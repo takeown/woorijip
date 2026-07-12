@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: woorijip-api
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/woorijip}
+    username: ${DATABASE_USERNAME:woorijip}
+    password: ${DATABASE_PASSWORD:woorijip}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+server:
+  port: ${PORT:8080}
