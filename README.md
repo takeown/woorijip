@@ -19,13 +19,13 @@
 ```bash
 cp .env.example .env
 docker compose up -d
-npm run dev:api
+pnpm dev:api
 ```
 
 다른 터미널에서 웹 앱을 실행합니다.
 
 ```bash
-npm run dev:web
+pnpm dev:web
 ```
 
 - Web: http://localhost:3000
@@ -34,8 +34,8 @@ npm run dev:web
 ## 확인
 
 ```bash
-npm run lint:web
-npm run build:web
-npm run test:api
-npm run build:api
+pnpm lint:web
+pnpm build:web
+pnpm test:api
+pnpm build:api
 ```
