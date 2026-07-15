@@ -6,6 +6,10 @@ spring:
     username: ${DATABASE_USERNAME:woorijip}
     password: ${DATABASE_PASSWORD:woorijip}
 
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+
 management:
   endpoints:
     web:

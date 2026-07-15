@@ -1,0 +1,130 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { FormEvent, useState } from "react";
+
+const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+
+export function TransactionForm() {
+  const router = useRouter();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsSubmitting(true);
+    setError(null);
+
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const occurredAt = String(formData.get("occurredAt") ?? "").trim();
+
+    try {
+      const response = await fetch(`${apiUrl}/transactions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          merchant: formData.get("merchant"),
+          amount: Number(formData.get("amount")),
+          category: formData.get("category"),
+          occurredAt: occurredAt
+            ? new Date(occurredAt).toISOString()
+            : new Date().toISOString(),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("거래를 저장하지 못했습니다. 입력값을 확인해 주세요.");
+      }
+
+      form.reset();
+      router.refresh();
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "거래를 저장하지 못했습니다.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <form className="space-y-5" onSubmit={handleSubmit}>
+      <div>
+        <label className="mb-2 block text-sm font-medium text-stone-700" htmlFor="merchant">
+          가맹점
+        </label>
+        <input
+          className="w-full rounded-xl border border-stone-300 px-4 py-3 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+          id="merchant"
+          name="merchant"
+          placeholder="김밥천국"
+          required
+          maxLength={200}
+        />
+      </div>
+
+      <div className="grid gap-5 sm:grid-cols-2">
+        <div>
+          <label className="mb-2 block text-sm font-medium text-stone-700" htmlFor="amount">
+            금액
+          </label>
+          <input
+            className="w-full rounded-xl border border-stone-300 px-4 py-3 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+            id="amount"
+            name="amount"
+            type="number"
+            min="1"
+            step="1"
+            inputMode="numeric"
+            placeholder="8000"
+            required
+          />
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-medium text-stone-700" htmlFor="category">
+            카테고리
+          </label>
+          <input
+            className="w-full rounded-xl border border-stone-300 px-4 py-3 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+            id="category"
+            name="category"
+            placeholder="식비"
+            required
+            maxLength={100}
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="mb-2 block text-sm font-medium text-stone-700" htmlFor="occurredAt">
+          결제 시각
+        </label>
+        <input
+          className="w-full rounded-xl border border-stone-300 px-4 py-3 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+          id="occurredAt"
+          name="occurredAt"
+          type="datetime-local"
+        />
+        <p className="mt-2 text-xs text-stone-500">비워두면 현재 시각으로 저장됩니다.</p>
+      </div>
+
+      {error ? (
+        <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
+          {error}
+        </p>
+      ) : null}
+
+      <button
+        className="w-full rounded-xl bg-emerald-700 px-4 py-3 font-medium text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
+        type="submit"
+        disabled={isSubmitting}
+      >
+        {isSubmitting ? "저장 중..." : "거래 저장"}
+      </button>
+    </form>
+  );
+}
