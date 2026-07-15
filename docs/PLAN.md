@@ -36,19 +36,19 @@
 - [x] `/health`와 웹–API 연결 상태 확인 추가
 - [x] 웹과 API 빌드 검증
 
-### M1 — 거래내역 vertical slice — 진행 중
+### M1 — 거래내역 vertical slice — 완료
 
 결과: 실제 데이터베이스와 UI를 통해 거래내역을 직접 등록하고 조회할 수 있다.
 
-- [ ] 첫 `transactions` 스키마를 Flyway migration으로 정의
-- [ ] 거래 영속 모델과 Repository 정의
-- [ ] `POST /transactions` 구현
-- [ ] `GET /transactions` 구현
-- [ ] 양의 정수 KRW 금액과 필수 필드 검증
-- [ ] Repository와 HTTP 테스트 추가
-- [ ] 웹에서 거래 목록 표시
-- [ ] 최소한의 수동 거래 등록 폼 추가
-- [ ] 로컬 PostgreSQL을 사용한 전체 흐름 검증
+- [x] 첫 `transactions` 스키마를 Flyway migration으로 정의
+- [x] 거래 영속 모델과 Repository 정의
+- [x] `POST /transactions` 구현
+- [x] `GET /transactions` 구현
+- [x] 양의 정수 KRW 금액과 필수 필드 검증
+- [x] Repository와 HTTP 테스트 추가
+- [x] 웹에서 거래 목록 표시
+- [x] 최소한의 수동 거래 등록 폼 추가
+- [x] 로컬 PostgreSQL을 사용한 전체 흐름 검증
 
 초기 거래 필드:
 
@@ -62,7 +62,7 @@
 M1에서는 Controller → 영속 계층 → 데이터베이스 → UI 흐름을 먼저 학습할 수 있도록
 household 소유권과 결제자 정보는 M2로 미룬다.
 
-### M2 — Household와 인증 — 예정
+### M2 — Household와 인증 — 진행 중
 
 - [ ] users, households, household membership 스키마 추가
 - [ ] 모든 거래를 household에 연결
@@ -169,6 +169,19 @@ AI 자연어 입력으로 평소 거래를 기록하고, 카드 명세서 엑셀
 엑셀 명세서는 기존 거래와 비교할 월말 기준 자료다. 대조 결과를 자동으로 저장하거나
 수정하지 않고 누락, 중복 의심, 불일치 후보를 사용자에게 보여준 뒤 선택한 변경만
 반영한다. 초기에는 카드사 또는 파일 형식 하나만 지원한다.
+
+### 2026-07-15 — 웹은 Spring API를 직접 호출
+
+Next.js는 화면과 라우팅을 담당하고 거래 데이터와 비즈니스 규칙은 Spring API가
+소유한다. 브라우저의 거래 등록 요청은 Spring API를 직접 호출하며, API는 설정된
+origin에만 거래 경로의 CORS를 허용한다. Next.js API Route나 Server Action을 중간
+백엔드로 추가하지 않는다.
+
+### 2026-07-15 — PostgreSQL 통합 테스트에 Testcontainers 사용
+
+Repository와 HTTP 통합 테스트는 H2나 개발자 로컬 데이터베이스 대신 일회용
+PostgreSQL Testcontainer를 사용한다. 실제 Flyway migration과 PostgreSQL 타입을
+검증하고 테스트 간 데이터 오염을 막는다.
 
 ## 백로그
 
