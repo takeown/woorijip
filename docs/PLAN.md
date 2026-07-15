@@ -68,8 +68,8 @@ household 소유권과 결제자 정보는 M2로 미룬다.
 
 ### M2 — Household와 인증 — 진행 중
 
-- [ ] `users`, `auth_identities`, `households`, `household_memberships` 스키마 추가
-- [ ] 인증 제공자와 제공자 고유 ID 조합으로 로그인 계정을 식별
+- [x] `users`, `auth_identities`, `households`, `household_memberships` 스키마 추가
+- [x] 인증 제공자와 제공자 고유 ID 조합으로 로그인 계정을 식별
 - [ ] 모든 거래를 household에 연결
 - [ ] 웹 애플리케이션에 Google 로그인 추가
 - [ ] Google 계정 두 개만 허용
