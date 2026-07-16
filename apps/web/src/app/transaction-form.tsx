@@ -1,12 +1,19 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
-export function TransactionForm() {
-  const router = useRouter();
+type TransactionFormProps = {
+  onCreated: () => Promise<void> | void;
+};
+
+type CsrfToken = {
+  token: string;
+  headerName: string;
+};
+
+export function TransactionForm({ onCreated }: TransactionFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -20,9 +27,20 @@ export function TransactionForm() {
     const occurredAt = String(formData.get("occurredAt") ?? "").trim();
 
     try {
+      const csrfResponse = await fetch(`${apiUrl}/auth/csrf`, {
+        credentials: "include",
+      });
+      if (!csrfResponse.ok) {
+        throw new Error("거래 저장 요청을 준비하지 못했습니다.");
+      }
+      const csrfToken: CsrfToken = await csrfResponse.json();
       const response = await fetch(`${apiUrl}/transactions`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          [csrfToken.headerName]: csrfToken.token,
+        },
         body: JSON.stringify({
           merchant: formData.get("merchant"),
           amount: Number(formData.get("amount")),
@@ -38,7 +56,7 @@ export function TransactionForm() {
       }
 
       form.reset();
-      router.refresh();
+      await onCreated();
     } catch (caughtError) {
       setError(
         caughtError instanceof Error

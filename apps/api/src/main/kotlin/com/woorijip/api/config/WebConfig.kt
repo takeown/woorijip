@@ -11,9 +11,13 @@ class WebConfig(
     private val allowedOrigins: Array<String>,
 ) : WebMvcConfigurer {
     override fun addCorsMappings(registry: CorsRegistry) {
-        registry
-            .addMapping("/transactions/**")
-            .allowedOrigins(*allowedOrigins)
-            .allowedMethods("GET", "POST")
+        listOf("/auth/**", "/transactions/**").forEach { path ->
+            registry
+                .addMapping(path)
+                .allowedOrigins(*allowedOrigins)
+                .allowedMethods("GET", "POST", "OPTIONS")
+                .allowedHeaders("Content-Type", "X-XSRF-TOKEN")
+                .allowCredentials(true)
+        }
     }
 }
