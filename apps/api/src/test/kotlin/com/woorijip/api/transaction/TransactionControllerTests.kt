@@ -10,6 +10,8 @@ import org.springframework.http.MediaType
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.oidcLogin
 import org.springframework.transaction.annotation.Transactional
 import kotlin.test.Test
 
@@ -24,6 +26,8 @@ class TransactionControllerTests(
     fun `creates and lists a transaction`() {
         mockMvc
             .post("/transactions") {
+                with(oidcLogin())
+                with(csrf())
                 contentType = MediaType.APPLICATION_JSON
                 content =
                     """
@@ -43,7 +47,9 @@ class TransactionControllerTests(
             }
 
         mockMvc
-            .get("/transactions")
+            .get("/transactions") {
+                with(oidcLogin())
+            }
             .andExpect {
                 status { isOk() }
                 jsonPath("$", hasSize<Any>(1))
@@ -55,6 +61,8 @@ class TransactionControllerTests(
     fun `rejects invalid transaction fields`() {
         mockMvc
             .post("/transactions") {
+                with(oidcLogin())
+                with(csrf())
                 contentType = MediaType.APPLICATION_JSON
                 content =
                     """
@@ -67,6 +75,15 @@ class TransactionControllerTests(
                     """.trimIndent()
             }.andExpect {
                 status { isBadRequest() }
+            }
+    }
+
+    @Test
+    fun `requires authentication to access transactions`() {
+        mockMvc
+            .get("/transactions")
+            .andExpect {
+                status { isUnauthorized() }
             }
     }
 }
