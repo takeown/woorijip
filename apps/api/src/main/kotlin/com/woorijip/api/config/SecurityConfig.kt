@@ -2,6 +2,7 @@ package com.woorijip.api.config
 
 import com.woorijip.api.auth.AuthProperties
 import com.woorijip.api.auth.WoorijipOidcUserService
+import com.woorijip.api.ai.OpenAiProperties
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -16,7 +17,7 @@ import org.springframework.security.web.authentication.logout.HttpStatusReturnin
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository
 
 @Configuration
-@EnableConfigurationProperties(AuthProperties::class)
+@EnableConfigurationProperties(AuthProperties::class, OpenAiProperties::class)
 class SecurityConfig {
     @Bean
     fun securityFilterChain(
