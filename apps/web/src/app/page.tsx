@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { TransactionForm } from "./transaction-form";
+import { TransactionForm, type HouseholdMember } from "./transaction-form";
 
 type CurrentUser = {
   id: number;
@@ -11,12 +11,15 @@ type CurrentUser = {
 
 type Transaction = {
   id: number;
+  payerId: number;
   merchant: string;
   amount: number;
   category: string;
   occurredAt: string;
   createdAt: string;
 };
+
+type PayerFilter = "all" | "me" | "partner";
 
 type CsrfToken = {
   token: string;
@@ -33,11 +36,13 @@ const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
 
 export default function Home() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>();
+  const [householdMembers, setHouseholdMembers] = useState<HouseholdMember[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [payerFilter, setPayerFilter] = useState<PayerFilter>("all");
   const [error, setError] = useState<string | null>(null);
 
-  const loadTransactions = useCallback(async () => {
-    const response = await fetch(`${apiUrl}/transactions`, {
+  const loadTransactions = useCallback(async (filter: PayerFilter = "all") => {
+    const response = await fetch(`${apiUrl}/transactions?payer=${filter}`, {
       credentials: "include",
       cache: "no-store",
     });
@@ -47,6 +52,19 @@ export default function Home() {
     }
 
     setTransactions(await response.json());
+  }, []);
+
+  const loadHouseholdMembers = useCallback(async () => {
+    const response = await fetch(`${apiUrl}/households/current/members`, {
+      credentials: "include",
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      throw new Error("가구 구성원을 불러오지 못했습니다.");
+    }
+
+    setHouseholdMembers(await response.json());
   }, []);
 
   useEffect(() => {
@@ -66,8 +84,9 @@ export default function Home() {
           throw new Error("로그인 상태를 확인하지 못했습니다.");
         }
 
-        setCurrentUser(await response.json());
-        await loadTransactions();
+        const user: CurrentUser = await response.json();
+        await Promise.all([loadTransactions(), loadHouseholdMembers()]);
+        if (active) setCurrentUser(user);
       })
       .catch((caughtError: unknown) => {
         if (!active) return;
@@ -82,7 +101,21 @@ export default function Home() {
     return () => {
       active = false;
     };
-  }, [loadTransactions]);
+  }, [loadHouseholdMembers, loadTransactions]);
+
+  async function changePayerFilter(filter: PayerFilter) {
+    setPayerFilter(filter);
+    setError(null);
+    try {
+      await loadTransactions(filter);
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "거래 내역을 불러오지 못했습니다.",
+      );
+    }
+  }
 
   async function logout() {
     try {
@@ -103,6 +136,7 @@ export default function Home() {
       }
 
       setCurrentUser(null);
+      setHouseholdMembers([]);
       setTransactions([]);
     } catch (caughtError) {
       setError(
@@ -164,17 +198,42 @@ export default function Home() {
             오늘 사용한 금액을 직접 기록해 보세요.
           </p>
           <div className="mt-7">
-            <TransactionForm onCreated={loadTransactions} />
+            <TransactionForm
+              currentUserId={currentUser.id}
+              householdMembers={householdMembers}
+              onCreated={() => loadTransactions(payerFilter)}
+            />
           </div>
         </section>
 
         <section className="rounded-3xl border border-stone-200 bg-white p-7 shadow-sm">
-          <div className="flex items-end justify-between gap-4">
+          <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <p className="text-sm font-medium text-emerald-700">최근 기록</p>
               <h2 className="mt-2 text-3xl font-semibold tracking-tight">거래 내역</h2>
             </div>
             <p className="text-sm text-stone-500">{transactions.length}건</p>
+          </div>
+
+          <div className="mt-6 flex gap-2" aria-label="결제자 필터">
+            {([
+              ["all", "전체"],
+              ["me", "내 결제"],
+              ["partner", "배우자"],
+            ] as const).map(([filter, label]) => (
+              <button
+                className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                  payerFilter === filter
+                    ? "bg-emerald-700 text-white"
+                    : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                }`}
+                key={filter}
+                onClick={() => changePayerFilter(filter)}
+                type="button"
+              >
+                {label}
+              </button>
+            ))}
           </div>
 
           {error ? (
@@ -193,7 +252,9 @@ export default function Home() {
                   <div className="min-w-0">
                     <p className="truncate font-medium text-stone-900">{transaction.merchant}</p>
                     <p className="mt-1 text-sm text-stone-500">
-                      {transaction.category} · {dateFormatter.format(new Date(transaction.occurredAt))}
+                      {householdMembers.find((member) => member.userId === transaction.payerId)
+                        ?.displayName ?? "알 수 없음"} · {transaction.category} ·{" "}
+                      {dateFormatter.format(new Date(transaction.occurredAt))}
                     </p>
                   </div>
                   <p className="shrink-0 font-semibold text-stone-900">
