@@ -8,6 +8,8 @@ import java.time.OffsetDateTime
 data class Transaction(
     @Id
     val id: Long? = null,
+    val householdId: Long,
+    val payerId: Long,
     val merchant: String,
     val amount: Long,
     val category: String,

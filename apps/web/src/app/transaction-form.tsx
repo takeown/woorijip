@@ -4,8 +4,15 @@ import { FormEvent, useState } from "react";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
+export type HouseholdMember = {
+  userId: number;
+  displayName: string;
+};
+
 type TransactionFormProps = {
   onCreated: () => Promise<void> | void;
+  currentUserId: number;
+  householdMembers: HouseholdMember[];
 };
 
 type CsrfToken = {
@@ -13,7 +20,11 @@ type CsrfToken = {
   headerName: string;
 };
 
-export function TransactionForm({ onCreated }: TransactionFormProps) {
+export function TransactionForm({
+  onCreated,
+  currentUserId,
+  householdMembers,
+}: TransactionFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,6 +53,7 @@ export function TransactionForm({ onCreated }: TransactionFormProps) {
           [csrfToken.headerName]: csrfToken.token,
         },
         body: JSON.stringify({
+          payerId: Number(formData.get("payerId")),
           merchant: formData.get("merchant"),
           amount: Number(formData.get("amount")),
           category: formData.get("category"),
@@ -70,6 +82,25 @@ export function TransactionForm({ onCreated }: TransactionFormProps) {
 
   return (
     <form className="space-y-5" onSubmit={handleSubmit}>
+      <div>
+        <label className="mb-2 block text-sm font-medium text-stone-700" htmlFor="payerId">
+          결제자
+        </label>
+        <select
+          className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+          defaultValue={currentUserId}
+          id="payerId"
+          name="payerId"
+          required
+        >
+          {householdMembers.map((member) => (
+            <option key={member.userId} value={member.userId}>
+              {member.displayName}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div>
         <label className="mb-2 block text-sm font-medium text-stone-700" htmlFor="merchant">
           가맹점
