@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { AiTransactionDraftForm } from "./ai-transaction-draft-form";
 import { TransactionForm, type HouseholdMember } from "./transaction-form";
 
 type CurrentUser = {
@@ -195,9 +196,17 @@ export default function Home() {
           <p className="text-sm font-medium text-emerald-700">우리 둘의 생활 기록</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight">거래 입력</h1>
           <p className="mt-3 text-sm leading-6 text-stone-600">
-            오늘 사용한 금액을 직접 기록해 보세요.
+            짧게 말하면 AI가 거래 초안을 만들어 드립니다.
           </p>
           <div className="mt-7">
+            <AiTransactionDraftForm onCreated={() => loadTransactions(payerFilter)} />
+          </div>
+          <div className="my-7 flex items-center gap-3 text-xs text-stone-400">
+            <span className="h-px flex-1 bg-stone-200" />
+            직접 입력
+            <span className="h-px flex-1 bg-stone-200" />
+          </div>
+          <div>
             <TransactionForm
               currentUserId={currentUser.id}
               householdMembers={householdMembers}
