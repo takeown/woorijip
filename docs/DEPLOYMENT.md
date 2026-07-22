@@ -11,8 +11,11 @@ main push
 → 웹·API 이미지 빌드
 → GHCR에 latest와 commit SHA 태그로 게시
 → 40자리 commit SHA로 Deploy production workflow 수동 실행
+→ GitHub OIDC로 AWS 단기 자격 증명 발급
+→ GitHub runner IPv4만 22/TCP에 임시 허용
 → production Environment Secret으로 SSH 연결
 → Lightsail에서 이미지 교체
+→ 성공·실패와 관계없이 임시 SSH 규칙 제거
 ```
 
 애플리케이션 비밀값은 Docker 이미지나 GitHub Actions에 전달하지 않는다. Lightsail의
@@ -27,13 +30,14 @@ main push
 - 관리할 주소로 제한한 22/TCP
 - Lightsail에 설치한 Docker Engine과 Docker Compose plugin
 - GHCR private image를 읽을 수 있는 `read:packages` 토큰
+- GitHub OIDC를 신뢰하고 Lightsail SSH 방화벽만 변경할 수 있는 IAM 역할
 
 PostgreSQL의 5432 포트와 웹·API 컨테이너 포트는 외부에 공개하지 않는다.
 
-현재 배포 workflow는 고정 IP가 없는 GitHub-hosted runner에서 Lightsail로
-SSH 연결한다. 따라서 배포 직전에만 22/TCP를 모든 IPv4에 임시로
-개방하고, workflow가 종료되면 즉시 관리자의 IPv4로 다시 제한한다.
-항상 개방해 두지 않는다.
+배포 workflow는 고정 IP가 없는 GitHub-hosted runner의 공인 IPv4를 확인한 뒤 해당
+주소의 `/32`만 22/TCP에 임시로 추가한다. 마지막 cleanup 단계는 성공·실패와 관계없이
+추가했던 정확한 `/32` 규칙만 제거한다. 관리자의 기존 IPv4 규칙은 유지되며 22/TCP를
+모든 IPv4에 개방하지 않는다.
 
 ## GitHub 설정
 
@@ -44,6 +48,25 @@ SSH 연결한다. 따라서 배포 직전에만 22/TCP를 모든 IPv4에 임시�
 - `LIGHTSAIL_USER`: SSH 사용자
 - `LIGHTSAIL_SSH_KEY`: SSH 개인 키 원문
 - `LIGHTSAIL_KNOWN_HOSTS`: 검증한 서버의 SSH host key
+
+같은 Environment에 다음 Variable을 등록한다.
+
+- `AWS_ROLE_ARN`: GitHub Actions가 OIDC로 맡을 IAM 역할 ARN
+- `AWS_REGION`: Lightsail 리전. 현재 운영 환경은 `ap-northeast-2`
+- `LIGHTSAIL_INSTANCE_NAME`: 배포할 Lightsail 인스턴스 이름
+
+IAM 역할의 OIDC 신뢰 정책은 저장소 전체가 아니라 production Environment로 제한한다.
+
+```text
+repo:takeown/woorijip:environment:production
+```
+
+역할 권한은 운영 인스턴스 ARN에 대한 다음 두 작업만 허용한다.
+
+```text
+lightsail:OpenInstancePublicPorts
+lightsail:CloseInstancePublicPorts
+```
 
 가능한 경우 `production` Environment에 승인자를 지정한다. Repository의 기본 workflow
 권한은 읽기로 유지하고, 이미지 게시 workflow에만 `packages: write`를 부여한다.
@@ -85,12 +108,14 @@ Google Cloud의 운영 OAuth 클라이언트에 실제 도메인을 사용한 �
 1. `main` CI와 `Publish images` workflow가 성공했는지 확인한다.
 2. 배포할 `main`의 40자리 commit SHA를 복사한다. `latest`는 사용하지
    않는 것을 기본으로 한다.
-3. Lightsail IPv4 방화벽에서 22/TCP를 모든 IPv4에 임시로 개방한다.
-4. Actions에서 `Deploy production`을 선택한다.
-5. `Run workflow`의 branch를 `main`으로 선택하고 commit SHA를 입력한다.
-6. workflow와 컨테이너 healthcheck가 성공하는지 확인한다.
-7. 성공·실패와 관계없이 22/TCP를 즉시 관리자 IPv4로 다시 제한한다.
-8. 운영 도메인의 HTTPS, 로그인과 주요 기능을 smoke test한다.
+3. Actions에서 `Deploy production`을 선택한다.
+4. `Run workflow`의 branch를 `main`으로 선택하고 commit SHA를 입력한다.
+5. 임시 SSH 개방, 배포, 임시 SSH 제거 단계가 모두 성공했는지 확인한다.
+6. 컨테이너 healthcheck와 운영 도메인의 HTTPS, 로그인, 주요 기능을 smoke test한다.
+
+workflow가 강제 취소되거나 runner 장애로 cleanup 단계까지 실행되지 못했다면 Lightsail의
+IPv4 방화벽을 확인한다. 관리자 주소가 아닌 배포 시각에 추가된 22/TCP `/32` 규칙만
+수동으로 제거한다.
 
 Flyway migration은 API 시작 과정에서 실행된다. migration 실패 시 API healthcheck가
 실패하고 배포 workflow도 실패한다.
