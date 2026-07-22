@@ -6,7 +6,7 @@
     "dev:web": "pnpm --filter web dev",
     "build:web": "pnpm --filter web build",
     "lint:web": "pnpm --filter web lint",
-    "dev:api": "cd apps/api && ./gradlew bootRun",
+    "dev:api": "set -a && . ./.env && set +a && cd apps/api && ./gradlew bootRun",
     "test:api": "cd apps/api && ./gradlew test",
     "build:api": "cd apps/api && ./gradlew build"
   },
