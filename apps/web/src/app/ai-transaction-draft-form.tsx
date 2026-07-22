@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import type { HouseholdMember } from "./transaction-form";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
@@ -29,16 +30,13 @@ type CsrfToken = {
 
 type AiTransactionDraftFormProps = {
   onCreated: () => Promise<void> | void;
+  householdMembers: HouseholdMember[];
 };
 
-const amountFormatter = new Intl.NumberFormat("ko-KR");
-const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
-  dateStyle: "medium",
-  timeStyle: "short",
-  timeZone: "Asia/Seoul",
-});
-
-export function AiTransactionDraftForm({ onCreated }: AiTransactionDraftFormProps) {
+export function AiTransactionDraftForm({
+  onCreated,
+  householdMembers,
+}: AiTransactionDraftFormProps) {
   const [message, setMessage] = useState("");
   const [draft, setDraft] = useState<AiDraft | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -88,11 +86,13 @@ export function AiTransactionDraftForm({ onCreated }: AiTransactionDraftFormProp
     }
   }
 
-  async function saveDraft() {
+  async function saveDraft(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     if (draft?.status !== "READY") return;
 
     setIsSaving(true);
     setError(null);
+    const formData = new FormData(event.currentTarget);
     try {
       const csrf = await csrfToken();
       const response = await fetch(`${apiUrl}/transactions`, {
@@ -103,11 +103,11 @@ export function AiTransactionDraftForm({ onCreated }: AiTransactionDraftFormProp
           [csrf.headerName]: csrf.token,
         },
         body: JSON.stringify({
-          payerId: draft.payerId,
-          merchant: draft.merchant,
-          amount: draft.amount,
-          category: draft.category,
-          occurredAt: draft.occurredAt,
+          payerId: Number(formData.get("payerId")),
+          merchant: String(formData.get("merchant") ?? "").trim(),
+          amount: Number(formData.get("amount")),
+          category: String(formData.get("category") ?? "").trim(),
+          occurredAt: new Date(String(formData.get("occurredAt"))).toISOString(),
         }),
       });
       if (!response.ok) {
@@ -155,49 +155,99 @@ export function AiTransactionDraftForm({ onCreated }: AiTransactionDraftFormProp
       {draft?.status === "READY" ? (
         <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
           <p className="text-sm font-medium text-emerald-800">{draft.message}</p>
-          <dl className="mt-4 space-y-2 text-sm text-stone-700">
-            <div className="flex justify-between gap-4">
-              <dt>가맹점</dt>
-              <dd className="font-medium text-stone-900">{draft.merchant}</dd>
+          <form className="mt-4 space-y-4" onSubmit={saveDraft}>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-stone-700" htmlFor="draft-merchant">
+                가맹점
+              </label>
+              <input
+                className="w-full rounded-xl border border-emerald-200 bg-white px-3 py-2.5 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                defaultValue={draft.merchant}
+                id="draft-merchant"
+                maxLength={200}
+                name="merchant"
+                required
+              />
             </div>
-            <div className="flex justify-between gap-4">
-              <dt>금액</dt>
-              <dd className="font-medium text-stone-900">
-                {amountFormatter.format(draft.amount)}원
-              </dd>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-stone-700" htmlFor="draft-amount">
+                  금액
+                </label>
+                <input
+                  className="w-full rounded-xl border border-emerald-200 bg-white px-3 py-2.5 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                  defaultValue={draft.amount}
+                  id="draft-amount"
+                  inputMode="numeric"
+                  min="1"
+                  name="amount"
+                  required
+                  step="1"
+                  type="number"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-stone-700" htmlFor="draft-category">
+                  카테고리
+                </label>
+                <input
+                  className="w-full rounded-xl border border-emerald-200 bg-white px-3 py-2.5 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                  defaultValue={draft.category}
+                  id="draft-category"
+                  maxLength={100}
+                  name="category"
+                  required
+                />
+              </div>
             </div>
-            <div className="flex justify-between gap-4">
-              <dt>카테고리</dt>
-              <dd className="font-medium text-stone-900">{draft.category}</dd>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-stone-700" htmlFor="draft-payerId">
+                결제자
+              </label>
+              <select
+                className="w-full rounded-xl border border-emerald-200 bg-white px-3 py-2.5 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                defaultValue={draft.payerId}
+                id="draft-payerId"
+                name="payerId"
+                required
+              >
+                {householdMembers.map((member) => (
+                  <option key={member.userId} value={member.userId}>
+                    {member.displayName}
+                  </option>
+                ))}
+              </select>
             </div>
-            <div className="flex justify-between gap-4">
-              <dt>결제자</dt>
-              <dd className="font-medium text-stone-900">{draft.payerDisplayName}</dd>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-stone-700" htmlFor="draft-occurredAt">
+                결제 시각
+              </label>
+              <input
+                className="w-full rounded-xl border border-emerald-200 bg-white px-3 py-2.5 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                defaultValue={draft.occurredAt.slice(0, 16)}
+                id="draft-occurredAt"
+                name="occurredAt"
+                required
+                type="datetime-local"
+              />
             </div>
-            <div className="flex justify-between gap-4">
-              <dt>결제 시각</dt>
-              <dd className="text-right font-medium text-stone-900">
-                {dateFormatter.format(new Date(draft.occurredAt))}
-              </dd>
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <button
+                className="rounded-xl border border-stone-300 bg-white px-4 py-2.5 text-sm font-medium text-stone-700 hover:bg-stone-50"
+                onClick={() => setDraft(null)}
+                type="button"
+              >
+                취소
+              </button>
+              <button
+                className="rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-60"
+                disabled={isSaving}
+                type="submit"
+              >
+                {isSaving ? "저장 중..." : "확인하고 저장"}
+              </button>
             </div>
-          </dl>
-          <div className="mt-5 grid grid-cols-2 gap-3">
-            <button
-              className="rounded-xl border border-stone-300 bg-white px-4 py-2.5 text-sm font-medium text-stone-700 hover:bg-stone-50"
-              onClick={() => setDraft(null)}
-              type="button"
-            >
-              취소
-            </button>
-            <button
-              className="rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-60"
-              disabled={isSaving}
-              onClick={saveDraft}
-              type="button"
-            >
-              {isSaving ? "저장 중..." : "확인하고 저장"}
-            </button>
-          </div>
+          </form>
         </div>
       ) : draft ? (
         <p className="mt-5 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800" role="status">
