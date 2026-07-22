@@ -55,6 +55,11 @@ PostgreSQL의 5432 포트와 웹·API 컨테이너 포트는 외부에 공개하
 - `AWS_REGION`: Lightsail 리전. 현재 운영 환경은 `ap-northeast-2`
 - `LIGHTSAIL_INSTANCE_NAME`: 배포할 Lightsail 인스턴스 이름
 
+이 세 값은 `Environment secrets`가 아니라 `Environment variables` 영역에 등록한다.
+workflow가 `${{ vars.* }}` 문법으로 읽기 때문에 Secret에만 등록하면 빈 값으로 처리되어
+AWS 자격 증명 설정 단계가 실패한다. 반대로 SSH 개인 키와 host key는 Variable로 옮기지
+않고 기존 Environment Secret으로 유지한다.
+
 IAM 역할의 OIDC 신뢰 정책은 저장소 전체가 아니라 production Environment로 제한한다.
 
 ```text
@@ -147,6 +152,7 @@ migration이 이전 애플리케이션과 호환되는지 먼저 확인한다.
 
 - [x] Lightsail 2GB 인스턴스와 고정 IPv4, 운영 DNS, HTTPS 구성
 - [x] GitHub Actions와 commit SHA를 사용한 첫 운영 배포
+- [x] GitHub OIDC와 runner `/32`를 사용한 SSH 방화벽 자동 개방·회수 검증
 - [x] 운영 도메인의 Google 로그인과 수동 거래 등록 smoke test
 - [x] AWS 월 USD 20 예산과 비용 알림 설정
 - [ ] AI 거래 초안 생성·저장 smoke test
