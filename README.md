@@ -11,7 +11,7 @@
 ## 요구 사항
 
 - Node.js 24 LTS
-- JDK 17+
+- JDK 21+
 - Docker
 
 ## 시작하기
