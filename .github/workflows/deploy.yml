@@ -1,0 +1,71 @@
+name: Deploy production
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: GHCR image tag to deploy (latest or a full commit SHA)
+        required: true
+        default: latest
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+
+    steps:
+      - name: Checkout deployment files
+        uses: actions/checkout@v6
+
+      - name: Validate image tag
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          if [[ ! "$IMAGE_TAG" =~ ^(latest|[0-9a-f]{40})$ ]]; then
+            echo "image_tag must be latest or a full commit SHA"
+            exit 1
+          fi
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.LIGHTSAIL_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/lightsail
+          chmod 600 ~/.ssh/lightsail
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Copy deployment files
+        env:
+          LIGHTSAIL_HOST: ${{ secrets.LIGHTSAIL_HOST }}
+          LIGHTSAIL_USER: ${{ secrets.LIGHTSAIL_USER }}
+        run: |
+          ssh -i ~/.ssh/lightsail "$LIGHTSAIL_USER@$LIGHTSAIL_HOST" \
+            'mkdir -p ~/woorijip/deploy'
+          scp -i ~/.ssh/lightsail compose.prod.yaml \
+            "$LIGHTSAIL_USER@$LIGHTSAIL_HOST:~/woorijip/compose.prod.yaml"
+          scp -i ~/.ssh/lightsail deploy/Caddyfile \
+            "$LIGHTSAIL_USER@$LIGHTSAIL_HOST:~/woorijip/deploy/Caddyfile"
+
+      - name: Deploy
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          LIGHTSAIL_HOST: ${{ secrets.LIGHTSAIL_HOST }}
+          LIGHTSAIL_USER: ${{ secrets.LIGHTSAIL_USER }}
+        run: |
+          ssh -i ~/.ssh/lightsail "$LIGHTSAIL_USER@$LIGHTSAIL_HOST" \
+            "cd ~/woorijip && \
+            IMAGE_TAG='$IMAGE_TAG' docker compose --env-file deploy/.env -f compose.prod.yaml pull && \
+            IMAGE_TAG='$IMAGE_TAG' docker compose --env-file deploy/.env -f compose.prod.yaml up -d --remove-orphans --wait --wait-timeout 120 && \
+            IMAGE_TAG='$IMAGE_TAG' docker compose --env-file deploy/.env -f compose.prod.yaml ps"
