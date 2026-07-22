@@ -27,12 +27,12 @@ class AiTransactionDraftService(
 ) {
     fun create(
         currentUser: CurrentUser,
-        message: String,
+        messages: List<String>,
     ): AiTransactionDraft {
         val members = householdMembershipRepository.findMembersByHouseholdId(currentUser.householdId)
         val generated = try {
             transactionDraftGenerator.generate(
-                message,
+                conversationPrompt(messages),
                 TransactionDraftGenerationContext(
                     currentUserId = currentUser.id,
                     currentTime = OffsetDateTime.now(SEOUL),
@@ -98,6 +98,16 @@ class AiTransactionDraftService(
             GeneratedPayer.PARTNER -> members.singleOrNull { member -> member.userId != currentUser.id }
             null -> null
         }
+
+    private fun conversationPrompt(messages: List<String>): String =
+        messages
+            .mapIndexed { index, message ->
+                if (index == 0) {
+                    "최초 거래 입력:\n$message"
+                } else {
+                    "추가 답변 $index:\n$message"
+                }
+            }.joinToString("\n\n")
 
     private companion object {
         val SEOUL: ZoneId = ZoneId.of("Asia/Seoul")
