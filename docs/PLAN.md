@@ -264,8 +264,10 @@ Compose로 실행했다. `main` CI 성공 후 GHCR에 게시한 commit SHA 이�
 Google 로그인, 수동 거래 등록·조회를 확인했다. AWS 월별 비용 예산과
 이메일 알림도 설정했다.
 
-현재 배포는 고정 IP가 없는 GitHub-hosted runner가 SSH로 접속하므로 배포
-직전에 22/TCP를 임시 개방하고 종료 직후 관리자 IPv4로 복구한다.
+고정 IP가 없는 GitHub-hosted runner의 배포를 위해 GitHub OIDC로 AWS 단기 자격
+증명을 발급한다. workflow가 runner 공인 IPv4의 `/32`만 22/TCP에 임시 추가하고
+성공·실패와 관계없이 같은 규칙을 제거한다. IAM 신뢰 정책은 production Environment로,
+역할 권한은 운영 Lightsail 인스턴스의 방화벽 개방·폐쇄 작업으로 제한한다.
 외부 논리 백업과 복구 검증이 완료되기 전까지 단일 서버 장애에 대한 데이터
 복구 위험은 남아 있다.
 
