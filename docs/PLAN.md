@@ -125,15 +125,15 @@ household 소유권과 결제자 정보는 M2로 미룬다.
 
 ### M7 — 배포 — 예정
 
-- [ ] AWS Lightsail 2GB 인스턴스에 Docker Compose 운영 환경 구성
-- [ ] Next.js, Spring API, PostgreSQL을 독립 컨테이너로 실행
-- [ ] Caddy에서 단일 도메인의 웹과 `/api` 요청을 각 컨테이너로 전달
-- [ ] 고정 IPv4, DNS, HTTPS와 최소 방화벽 규칙 설정
-- [ ] 운영 비밀값을 서버에만 저장하고 파일 권한 제한
-- [ ] GitHub Actions에서 운영 이미지를 빌드하고 서버는 이미지를 받아 실행
-- [ ] 통제된 배포 단계에서 Flyway migration 실행
+- [x] AWS Lightsail 2GB 인스턴스에 Docker Compose 운영 환경 구성
+- [x] Next.js, Spring API, PostgreSQL을 독립 컨테이너로 실행
+- [x] Caddy에서 단일 도메인의 웹과 `/api` 요청을 각 컨테이너로 전달
+- [x] 고정 IPv4, DNS, HTTPS와 최소 방화벽 규칙 설정
+- [x] 운영 비밀값을 서버에만 저장하고 파일 권한 제한
+- [x] GitHub Actions에서 운영 이미지를 빌드하고 서버는 이미지를 받아 실행
+- [x] 통제된 배포 단계에서 Flyway migration 실행
 - [ ] Lightsail 자동 스냅샷과 PostgreSQL 논리 백업 구성
-- [ ] AWS 비용 알림 추가
+- [x] AWS 비용 알림 추가
 - [ ] 복구와 rollback 절차 문서화
 
 ## 현재 마일스톤 결정 기록
@@ -255,6 +255,19 @@ HTTPS를 종료하고 웹 요청은 Next.js로, `/api` 요청은 Spring API로 �
 단일 서버 장애로 애플리케이션과 데이터베이스가 함께 영향을 받으므로 Lightsail 자동
 스냅샷과 서버 외부 PostgreSQL 논리 백업을 배포 필수 조건으로 둔다. 사용량이나 가용성
 요구가 커지면 데이터베이스와 애플리케이션을 분리한다.
+
+### 2026-07-22 — 첫 Lightsail 운영 배포 검증
+
+Lightsail 2GB 인스턴스에서 PostgreSQL, Spring API, Next.js, Caddy를 Docker
+Compose로 실행했다. `main` CI 성공 후 GHCR에 게시한 commit SHA 이미지를
+`Deploy production` workflow로 배포했고, 컨테이너 healthcheck, HTTPS,
+Google 로그인, 수동 거래 등록·조회를 확인했다. AWS 월별 비용 예산과
+이메일 알림도 설정했다.
+
+현재 배포는 고정 IP가 없는 GitHub-hosted runner가 SSH로 접속하므로 배포
+직전에 22/TCP를 임시 개방하고 종료 직후 관리자 IPv4로 복구한다.
+외부 논리 백업과 복구 검증이 완료되기 전까지 단일 서버 장애에 대한 데이터
+복구 위험은 남아 있다.
 
 ## 백로그
 
