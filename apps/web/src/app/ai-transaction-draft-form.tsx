@@ -33,11 +33,16 @@ type AiTransactionDraftFormProps = {
   householdMembers: HouseholdMember[];
 };
 
+const maxAiRequests = 3;
+
 export function AiTransactionDraftForm({
   onCreated,
   householdMembers,
 }: AiTransactionDraftFormProps) {
   const [message, setMessage] = useState("");
+  const [clarification, setClarification] = useState("");
+  const [messages, setMessages] = useState<string[]>([]);
+  const [requestCount, setRequestCount] = useState(0);
   const [draft, setDraft] = useState<AiDraft | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -53,14 +58,13 @@ export function AiTransactionDraftForm({
     return response.json();
   }
 
-  async function generateDraft(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function requestDraft(nextMessages: string[]) {
     setIsGenerating(true);
-    setDraft(null);
     setError(null);
 
     try {
       const csrf = await csrfToken();
+      setRequestCount((current) => current + 1);
       const response = await fetch(`${apiUrl}/ai/transaction-drafts`, {
         method: "POST",
         credentials: "include",
@@ -68,22 +72,54 @@ export function AiTransactionDraftForm({
           "Content-Type": "application/json",
           [csrf.headerName]: csrf.token,
         },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ messages: nextMessages }),
       });
       if (!response.ok) {
         throw new Error("AI 거래 초안을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.");
       }
 
+      setMessages(nextMessages);
       setDraft(await response.json());
+      return true;
     } catch (caughtError) {
       setError(
         caughtError instanceof Error
           ? caughtError.message
           : "AI 거래 초안을 만들지 못했습니다.",
       );
+      return false;
     } finally {
       setIsGenerating(false);
     }
+  }
+
+  async function generateDraft(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setDraft(null);
+    setMessages([]);
+    setRequestCount(0);
+    setClarification("");
+    await requestDraft([message.trim()]);
+  }
+
+  async function answerClarification(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (draft?.status !== "NEEDS_CLARIFICATION" || requestCount >= maxAiRequests) return;
+
+    const answer = clarification.trim();
+    if (!answer) return;
+
+    const succeeded = await requestDraft([...messages, answer]);
+    if (succeeded) setClarification("");
+  }
+
+  function resetConversation() {
+    setMessage("");
+    setClarification("");
+    setMessages([]);
+    setRequestCount(0);
+    setDraft(null);
+    setError(null);
   }
 
   async function saveDraft(event: FormEvent<HTMLFormElement>) {
@@ -114,8 +150,7 @@ export function AiTransactionDraftForm({
         throw new Error("거래를 저장하지 못했습니다.");
       }
 
-      setMessage("");
-      setDraft(null);
+      resetConversation();
       await onCreated();
     } catch (caughtError) {
       setError(
@@ -234,7 +269,7 @@ export function AiTransactionDraftForm({
             <div className="grid grid-cols-2 gap-3 pt-1">
               <button
                 className="rounded-xl border border-stone-300 bg-white px-4 py-2.5 text-sm font-medium text-stone-700 hover:bg-stone-50"
-                onClick={() => setDraft(null)}
+                onClick={resetConversation}
                 type="button"
               >
                 취소
@@ -249,9 +284,63 @@ export function AiTransactionDraftForm({
             </div>
           </form>
         </div>
+      ) : draft?.status === "NEEDS_CLARIFICATION" ? (
+        <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+          <p className="text-sm font-medium text-amber-900" role="status">
+            {draft.message}
+          </p>
+          {requestCount < maxAiRequests ? (
+            <form className="mt-4 space-y-3" onSubmit={answerClarification}>
+              <label className="block text-sm font-medium text-stone-700" htmlFor="ai-clarification">
+                추가 답변
+              </label>
+              <input
+                autoFocus
+                className="w-full rounded-xl border border-amber-200 bg-white px-3 py-2.5 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
+                id="ai-clarification"
+                maxLength={500}
+                onChange={(event) => setClarification(event.target.value)}
+                placeholder="예: 8천원"
+                required
+                value={clarification}
+              />
+              <button
+                className="w-full rounded-xl bg-amber-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-amber-800 disabled:opacity-60"
+                disabled={isGenerating || clarification.trim().length === 0}
+                type="submit"
+              >
+                {isGenerating ? "초안 보완 중..." : "답변하고 초안 보완"}
+              </button>
+            </form>
+          ) : (
+            <p className="mt-3 text-sm text-amber-800">
+              추가 질문 한도에 도달했습니다. 내용을 보완해 처음부터 다시 입력해 주세요.
+            </p>
+          )}
+          <button
+            className="mt-3 w-full rounded-xl border border-stone-300 bg-white px-4 py-2.5 text-sm font-medium text-stone-700 hover:bg-stone-50"
+            onClick={resetConversation}
+            type="button"
+          >
+            처음부터 다시
+          </button>
+        </div>
       ) : draft ? (
-        <p className="mt-5 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800" role="status">
-          {draft.message}
+        <div className="mt-5 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <p role="status">{draft.message}</p>
+          <button
+            className="mt-3 w-full rounded-xl border border-stone-300 bg-white px-4 py-2.5 font-medium text-stone-700 hover:bg-stone-50"
+            onClick={resetConversation}
+            type="button"
+          >
+            새 거래 입력
+          </button>
+        </div>
+      ) : null}
+
+      {requestCount > 0 ? (
+        <p className="mt-3 text-center text-xs text-stone-500">
+          AI 요청 {requestCount}/{maxAiRequests}회
         </p>
       ) : null}
 

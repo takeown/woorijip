@@ -51,7 +51,7 @@ class AiTransactionDraftControllerTests(
                 with(allowedOidcLogin())
                 with(csrf())
                 contentType = MediaType.APPLICATION_JSON
-                content = """{"message":"김밥천국 8천원"}"""
+                content = """{"messages":["김밥천국 8천원"]}"""
             }.andExpect {
                 status { isOk() }
                 jsonPath("$.status") { value("READY") }
@@ -74,7 +74,7 @@ class AiTransactionDraftControllerTests(
                 with(allowedOidcLogin())
                 with(csrf())
                 contentType = MediaType.APPLICATION_JSON
-                content = """{"message":"배우자가 이마트에서 3만원"}"""
+                content = """{"messages":["배우자가 이마트에서 3만원"]}"""
             }.andExpect {
                 status { isOk() }
                 jsonPath("$.status") { value("READY") }
@@ -92,7 +92,7 @@ class AiTransactionDraftControllerTests(
                 with(allowedOidcLogin())
                 with(csrf())
                 contentType = MediaType.APPLICATION_JSON
-                content = """{"message":"이번 달 식비 알려줘"}"""
+                content = """{"messages":["이번 달 식비 알려줘"]}"""
             }.andExpect {
                 status { isOk() }
                 jsonPath("$.status") { value("UNSUPPORTED") }
@@ -104,11 +104,30 @@ class AiTransactionDraftControllerTests(
                 with(allowedOidcLogin())
                 with(csrf())
                 contentType = MediaType.APPLICATION_JSON
-                content = """{"message":"금액 없는 거래"}"""
+                content = """{"messages":["금액 없는 거래"]}"""
             }.andExpect {
                 status { isOk() }
                 jsonPath("$.status") { value("NEEDS_CLARIFICATION") }
             }
+    }
+
+    @Test
+    fun `combines follow-up answers into a completed draft`() {
+        googleAccountService.provision(TestOidcUsers.allowed())
+
+        mockMvc
+            .post("/ai/transaction-drafts") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"messages":["금액 없는 거래","8천원"]}"""
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.status") { value("READY") }
+                jsonPath("$.amount") { value(8000) }
+            }
+
+        assertEquals(0, transactionRepository.count())
     }
 
     @Test
@@ -120,7 +139,17 @@ class AiTransactionDraftControllerTests(
                 with(allowedOidcLogin())
                 with(csrf())
                 contentType = MediaType.APPLICATION_JSON
-                content = """{"message":" "}"""
+                content = """{"messages":[" "]}"""
+            }.andExpect {
+                status { isBadRequest() }
+            }
+
+        mockMvc
+            .post("/ai/transaction-drafts") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"messages":["하나","둘","셋","넷"]}"""
             }.andExpect {
                 status { isBadRequest() }
             }
@@ -129,7 +158,7 @@ class AiTransactionDraftControllerTests(
             .post("/ai/transaction-drafts") {
                 with(csrf())
                 contentType = MediaType.APPLICATION_JSON
-                content = """{"message":"김밥천국 8천원"}"""
+                content = """{"messages":["김밥천국 8천원"]}"""
             }.andExpect {
                 status { isUnauthorized() }
             }
@@ -171,12 +200,9 @@ class AiTransactionDraftTestConfiguration {
                 message.contains("알려줘") -> GeneratedTransactionDraft(
                     status = GeneratedDraftStatus.UNSUPPORTED,
                 )
-                message.contains("금액 없는") -> GeneratedTransactionDraft(
-                    status = GeneratedDraftStatus.READY,
-                    merchant = "가맹점",
-                    category = "기타",
-                    occurredAt = "2026-07-21T12:30:00+09:00",
-                    payer = GeneratedPayer.ME,
+                message.contains("금액 없는") && !message.contains("8천원") -> GeneratedTransactionDraft(
+                    status = GeneratedDraftStatus.NEEDS_CLARIFICATION,
+                    message = "금액이 얼마였나요?",
                 )
                 message.contains("배우자") -> GeneratedTransactionDraft(
                     status = GeneratedDraftStatus.READY,
