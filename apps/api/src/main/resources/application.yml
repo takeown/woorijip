@@ -13,6 +13,10 @@ spring:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/woorijip}
     username: ${DATABASE_USERNAME:woorijip}
     password: ${DATABASE_PASSWORD:woorijip}
+  session:
+    timeout: 30d
+    jdbc:
+      initialize-schema: never
 
 app:
   auth:
@@ -33,3 +37,11 @@ management:
 
 server:
   port: ${PORT:8080}
+  servlet:
+    session:
+      timeout: 30d
+      cookie:
+        http-only: true
+        max-age: 30d
+        same-site: lax
+        secure: ${SESSION_COOKIE_SECURE:false}

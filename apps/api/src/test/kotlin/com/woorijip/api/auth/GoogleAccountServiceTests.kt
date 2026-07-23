@@ -55,16 +55,18 @@ class GoogleAccountServiceTests(
 
     @Test
     fun `rejects a Google account outside the allowlist`() {
-        assertFailsWith<OAuth2AuthenticationException> {
+        val exception = assertFailsWith<OAuth2AuthenticationException> {
             googleAccountService.provision(
                 oidcUser("unknown-subject", "unknown@example.com", "미허용 사용자"),
             )
         }
+
+        assertEquals(ACCOUNT_NOT_ALLOWED_ERROR, exception.error.errorCode)
     }
 
     @Test
     fun `rejects an unverified Google email`() {
-        assertFailsWith<OAuth2AuthenticationException> {
+        val exception = assertFailsWith<OAuth2AuthenticationException> {
             googleAccountService.provision(
                 oidcUser(
                     subject = "unverified-subject",
@@ -74,6 +76,8 @@ class GoogleAccountServiceTests(
                 ),
             )
         }
+
+        assertEquals(ACCOUNT_NOT_ALLOWED_ERROR, exception.error.errorCode)
     }
 
     private fun oidcUser(
