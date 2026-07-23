@@ -28,7 +28,7 @@ pnpm dev:api
 pnpm dev:web
 ```
 
-- Web: http://localhost:3000
+- Web: http://localhost:3100
 - API health: http://localhost:8080/health
 
 ## 확인
