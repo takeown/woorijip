@@ -1,5 +1,7 @@
 package com.woorijip.api.ai
 
+import com.woorijip.api.transaction.CardIssuer
+import com.woorijip.api.transaction.PaymentMethod
 import org.springframework.http.HttpHeaders
 import org.springframework.stereotype.Component
 import org.springframework.web.client.RestClient
@@ -77,8 +79,11 @@ class OpenAiTransactionDraftGenerator(
         현재 시각은 ${context.currentTime}입니다.
         날짜나 시각이 없으면 현재 시각을 사용하세요.
         결제자 언급이 없으면 ME, 배우자나 아내나 남편이 결제했다면 PARTNER를 사용하세요.
+        결제수단은 CARD 또는 CASH만 사용하세요. 카드 결제면 국내 카드사를 cardIssuer로 반환하세요.
+        카드사가 언급되지 않은 카드 결제는 NEEDS_CLARIFICATION으로 카드사를 질문하세요.
+        현금 결제면 cardIssuer는 null입니다.
         카테고리는 짧은 한국어 명사로 추론하세요.
-        가맹점, 양의 정수 KRW 금액, 카테고리, ISO 8601 발생 시각, 결제자를 모두 알면 READY입니다.
+        가맹점, 양의 정수 KRW 금액, 카테고리, ISO 8601 발생 시각, 결제자, 결제수단을 모두 알면 READY입니다.
         거래 입력이지만 필수값이 부족하면 NEEDS_CLARIFICATION과 한 가지 짧은 질문을 반환하세요.
         소비 분석, 조회, 일반 대화 등 거래 한 건 입력이 아니면 UNSUPPORTED를 반환하세요.
         READY가 아니면 알 수 없는 거래 필드는 null로 반환하세요.
@@ -116,6 +121,14 @@ class OpenAiTransactionDraftGenerator(
                     "type" to listOf("string", "null"),
                     "enum" to listOf("ME", "PARTNER", null),
                 ),
+                "paymentMethod" to mapOf(
+                    "type" to listOf("string", "null"),
+                    "enum" to listOf(PaymentMethod.CARD.name, PaymentMethod.CASH.name, null),
+                ),
+                "cardIssuer" to mapOf(
+                    "type" to listOf("string", "null"),
+                    "enum" to CardIssuer.entries.map(CardIssuer::name) + null,
+                ),
                 "message" to nullableString,
             ),
             "required" to listOf(
@@ -125,6 +138,8 @@ class OpenAiTransactionDraftGenerator(
                 "category",
                 "occurredAt",
                 "payer",
+                "paymentMethod",
+                "cardIssuer",
                 "message",
             ),
         )

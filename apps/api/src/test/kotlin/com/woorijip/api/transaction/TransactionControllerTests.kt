@@ -111,6 +111,8 @@ class TransactionControllerTests(
                 merchant = "다른 집 거래",
                 amount = 10_000,
                 category = "식비",
+                paymentMethod = PaymentMethod.UNKNOWN,
+                cardIssuer = null,
                 occurredAt = now,
                 createdAt = now,
             ),
@@ -152,6 +154,7 @@ class TransactionControllerTests(
                       "merchant": " ",
                       "amount": 0,
                       "category": "",
+                      "paymentMethod": null,
                       "occurredAt": null
                     }
                     """.trimIndent()
@@ -165,6 +168,58 @@ class TransactionControllerTests(
                 with(allowedOidcLogin())
             }.andExpect {
                 status { isBadRequest() }
+            }
+    }
+
+    @Test
+    fun `validates payment method and card issuer combinations`() {
+        val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
+
+        mockMvc
+            .post("/transactions") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content = transactionJson(currentUser.id, "카드 결제", "CARD", null)
+            }.andExpect {
+                status { isBadRequest() }
+            }
+
+        mockMvc
+            .post("/transactions") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content = transactionJson(currentUser.id, "현금 결제", "CASH", "SHINHAN")
+            }.andExpect {
+                status { isBadRequest() }
+            }
+
+        mockMvc
+            .post("/transactions") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content = transactionJson(currentUser.id, "과거 결제", "UNKNOWN", null)
+            }.andExpect {
+                status { isBadRequest() }
+            }
+    }
+
+    @Test
+    fun `creates a cash transaction without a card issuer`() {
+        val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
+
+        mockMvc
+            .post("/transactions") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content = transactionJson(currentUser.id, "현금 결제", "CASH", null)
+            }.andExpect {
+                status { isCreated() }
+                jsonPath("$.paymentMethod") { value("CASH") }
+                jsonPath("$.cardIssuer") { doesNotExist() }
             }
     }
 
@@ -191,12 +246,16 @@ class TransactionControllerTests(
                 status { isCreated() }
                 jsonPath("$.payerId") { value(payerId) }
                 jsonPath("$.merchant") { value(merchant) }
+                jsonPath("$.paymentMethod") { value("CARD") }
+                jsonPath("$.cardIssuer") { value("SHINHAN") }
             }
     }
 
     private fun transactionJson(
         payerId: Long,
         merchant: String,
+        paymentMethod: String = "CARD",
+        cardIssuer: String? = "SHINHAN",
     ) =
         """
         {
@@ -204,6 +263,8 @@ class TransactionControllerTests(
           "merchant": "$merchant",
           "amount": 8000,
           "category": "식비",
+          "paymentMethod": "$paymentMethod",
+          "cardIssuer": ${cardIssuer?.let { "\"$it\"" } ?: "null"},
           "occurredAt": "2026-07-15T12:30:00+09:00"
         }
         """.trimIndent()

@@ -8,6 +8,9 @@ import com.woorijip.api.household.HouseholdMembershipRepository
 import com.woorijip.api.identity.AppUser
 import com.woorijip.api.identity.AppUserRepository
 import com.woorijip.api.transaction.TransactionRepository
+import com.woorijip.api.transaction.CardIssuer
+import com.woorijip.api.transaction.PaymentMethod
+import org.hamcrest.Matchers.containsString
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
@@ -59,6 +62,8 @@ class AiTransactionDraftControllerTests(
                 jsonPath("$.amount") { value(8000) }
                 jsonPath("$.category") { value("식비") }
                 jsonPath("$.payerId") { value(currentUser.id) }
+                jsonPath("$.paymentMethod") { value("CARD") }
+                jsonPath("$.cardIssuer") { value("SHINHAN") }
             }
 
         assertEquals(0, transactionRepository.count())
@@ -128,6 +133,23 @@ class AiTransactionDraftControllerTests(
             }
 
         assertEquals(0, transactionRepository.count())
+    }
+
+    @Test
+    fun `asks for clarification when generated payment details are incomplete`() {
+        googleAccountService.provision(TestOidcUsers.allowed())
+
+        mockMvc
+            .post("/ai/transaction-drafts") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"messages":["결제수단 없는 거래"]}"""
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.status") { value("NEEDS_CLARIFICATION") }
+                jsonPath("$.message") { value(containsString("결제수단")) }
+            }
     }
 
     @Test
@@ -204,6 +226,14 @@ class AiTransactionDraftTestConfiguration {
                     status = GeneratedDraftStatus.NEEDS_CLARIFICATION,
                     message = "금액이 얼마였나요?",
                 )
+                message.contains("결제수단 없는") -> GeneratedTransactionDraft(
+                    status = GeneratedDraftStatus.READY,
+                    merchant = "김밥천국",
+                    amount = 8_000,
+                    category = "식비",
+                    occurredAt = "2026-07-21T12:30:00+09:00",
+                    payer = GeneratedPayer.ME,
+                )
                 message.contains("배우자") -> GeneratedTransactionDraft(
                     status = GeneratedDraftStatus.READY,
                     merchant = "이마트",
@@ -211,6 +241,7 @@ class AiTransactionDraftTestConfiguration {
                     category = "생활",
                     occurredAt = "2026-07-21T12:30:00+09:00",
                     payer = GeneratedPayer.PARTNER,
+                    paymentMethod = PaymentMethod.CASH,
                 )
                 else -> GeneratedTransactionDraft(
                     status = GeneratedDraftStatus.READY,
@@ -219,6 +250,8 @@ class AiTransactionDraftTestConfiguration {
                     category = "식비",
                     occurredAt = "2026-07-21T12:30:00+09:00",
                     payer = GeneratedPayer.ME,
+                    paymentMethod = PaymentMethod.CARD,
+                    cardIssuer = CardIssuer.SHINHAN,
                 )
             }
         }

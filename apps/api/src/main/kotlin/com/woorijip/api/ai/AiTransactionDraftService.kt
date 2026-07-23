@@ -3,6 +3,8 @@ package com.woorijip.api.ai
 import com.woorijip.api.auth.CurrentUser
 import com.woorijip.api.household.HouseholdMember
 import com.woorijip.api.household.HouseholdMembershipRepository
+import com.woorijip.api.transaction.CardIssuer
+import com.woorijip.api.transaction.PaymentMethod
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
@@ -17,6 +19,8 @@ data class AiTransactionDraft(
     val occurredAt: OffsetDateTime? = null,
     val payerId: Long? = null,
     val payerDisplayName: String? = null,
+    val paymentMethod: PaymentMethod? = null,
+    val cardIssuer: CardIssuer? = null,
     val message: String,
 )
 
@@ -68,11 +72,23 @@ class AiTransactionDraftService(
             runCatching { OffsetDateTime.parse(value) }.getOrNull()
         }
         val payer = resolvePayer(currentUser, members, generated.payer)
+        val hasValidPaymentDetails = when (generated.paymentMethod) {
+            PaymentMethod.CARD -> generated.cardIssuer != null
+            PaymentMethod.CASH -> generated.cardIssuer == null
+            PaymentMethod.UNKNOWN, null -> false
+        }
 
-        if (merchant == null || amount == null || category == null || occurredAt == null || payer == null) {
+        if (
+            merchant == null ||
+            amount == null ||
+            category == null ||
+            occurredAt == null ||
+            payer == null ||
+            !hasValidPaymentDetails
+        ) {
             return AiTransactionDraft(
                 status = GeneratedDraftStatus.NEEDS_CLARIFICATION,
-                message = "거래 정보를 정확히 확인할 수 없습니다. 가맹점, 금액, 결제자를 포함해 다시 입력해 주세요.",
+                message = "거래 정보를 정확히 확인할 수 없습니다. 가맹점, 금액, 결제자, 결제수단을 포함해 다시 입력해 주세요.",
             )
         }
 
@@ -84,6 +100,8 @@ class AiTransactionDraftService(
             occurredAt = occurredAt,
             payerId = payer.userId,
             payerDisplayName = payer.displayName,
+            paymentMethod = generated.paymentMethod,
+            cardIssuer = generated.cardIssuer,
             message = "아래 거래 내용을 확인해 주세요.",
         )
     }

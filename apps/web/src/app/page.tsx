@@ -2,6 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AiTransactionDraftForm } from "./ai-transaction-draft-form";
+import {
+  paymentDetailsLabel,
+  type CardIssuer,
+  type StoredPaymentMethod,
+} from "./payment-details";
 import { TransactionForm, type HouseholdMember } from "./transaction-form";
 
 type CurrentUser = {
@@ -16,6 +21,8 @@ type Transaction = {
   merchant: string;
   amount: number;
   category: string;
+  paymentMethod: StoredPaymentMethod;
+  cardIssuer: CardIssuer | null;
   occurredAt: string;
   createdAt: string;
 };
@@ -266,6 +273,7 @@ export default function Home() {
                     <p className="mt-1 text-sm text-stone-500">
                       {householdMembers.find((member) => member.userId === transaction.payerId)
                         ?.displayName ?? "알 수 없음"} · {transaction.category} ·{" "}
+                      {paymentDetailsLabel(transaction.paymentMethod, transaction.cardIssuer)} ·{" "}
                       {dateFormatter.format(new Date(transaction.occurredAt))}
                     </p>
                   </div>

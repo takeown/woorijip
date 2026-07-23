@@ -13,6 +13,8 @@ data class Transaction(
     val merchant: String,
     val amount: Long,
     val category: String,
+    val paymentMethod: PaymentMethod,
+    val cardIssuer: CardIssuer?,
     val occurredAt: OffsetDateTime,
     val createdAt: OffsetDateTime,
 )

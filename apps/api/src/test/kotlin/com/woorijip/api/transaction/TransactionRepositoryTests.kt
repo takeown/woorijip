@@ -35,6 +35,8 @@ class TransactionRepositoryTests(
         transactionRepository.save(later)
 
         assertNotNull(savedEarlier.id)
+        assertEquals(PaymentMethod.CARD, savedEarlier.paymentMethod)
+        assertEquals(CardIssuer.SHINHAN, savedEarlier.cardIssuer)
         assertEquals(
             listOf("동네마트", "김밥천국"),
             transactionRepository
@@ -54,6 +56,8 @@ class TransactionRepositoryTests(
         merchant = merchant,
         amount = 8_000,
         category = "식비",
+        paymentMethod = PaymentMethod.CARD,
+        cardIssuer = CardIssuer.SHINHAN,
         occurredAt = OffsetDateTime.parse(occurredAt),
         createdAt = OffsetDateTime.parse("2026-07-15T20:00:00+09:00"),
     )
