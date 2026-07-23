@@ -12,8 +12,8 @@ permissions:
   contents: read
 
 jobs:
-  ci:
-    runs-on: ubuntu-latest
+  web:
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
 
     steps:
@@ -31,13 +31,6 @@ jobs:
           corepack install
           pnpm --version
 
-      - name: Set up Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: 21
-          cache: gradle
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -47,8 +40,52 @@ jobs:
       - name: Build web
         run: pnpm build:web
 
+  api:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
       - name: Build and test API
-        run: pnpm build:api
+        working-directory: apps/api
+        run: ./gradlew build
+
+  compose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
 
       - name: Validate Docker Compose
         run: docker compose config -q
+
+  ci:
+    if: ${{ always() }}
+    needs:
+      - web
+      - api
+      - compose
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Verify all CI jobs succeeded
+        env:
+          WEB_RESULT: ${{ needs.web.result }}
+          API_RESULT: ${{ needs.api.result }}
+          COMPOSE_RESULT: ${{ needs.compose.result }}
+        run: |
+          test "$WEB_RESULT" = success
+          test "$API_RESULT" = success
+          test "$COMPOSE_RESULT" = success
