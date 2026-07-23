@@ -22,9 +22,9 @@ app:
   auth:
     allowed-google-emails: ${GOOGLE_ALLOWED_EMAILS:}
     bootstrap-household-name: ${BOOTSTRAP_HOUSEHOLD_NAME:우리집}
-    web-url: ${WEB_URL:http://localhost:3000}
+    web-url: ${WEB_URL:http://localhost:3100}
   cors:
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3100}
   openai:
     api-key: ${OPENAI_API_KEY:}
     model: ${OPENAI_MODEL:gpt-5.6-luna}

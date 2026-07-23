@@ -6,5 +6,5 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 data class AuthProperties(
     val allowedGoogleEmails: List<String> = emptyList(),
     val bootstrapHouseholdName: String = "우리집",
-    val webUrl: String = "http://localhost:3000",
+    val webUrl: String = "http://localhost:3100",
 )
