@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   web:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
 
     steps:
@@ -41,7 +41,7 @@ jobs:
         run: pnpm build:web
 
   api:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
 
     steps:
@@ -60,7 +60,7 @@ jobs:
         run: ./gradlew build
 
   compose:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
 
     steps:
@@ -76,7 +76,7 @@ jobs:
       - web
       - api
       - compose
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
 
     steps:
