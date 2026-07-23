@@ -131,6 +131,7 @@ household 소유권과 결제자 정보는 M2로 미룬다.
 - [x] 고정 IPv4, DNS, HTTPS와 최소 방화벽 규칙 설정
 - [x] 운영 비밀값을 서버에만 저장하고 파일 권한 제한
 - [x] GitHub Actions에서 운영 이미지를 빌드하고 서버는 이미지를 받아 실행
+- [x] GitHub OIDC로 배포 runner의 SSH 방화벽 규칙을 자동 개방·회수
 - [x] 통제된 배포 단계에서 Flyway migration 실행
 - [ ] Lightsail 자동 스냅샷과 PostgreSQL 논리 백업 구성
 - [x] AWS 비용 알림 추가
@@ -268,6 +269,9 @@ Google 로그인, 수동 거래 등록·조회를 확인했다. AWS 월별 비�
 증명을 발급한다. workflow가 runner 공인 IPv4의 `/32`만 22/TCP에 임시 추가하고
 성공·실패와 관계없이 같은 규칙을 제거한다. IAM 신뢰 정책은 production Environment로,
 역할 권한은 운영 Lightsail 인스턴스의 방화벽 개방·폐쇄 작업으로 제한한다.
+실제 운영 배포에서 OIDC 인증, 임시 규칙 추가, SSH 배포, 임시 규칙 제거와 외부 HTTPS
+응답을 확인했다. AWS 역할 ARN, 리전, 인스턴스 이름은 GitHub production Environment의
+Secret이 아니라 Variable로 관리한다.
 외부 논리 백업과 복구 검증이 완료되기 전까지 단일 서버 장애에 대한 데이터
 복구 위험은 남아 있다.
 
