@@ -8,8 +8,6 @@ import com.woorijip.api.identity.AppUser
 import com.woorijip.api.identity.AppUserRepository
 import com.woorijip.api.identity.AuthIdentity
 import com.woorijip.api.identity.AuthIdentityRepository
-import org.springframework.security.oauth2.core.OAuth2AuthenticationException
-import org.springframework.security.oauth2.core.OAuth2Error
 import org.springframework.security.oauth2.core.oidc.user.OidcUser
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -22,14 +20,13 @@ class GoogleAccountService(
     private val authIdentityRepository: AuthIdentityRepository,
     private val householdRepository: HouseholdRepository,
     private val householdMembershipRepository: HouseholdMembershipRepository,
+    private val googleAccountAccessPolicy: GoogleAccountAccessPolicy,
 ) {
     @Transactional
     fun provision(oidcUser: OidcUser): CurrentUser {
-        val subject = oidcUser.subject ?: throw accessDenied()
-        val email = oidcUser.email?.trim()?.lowercase()
-        if (email == null || oidcUser.emailVerified != true || email !in allowedEmails()) {
-            throw accessDenied()
-        }
+        googleAccountAccessPolicy.requireAllowed(oidcUser)
+        val subject = requireNotNull(oidcUser.subject)
+        val email = requireNotNull(oidcUser.email).trim().lowercase()
 
         val existingIdentity = authIdentityRepository.findByProviderAndProviderSubject(GOOGLE, subject)
         if (existingIdentity != null) {
@@ -75,34 +72,22 @@ class GoogleAccountService(
 
     @Transactional(readOnly = true)
     fun findByGoogleSubject(subject: String?): CurrentUser {
-        val verifiedSubject = subject ?: throw accessDenied()
+        val verifiedSubject = subject ?: throw accountNotAllowed()
         val identity = authIdentityRepository.findByProviderAndProviderSubject(GOOGLE, verifiedSubject)
-            ?: throw accessDenied()
+            ?: throw accountNotAllowed()
         return currentUser(identity.userId)
     }
 
     private fun currentUser(userId: Long): CurrentUser {
-        val user = appUserRepository.findById(userId).orElseThrow(::accessDenied)
+        val user = appUserRepository.findById(userId).orElseThrow(::accountNotAllowed)
         val membership = householdMembershipRepository.findAllByUserId(userId).singleOrNull()
-            ?: throw accessDenied()
+            ?: throw accountNotAllowed()
         return CurrentUser(
             id = requireNotNull(user.id),
             displayName = user.displayName,
             householdId = membership.householdId,
         )
     }
-
-    private fun allowedEmails(): Set<String> =
-        authProperties.allowedGoogleEmails
-            .map(String::trim)
-            .filter(String::isNotEmpty)
-            .map(String::lowercase)
-            .toSet()
-
-    private fun accessDenied() = OAuth2AuthenticationException(
-        OAuth2Error("access_denied"),
-        "허용되지 않은 Google 계정입니다.",
-    )
 
     private companion object {
         const val GOOGLE = "google"

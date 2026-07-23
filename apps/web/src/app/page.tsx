@@ -42,12 +42,27 @@ const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
   timeZone: "Asia/Seoul",
 });
 
+function authErrorMessage(authError: string): string {
+  switch (authError) {
+    case "not_allowed":
+      return "허용되지 않은 Google 계정입니다.";
+    case "session_expired":
+      return "로그인 시간이 만료되었습니다. 다시 시도해 주세요.";
+    default:
+      return "Google 로그인을 완료하지 못했습니다. 다시 시도해 주세요.";
+  }
+}
+
 export default function Home() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>();
   const [householdMembers, setHouseholdMembers] = useState<HouseholdMember[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [payerFilter, setPayerFilter] = useState<PayerFilter>("all");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    const authError = new URL(window.location.href).searchParams.get("authError");
+    return authError ? authErrorMessage(authError) : null;
+  });
 
   const loadTransactions = useCallback(async (filter: PayerFilter = "all") => {
     const response = await fetch(`${apiUrl}/transactions?payer=${filter}`, {
@@ -77,6 +92,12 @@ export default function Home() {
 
   useEffect(() => {
     let active = true;
+    const url = new URL(window.location.href);
+    const authError = url.searchParams.get("authError");
+    if (authError) {
+      url.searchParams.delete("authError");
+      window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    }
 
     fetch(`${apiUrl}/auth/me`, {
       credentials: "include",
