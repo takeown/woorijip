@@ -8,10 +8,10 @@ PostgreSQL을 Docker Compose로 실행한다.
 ```text
 main push
 → CI 성공
-→ main에서 Publish images workflow 수동 실행
+→ main에서 Release production workflow 수동 실행
 → 웹·API 이미지 병렬 빌드
 → GHCR에 latest와 commit SHA 태그로 게시
-→ 40자리 commit SHA로 Deploy production workflow 수동 실행
+→ 게시한 commit SHA로 배포 자동 진행
 → GitHub OIDC로 AWS 단기 자격 증명 발급
 → GitHub runner IPv4만 22/TCP에 임시 허용
 → production Environment Secret으로 SSH 연결
@@ -112,14 +112,15 @@ Google Cloud의 운영 OAuth 클라이언트에 실제 도메인을 사용한 �
 ## 배포
 
 1. 배포할 `main` commit의 CI가 성공했는지 확인한다.
-2. Actions에서 `Publish images`를 선택하고 `main` 브랜치에서 수동 실행한다.
-3. web과 api 이미지 게시 job이 모두 성공했는지 확인한다.
-4. 배포할 `main`의 40자리 commit SHA를 복사한다. `latest`는 사용하지
-   않는 것을 기본으로 한다.
-5. Actions에서 `Deploy production`을 선택한다.
-6. `Run workflow`의 branch를 `main`으로 선택하고 commit SHA를 입력한다.
-7. 임시 SSH 개방, 배포, 임시 SSH 제거 단계가 모두 성공했는지 확인한다.
-8. 컨테이너 healthcheck와 운영 도메인의 HTTPS, 로그인, 주요 기능을 smoke test한다.
+2. Actions에서 `Release production`을 선택한다.
+3. `Run workflow`의 branch를 `main`으로 선택하고 수동 실행한다.
+4. web과 api 이미지 게시 job이 모두 성공한 뒤 deploy job이 이어지는지 확인한다.
+5. 임시 SSH 개방, 배포, 임시 SSH 제거 단계가 모두 성공했는지 확인한다.
+6. 컨테이너 healthcheck와 운영 도메인의 HTTPS, 로그인, 주요 기능을 smoke test한다.
+
+`Publish images`는 배포 없이 이미지만 게시할 때 사용한다. `Deploy production`은 이미
+게시된 `latest` 또는 40자리 commit SHA를 재배포하거나 rollback할 때 사용한다. 정상
+배포에서는 `Release production`이 현재 `main`의 commit SHA를 자동으로 전달한다.
 
 workflow가 강제 취소되거나 runner 장애로 cleanup 단계까지 실행되지 못했다면 Lightsail의
 IPv4 방화벽을 확인한다. 관리자 주소가 아닌 배포 시각에 추가된 22/TCP `/32` 규칙만
