@@ -1,6 +1,11 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import {
+  cardIssuers,
+  type CardIssuer,
+  type PaymentMethod,
+} from "./payment-details";
 import type { HouseholdMember } from "./transaction-form";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
@@ -13,6 +18,8 @@ type ReadyDraft = {
   occurredAt: string;
   payerId: number;
   payerDisplayName: string;
+  paymentMethod: PaymentMethod;
+  cardIssuer: CardIssuer | null;
   message: string;
 };
 
@@ -47,6 +54,8 @@ export function AiTransactionDraftForm({
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CARD");
+  const [cardIssuer, setCardIssuer] = useState<CardIssuer | "">("");
 
   async function csrfToken(): Promise<CsrfToken> {
     const response = await fetch(`${apiUrl}/auth/csrf`, {
@@ -78,8 +87,13 @@ export function AiTransactionDraftForm({
         throw new Error("AI 거래 초안을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.");
       }
 
+      const nextDraft: AiDraft = await response.json();
       setMessages(nextMessages);
-      setDraft(await response.json());
+      setDraft(nextDraft);
+      if (nextDraft.status === "READY") {
+        setPaymentMethod(nextDraft.paymentMethod);
+        setCardIssuer(nextDraft.cardIssuer ?? "");
+      }
       return true;
     } catch (caughtError) {
       setError(
@@ -120,6 +134,8 @@ export function AiTransactionDraftForm({
     setRequestCount(0);
     setDraft(null);
     setError(null);
+    setPaymentMethod("CARD");
+    setCardIssuer("");
   }
 
   async function saveDraft(event: FormEvent<HTMLFormElement>) {
@@ -143,6 +159,8 @@ export function AiTransactionDraftForm({
           merchant: String(formData.get("merchant") ?? "").trim(),
           amount: Number(formData.get("amount")),
           category: String(formData.get("category") ?? "").trim(),
+          paymentMethod,
+          cardIssuer: paymentMethod === "CARD" ? cardIssuer : null,
           occurredAt: new Date(String(formData.get("occurredAt"))).toISOString(),
         }),
       });
@@ -253,6 +271,43 @@ export function AiTransactionDraftForm({
                 ))}
               </select>
             </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-stone-700" htmlFor="draft-paymentMethod">
+                결제수단
+              </label>
+              <select
+                className="w-full rounded-xl border border-emerald-200 bg-white px-3 py-2.5 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                id="draft-paymentMethod"
+                name="paymentMethod"
+                onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}
+                value={paymentMethod}
+              >
+                <option value="CARD">카드</option>
+                <option value="CASH">현금</option>
+              </select>
+            </div>
+            {paymentMethod === "CARD" ? (
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-stone-700" htmlFor="draft-cardIssuer">
+                  카드사
+                </label>
+                <select
+                  className="w-full rounded-xl border border-emerald-200 bg-white px-3 py-2.5 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                  id="draft-cardIssuer"
+                  name="cardIssuer"
+                  onChange={(event) => setCardIssuer(event.target.value as CardIssuer)}
+                  required
+                  value={cardIssuer}
+                >
+                  <option disabled value="">카드사를 선택해 주세요</option>
+                  {cardIssuers.map((issuer) => (
+                    <option key={issuer.value} value={issuer.value}>
+                      {issuer.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
             <div>
               <label className="mb-1.5 block text-sm font-medium text-stone-700" htmlFor="draft-occurredAt">
                 결제 시각

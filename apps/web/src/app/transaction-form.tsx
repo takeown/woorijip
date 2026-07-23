@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { cardIssuers, type PaymentMethod } from "./payment-details";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
@@ -27,6 +28,7 @@ export function TransactionForm({
 }: TransactionFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CARD");
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -57,6 +59,8 @@ export function TransactionForm({
           merchant: formData.get("merchant"),
           amount: Number(formData.get("amount")),
           category: formData.get("category"),
+          paymentMethod,
+          cardIssuer: paymentMethod === "CARD" ? formData.get("cardIssuer") : null,
           occurredAt: occurredAt
             ? new Date(occurredAt).toISOString()
             : new Date().toISOString(),
@@ -147,6 +151,44 @@ export function TransactionForm({
           />
         </div>
       </div>
+
+      <div>
+        <label className="mb-2 block text-sm font-medium text-stone-700" htmlFor="paymentMethod">
+          결제수단
+        </label>
+        <select
+          className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+          id="paymentMethod"
+          name="paymentMethod"
+          onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}
+          value={paymentMethod}
+        >
+          <option value="CARD">카드</option>
+          <option value="CASH">현금</option>
+        </select>
+      </div>
+
+      {paymentMethod === "CARD" ? (
+        <div>
+          <label className="mb-2 block text-sm font-medium text-stone-700" htmlFor="cardIssuer">
+            카드사
+          </label>
+          <select
+            className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+            defaultValue=""
+            id="cardIssuer"
+            name="cardIssuer"
+            required
+          >
+            <option disabled value="">카드사를 선택해 주세요</option>
+            {cardIssuers.map((issuer) => (
+              <option key={issuer.value} value={issuer.value}>
+                {issuer.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
 
       <div>
         <label className="mb-2 block text-sm font-medium text-stone-700" htmlFor="occurredAt">

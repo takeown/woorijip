@@ -19,6 +19,8 @@ data class TransactionDraft(
     val merchant: String,
     val amount: Long,
     val category: String,
+    val paymentMethod: PaymentMethod,
+    val cardIssuer: CardIssuer?,
     val occurredAt: OffsetDateTime,
 )
 
@@ -33,6 +35,7 @@ class TransactionService(
         draft: TransactionDraft,
     ): Transaction {
         requireHouseholdMember(currentUser.householdId, draft.payerId)
+        requirePaymentDetails(draft.paymentMethod, draft.cardIssuer)
 
         return transactionRepository.save(
             Transaction(
@@ -41,6 +44,8 @@ class TransactionService(
                 merchant = draft.merchant,
                 amount = draft.amount,
                 category = draft.category,
+                paymentMethod = draft.paymentMethod,
+                cardIssuer = draft.cardIssuer,
                 occurredAt = draft.occurredAt,
                 createdAt = OffsetDateTime.now(),
             ),
@@ -74,6 +79,20 @@ class TransactionService(
         val isMember = householdMembershipRepository.existsByHouseholdIdAndUserId(householdId, payerId)
         if (!isMember) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "결제자는 현재 가구의 구성원이어야 합니다.")
+        }
+    }
+
+    private fun requirePaymentDetails(
+        paymentMethod: PaymentMethod,
+        cardIssuer: CardIssuer?,
+    ) {
+        val isValid = when (paymentMethod) {
+            PaymentMethod.CARD -> cardIssuer != null
+            PaymentMethod.CASH -> cardIssuer == null
+            PaymentMethod.UNKNOWN -> false
+        }
+        if (!isValid) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "결제수단과 카드사를 확인해 주세요.")
         }
     }
 }

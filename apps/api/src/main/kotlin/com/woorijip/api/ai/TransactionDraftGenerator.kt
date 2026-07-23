@@ -1,5 +1,7 @@
 package com.woorijip.api.ai
 
+import com.woorijip.api.transaction.CardIssuer
+import com.woorijip.api.transaction.PaymentMethod
 import java.time.OffsetDateTime
 
 enum class GeneratedDraftStatus {
@@ -20,6 +22,8 @@ data class GeneratedTransactionDraft(
     val category: String? = null,
     val occurredAt: String? = null,
     val payer: GeneratedPayer? = null,
+    val paymentMethod: PaymentMethod? = null,
+    val cardIssuer: CardIssuer? = null,
     val message: String? = null,
 )
 

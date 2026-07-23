@@ -32,6 +32,9 @@ data class CreateTransactionRequest(
     @field:Size(max = 100)
     val category: String?,
     @field:NotNull
+    val paymentMethod: PaymentMethod?,
+    val cardIssuer: CardIssuer?,
+    @field:NotNull
     val occurredAt: OffsetDateTime?,
 )
 
@@ -41,6 +44,8 @@ data class TransactionResponse(
     val merchant: String,
     val amount: Long,
     val category: String,
+    val paymentMethod: PaymentMethod,
+    val cardIssuer: CardIssuer?,
     val occurredAt: OffsetDateTime,
     val createdAt: OffsetDateTime,
 )
@@ -62,10 +67,12 @@ class TransactionController(
                 currentUser,
                 TransactionDraft(
                     payerId = requireNotNull(request.payerId),
-                merchant = requireNotNull(request.merchant).trim(),
-                amount = requireNotNull(request.amount),
-                category = requireNotNull(request.category).trim(),
-                occurredAt = requireNotNull(request.occurredAt),
+                    merchant = requireNotNull(request.merchant).trim(),
+                    amount = requireNotNull(request.amount),
+                    category = requireNotNull(request.category).trim(),
+                    paymentMethod = requireNotNull(request.paymentMethod),
+                    cardIssuer = request.cardIssuer,
+                    occurredAt = requireNotNull(request.occurredAt),
                 ),
             ).toResponse()
     }
@@ -94,6 +101,8 @@ private fun Transaction.toResponse(): TransactionResponse =
         merchant = merchant,
         amount = amount,
         category = category,
+        paymentMethod = paymentMethod,
+        cardIssuer = cardIssuer,
         occurredAt = occurredAt,
         createdAt = createdAt,
     )
