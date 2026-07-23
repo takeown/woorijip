@@ -1,6 +1,12 @@
 name: Deploy production
 
 on:
+  workflow_call:
+    inputs:
+      image_tag:
+        description: GHCR image tag to deploy
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       image_tag:
