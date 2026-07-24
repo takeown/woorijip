@@ -83,6 +83,8 @@ class OpenAiTransactionDraftGenerator(
         카드사가 언급되지 않은 카드 결제는 NEEDS_CLARIFICATION으로 카드사를 질문하세요.
         현금 결제면 cardIssuer는 null입니다.
         카테고리는 짧은 한국어 명사로 추론하세요.
+        내역은 구매 품목이나 사용 목적을 사용자가 말한 경우에만 짧게 정리하고, 알 수 없으면 null로 반환하세요.
+        내역이 없다는 이유로 추가 질문하지 마세요.
         가맹점, 양의 정수 KRW 금액, 카테고리, ISO 8601 발생 시각, 결제자, 결제수단을 모두 알면 READY입니다.
         거래 입력이지만 필수값이 부족하면 NEEDS_CLARIFICATION과 한 가지 짧은 질문을 반환하세요.
         소비 분석, 조회, 일반 대화 등 거래 한 건 입력이 아니면 UNSUPPORTED를 반환하세요.
@@ -114,6 +116,7 @@ class OpenAiTransactionDraftGenerator(
                     "enum" to GeneratedDraftStatus.entries.map(GeneratedDraftStatus::name),
                 ),
                 "merchant" to nullableString,
+                "description" to nullableString,
                 "amount" to mapOf("type" to listOf("integer", "null")),
                 "category" to nullableString,
                 "occurredAt" to nullableString,
@@ -134,6 +137,7 @@ class OpenAiTransactionDraftGenerator(
             "required" to listOf(
                 "status",
                 "merchant",
+                "description",
                 "amount",
                 "category",
                 "occurredAt",

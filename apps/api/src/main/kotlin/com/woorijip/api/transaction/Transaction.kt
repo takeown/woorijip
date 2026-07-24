@@ -11,6 +11,7 @@ data class Transaction(
     val householdId: Long,
     val payerId: Long,
     val merchant: String,
+    val description: String?,
     val amount: Long,
     val category: String,
     val paymentMethod: PaymentMethod,

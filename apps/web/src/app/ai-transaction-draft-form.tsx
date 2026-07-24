@@ -13,6 +13,7 @@ const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 type ReadyDraft = {
   status: "READY";
   merchant: string;
+  description: string | null;
   amount: number;
   category: string;
   occurredAt: string;
@@ -157,6 +158,7 @@ export function AiTransactionDraftForm({
         body: JSON.stringify({
           payerId: Number(formData.get("payerId")),
           merchant: String(formData.get("merchant") ?? "").trim(),
+          description: String(formData.get("description") ?? "").trim() || null,
           amount: Number(formData.get("amount")),
           category: String(formData.get("category") ?? "").trim(),
           paymentMethod,
@@ -220,6 +222,19 @@ export function AiTransactionDraftForm({
                 maxLength={200}
                 name="merchant"
                 required
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-stone-700" htmlFor="draft-description">
+                내역 <span className="font-normal text-stone-500">(선택)</span>
+              </label>
+              <input
+                className="w-full rounded-xl border border-emerald-200 bg-white px-3 py-2.5 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                defaultValue={draft.description ?? ""}
+                id="draft-description"
+                maxLength={500}
+                name="description"
+                placeholder="세제와 휴지"
               />
             </div>
             <div className="grid grid-cols-2 gap-3">

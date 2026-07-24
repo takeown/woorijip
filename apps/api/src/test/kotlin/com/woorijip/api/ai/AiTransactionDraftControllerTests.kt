@@ -59,6 +59,7 @@ class AiTransactionDraftControllerTests(
                 status { isOk() }
                 jsonPath("$.status") { value("READY") }
                 jsonPath("$.merchant") { value("김밥천국") }
+                jsonPath("$.description") { value("점심 식사") }
                 jsonPath("$.amount") { value(8000) }
                 jsonPath("$.category") { value("식비") }
                 jsonPath("$.payerId") { value(currentUser.id) }
@@ -85,6 +86,7 @@ class AiTransactionDraftControllerTests(
                 jsonPath("$.status") { value("READY") }
                 jsonPath("$.payerId") { value(partnerId) }
                 jsonPath("$.payerDisplayName") { value("배우자") }
+                jsonPath("$.description") { doesNotExist() }
             }
     }
 
@@ -246,6 +248,7 @@ class AiTransactionDraftTestConfiguration {
                 else -> GeneratedTransactionDraft(
                     status = GeneratedDraftStatus.READY,
                     merchant = "김밥천국",
+                    description = "점심 식사",
                     amount = 8_000,
                     category = "식비",
                     occurredAt = "2026-07-21T12:30:00+09:00",

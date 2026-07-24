@@ -25,6 +25,8 @@ data class CreateTransactionRequest(
     @field:NotBlank
     @field:Size(max = 200)
     val merchant: String?,
+    @field:Size(max = 500)
+    val description: String?,
     @field:NotNull
     @field:Positive
     val amount: Long?,
@@ -42,6 +44,7 @@ data class TransactionResponse(
     val id: Long,
     val payerId: Long,
     val merchant: String,
+    val description: String?,
     val amount: Long,
     val category: String,
     val paymentMethod: PaymentMethod,
@@ -68,6 +71,7 @@ class TransactionController(
                 TransactionDraft(
                     payerId = requireNotNull(request.payerId),
                     merchant = requireNotNull(request.merchant).trim(),
+                    description = request.description?.trim()?.takeIf(String::isNotEmpty),
                     amount = requireNotNull(request.amount),
                     category = requireNotNull(request.category).trim(),
                     paymentMethod = requireNotNull(request.paymentMethod),
@@ -99,6 +103,7 @@ private fun Transaction.toResponse(): TransactionResponse =
         id = requireNotNull(id),
         payerId = payerId,
         merchant = merchant,
+        description = description,
         amount = amount,
         category = category,
         paymentMethod = paymentMethod,

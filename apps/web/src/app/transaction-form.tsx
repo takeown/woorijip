@@ -57,6 +57,7 @@ export function TransactionForm({
         body: JSON.stringify({
           payerId: Number(formData.get("payerId")),
           merchant: formData.get("merchant"),
+          description: String(formData.get("description") ?? "").trim() || null,
           amount: Number(formData.get("amount")),
           category: formData.get("category"),
           paymentMethod,
@@ -116,6 +117,19 @@ export function TransactionForm({
           placeholder="김밥천국"
           required
           maxLength={200}
+        />
+      </div>
+
+      <div>
+        <label className="mb-2 block text-sm font-medium text-stone-700" htmlFor="description">
+          내역 <span className="font-normal text-stone-500">(선택)</span>
+        </label>
+        <input
+          className="w-full rounded-xl border border-stone-300 px-4 py-3 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+          id="description"
+          name="description"
+          placeholder="세제와 휴지"
+          maxLength={500}
         />
       </div>
 
