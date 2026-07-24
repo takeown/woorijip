@@ -47,7 +47,7 @@ class TransactionControllerTests(
         val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
         val partnerId = createMember(currentUser.householdId, "배우자")
 
-        createTransaction(currentUser.id, "김밥천국")
+        createTransaction(currentUser.id, "김밥천국", "점심 식사")
         createTransaction(partnerId, "동네마트")
 
         mockMvc
@@ -66,6 +66,7 @@ class TransactionControllerTests(
                 status { isOk() }
                 jsonPath("$", hasSize<Any>(1))
                 jsonPath("$[0].merchant") { value("김밥천국") }
+                jsonPath("$[0].description") { value("점심 식사") }
                 jsonPath("$[0].payerId") { value(currentUser.id) }
             }
 
@@ -109,6 +110,7 @@ class TransactionControllerTests(
                 householdId = otherHouseholdId,
                 payerId = otherUserId,
                 merchant = "다른 집 거래",
+                description = null,
                 amount = 10_000,
                 category = "식비",
                 paymentMethod = PaymentMethod.UNKNOWN,
@@ -224,6 +226,48 @@ class TransactionControllerTests(
     }
 
     @Test
+    fun `stores an optional description and normalizes a blank description`() {
+        val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
+
+        mockMvc
+            .post("/transactions") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content = transactionJson(currentUser.id, "동네마트", description = "  세제와 휴지  ")
+            }.andExpect {
+                status { isCreated() }
+                jsonPath("$.description") { value("세제와 휴지") }
+            }
+
+        mockMvc
+            .post("/transactions") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content = transactionJson(currentUser.id, "김밥천국", description = " ")
+            }.andExpect {
+                status { isCreated() }
+                jsonPath("$.description") { doesNotExist() }
+            }
+    }
+
+    @Test
+    fun `rejects a description longer than 500 characters`() {
+        val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
+
+        mockMvc
+            .post("/transactions") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content = transactionJson(currentUser.id, "동네마트", description = "가".repeat(501))
+            }.andExpect {
+                status { isBadRequest() }
+            }
+    }
+
+    @Test
     fun `requires authentication to access transactions`() {
         mockMvc
             .get("/transactions")
@@ -235,17 +279,21 @@ class TransactionControllerTests(
     private fun createTransaction(
         payerId: Long,
         merchant: String,
+        description: String? = null,
     ) {
         mockMvc
             .post("/transactions") {
                 with(allowedOidcLogin())
                 with(csrf())
                 contentType = MediaType.APPLICATION_JSON
-                content = transactionJson(payerId, merchant)
+                content = transactionJson(payerId, merchant, description = description)
             }.andExpect {
                 status { isCreated() }
                 jsonPath("$.payerId") { value(payerId) }
                 jsonPath("$.merchant") { value(merchant) }
+                if (description != null) {
+                    jsonPath("$.description") { value(description) }
+                }
                 jsonPath("$.paymentMethod") { value("CARD") }
                 jsonPath("$.cardIssuer") { value("SHINHAN") }
             }
@@ -256,11 +304,13 @@ class TransactionControllerTests(
         merchant: String,
         paymentMethod: String = "CARD",
         cardIssuer: String? = "SHINHAN",
+        description: String? = null,
     ) =
         """
         {
           "payerId": $payerId,
           "merchant": "$merchant",
+          "description": ${description?.let { "\"$it\"" } ?: "null"},
           "amount": 8000,
           "category": "식비",
           "paymentMethod": "$paymentMethod",

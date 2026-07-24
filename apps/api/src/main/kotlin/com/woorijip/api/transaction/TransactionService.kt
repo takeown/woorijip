@@ -17,6 +17,7 @@ enum class PayerFilter {
 data class TransactionDraft(
     val payerId: Long,
     val merchant: String,
+    val description: String?,
     val amount: Long,
     val category: String,
     val paymentMethod: PaymentMethod,
@@ -42,6 +43,7 @@ class TransactionService(
                 householdId = currentUser.householdId,
                 payerId = draft.payerId,
                 merchant = draft.merchant,
+                description = draft.description,
                 amount = draft.amount,
                 category = draft.category,
                 paymentMethod = draft.paymentMethod,

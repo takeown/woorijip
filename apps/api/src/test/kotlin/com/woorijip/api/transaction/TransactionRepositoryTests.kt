@@ -28,7 +28,13 @@ class TransactionRepositoryTests(
     @Test
     fun `saves and returns transactions in occurred time order`() {
         val (householdId, payerId) = createHouseholdMember()
-        val earlier = transaction(householdId, payerId, "김밥천국", "2026-07-14T12:00:00+09:00")
+        val earlier = transaction(
+            householdId,
+            payerId,
+            "김밥천국",
+            "2026-07-14T12:00:00+09:00",
+            "점심 식사",
+        )
         val later = transaction(householdId, payerId, "동네마트", "2026-07-15T19:30:00+09:00")
 
         val savedEarlier = transactionRepository.save(earlier)
@@ -37,6 +43,7 @@ class TransactionRepositoryTests(
         assertNotNull(savedEarlier.id)
         assertEquals(PaymentMethod.CARD, savedEarlier.paymentMethod)
         assertEquals(CardIssuer.SHINHAN, savedEarlier.cardIssuer)
+        assertEquals("점심 식사", savedEarlier.description)
         assertEquals(
             listOf("동네마트", "김밥천국"),
             transactionRepository
@@ -50,10 +57,12 @@ class TransactionRepositoryTests(
         payerId: Long,
         merchant: String,
         occurredAt: String,
+        description: String? = null,
     ) = Transaction(
         householdId = householdId,
         payerId = payerId,
         merchant = merchant,
+        description = description,
         amount = 8_000,
         category = "식비",
         paymentMethod = PaymentMethod.CARD,

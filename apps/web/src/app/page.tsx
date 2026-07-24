@@ -19,6 +19,7 @@ type Transaction = {
   id: number;
   payerId: number;
   merchant: string;
+  description: string | null;
   amount: number;
   category: string;
   paymentMethod: StoredPaymentMethod;
@@ -291,6 +292,11 @@ export default function Home() {
                 <li className="flex items-center justify-between gap-5 py-5" key={transaction.id}>
                   <div className="min-w-0">
                     <p className="truncate font-medium text-stone-900">{transaction.merchant}</p>
+                    {transaction.description ? (
+                      <p className="mt-1 truncate text-sm text-stone-700">
+                        {transaction.description}
+                      </p>
+                    ) : null}
                     <p className="mt-1 text-sm text-stone-500">
                       {householdMembers.find((member) => member.userId === transaction.payerId)
                         ?.displayName ?? "알 수 없음"} · {transaction.category} ·{" "}

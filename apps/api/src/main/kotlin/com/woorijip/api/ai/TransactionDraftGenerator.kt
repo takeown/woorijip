@@ -18,6 +18,7 @@ enum class GeneratedPayer {
 data class GeneratedTransactionDraft(
     val status: GeneratedDraftStatus,
     val merchant: String? = null,
+    val description: String? = null,
     val amount: Long? = null,
     val category: String? = null,
     val occurredAt: String? = null,

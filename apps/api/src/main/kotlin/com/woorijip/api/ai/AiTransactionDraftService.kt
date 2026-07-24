@@ -14,6 +14,7 @@ import java.time.ZoneId
 data class AiTransactionDraft(
     val status: GeneratedDraftStatus,
     val merchant: String? = null,
+    val description: String? = null,
     val amount: Long? = null,
     val category: String? = null,
     val occurredAt: OffsetDateTime? = null,
@@ -66,6 +67,7 @@ class AiTransactionDraftService(
         generated: GeneratedTransactionDraft,
     ): AiTransactionDraft {
         val merchant = generated.merchant?.trim()?.takeIf { it.isNotEmpty() && it.length <= 200 }
+        val description = generated.description?.trim()?.takeIf { it.isNotEmpty() && it.length <= 500 }
         val amount = generated.amount?.takeIf { it > 0 }
         val category = generated.category?.trim()?.takeIf { it.isNotEmpty() && it.length <= 100 }
         val occurredAt = generated.occurredAt?.let { value ->
@@ -95,6 +97,7 @@ class AiTransactionDraftService(
         return AiTransactionDraft(
             status = GeneratedDraftStatus.READY,
             merchant = merchant,
+            description = description,
             amount = amount,
             category = category,
             occurredAt = occurredAt,
