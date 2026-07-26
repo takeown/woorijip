@@ -7,6 +7,7 @@ import {
   type CardIssuer,
   type StoredPaymentMethod,
 } from "./payment-details";
+import { SpendingStatisticsPanel } from "./spending-statistics-panel";
 import { TransactionForm, type HouseholdMember } from "./transaction-form";
 
 type CurrentUser = {
@@ -59,6 +60,7 @@ export default function Home() {
   const [householdMembers, setHouseholdMembers] = useState<HouseholdMember[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [payerFilter, setPayerFilter] = useState<PayerFilter>("all");
+  const [statisticsRefreshKey, setStatisticsRefreshKey] = useState(0);
   const [error, setError] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
     const authError = new URL(window.location.href).searchParams.get("authError");
@@ -147,6 +149,11 @@ export default function Home() {
     }
   }
 
+  async function handleTransactionCreated() {
+    await loadTransactions(payerFilter);
+    setStatisticsRefreshKey((current) => current + 1);
+  }
+
   async function logout() {
     try {
       const csrfResponse = await fetch(`${apiUrl}/auth/csrf`, {
@@ -220,6 +227,7 @@ export default function Home() {
           로그아웃
         </button>
       </div>
+      <SpendingStatisticsPanel refreshKey={statisticsRefreshKey} />
       <div className="mx-auto grid w-full max-w-6xl gap-8 lg:grid-cols-[380px_1fr]">
         <section className="h-fit rounded-3xl border border-stone-200 bg-white p-7 shadow-sm">
           <p className="text-sm font-medium text-emerald-700">우리 둘의 생활 기록</p>
@@ -230,7 +238,7 @@ export default function Home() {
           <div className="mt-7">
             <AiTransactionDraftForm
               householdMembers={householdMembers}
-              onCreated={() => loadTransactions(payerFilter)}
+              onCreated={handleTransactionCreated}
             />
           </div>
           <div className="my-7 flex items-center gap-3 text-xs text-stone-400">
@@ -242,7 +250,7 @@ export default function Home() {
             <TransactionForm
               currentUserId={currentUser.id}
               householdMembers={householdMembers}
-              onCreated={() => loadTransactions(payerFilter)}
+              onCreated={handleTransactionCreated}
             />
           </div>
         </section>
