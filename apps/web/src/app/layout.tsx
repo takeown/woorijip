@@ -27,6 +27,9 @@ const maruBuri = localFont({
 export const metadata: Metadata = {
   title: "우리집",
   description: "부부가 함께 사용하는 비공개 가계부",
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+  },
 };
 
 export default function RootLayout({
