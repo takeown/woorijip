@@ -24,7 +24,7 @@ describe("AuthenticatedShell", () => {
       ),
     );
 
-    render(
+    const { container } = render(
       <AuthenticatedShell>
         {() => <p>통계 콘텐츠</p>}
       </AuthenticatedShell>,
@@ -36,6 +36,8 @@ describe("AuthenticatedShell", () => {
     const statsLink = screen.getByRole("link", { name: "통계" });
     expect(statsLink.getAttribute("href")).toBe("/stats");
     expect(statsLink.getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("link", { name: "우리집" }).querySelector("svg")).not.toBeNull();
+    expect(container.querySelectorAll("svg")).toHaveLength(1);
   });
 });
 

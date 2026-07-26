@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ReactNode, useEffect, useState } from "react";
+import { BrandLogo } from "./brand-logo";
 
 export type CurrentUser = {
   id: number;
@@ -106,8 +107,9 @@ export function AuthenticatedShell({ children }: AuthenticatedShellProps) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-stone-100 px-5 text-stone-900">
         <section className="w-full max-w-md rounded-3xl border border-stone-200 bg-white p-8 text-center shadow-sm">
+          <BrandLogo className="mx-auto h-20 w-20" />
           <p className="text-sm font-medium text-emerald-700">우리 둘의 생활 기록</p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight">우리집</h1>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight">우리집</h1>
           <p className="mt-4 text-sm leading-6 text-stone-600">
             허용된 Google 계정으로 로그인해 주세요.
           </p>
@@ -131,8 +133,12 @@ export function AuthenticatedShell({ children }: AuthenticatedShellProps) {
     <main className="min-h-screen bg-stone-100 px-5 py-8 text-stone-900 sm:px-8">
       <header className="mx-auto mb-8 flex w-full max-w-6xl flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-6">
-          <Link className="text-xl font-semibold tracking-tight text-stone-900" href="/">
-            우리집
+          <Link
+            className="flex items-center gap-2.5 text-xl font-semibold tracking-tight text-stone-900"
+            href="/"
+          >
+            <BrandLogo className="h-9 w-9" />
+            <span>우리집</span>
           </Link>
           <nav className="flex rounded-full bg-white p-1 shadow-sm" aria-label="주요 메뉴">
             <NavigationLink active={pathname === "/"} href="/">
