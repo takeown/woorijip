@@ -19,6 +19,7 @@ class SpendingStatisticsController(
     fun find(
         @AuthenticationPrincipal oidcUser: OidcUser,
         @RequestParam(defaultValue = "MONTH") period: String,
+        @RequestParam(defaultValue = "ALL") payer: String,
         @RequestParam(required = false) date: LocalDate?,
     ): SpendingStatistics {
         val spendingPeriod = try {
@@ -26,11 +27,16 @@ class SpendingStatisticsController(
         } catch (_: IllegalArgumentException) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "지원하지 않는 통계 기간입니다.")
         }
+        val spendingPayer = try {
+            SpendingPayer.valueOf(payer.uppercase())
+        } catch (_: IllegalArgumentException) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "지원하지 않는 결제자 필터입니다.")
+        }
         val currentUser = googleAccountService.findByGoogleSubject(oidcUser.subject)
         return if (date == null) {
-            spendingStatisticsService.find(currentUser, spendingPeriod)
+            spendingStatisticsService.find(currentUser, spendingPeriod, spendingPayer)
         } else {
-            spendingStatisticsService.find(currentUser, spendingPeriod, date)
+            spendingStatisticsService.find(currentUser, spendingPeriod, spendingPayer, date)
         }
     }
 }

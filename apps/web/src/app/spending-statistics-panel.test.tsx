@@ -5,6 +5,7 @@ import { SpendingStatisticsPanel } from "./spending-statistics-panel";
 
 const monthlyStatistics = {
   period: "MONTH",
+  payer: "ALL",
   referenceDate: "2026-07-26",
   startDate: "2026-07-01",
   endDateExclusive: "2026-08-01",
@@ -81,6 +82,37 @@ describe("SpendingStatisticsPanel", () => {
       await screen.findByText("이 기간에는 기록된 지출이 없습니다."),
     ).toBeDefined();
     expect(screen.getByText("변화 없음")).toBeDefined();
+  });
+
+  test("reloads every summary for the selected payer", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse(monthlyStatistics))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          ...monthlyStatistics,
+          payer: "PARTNER",
+          current: { totalAmount: 40_000, transactionCount: 2 },
+          previous: { totalAmount: 30_000, transactionCount: 1 },
+          amountChange: 10_000,
+          changeRatePercent: 33.3,
+          byPayer: [
+            { key: "2", label: "배우자", amount: 40_000, transactionCount: 2 },
+          ],
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<SpendingStatisticsPanel refreshKey={0} />);
+    const initialTotalCard = (await screen.findByText("총지출")).parentElement;
+    expect(within(initialTotalCard as HTMLElement).getByText("125,000원")).toBeDefined();
+    await user.click(screen.getByRole("button", { name: "배우자" }));
+
+    const totalCard = (await screen.findByText("총지출")).parentElement;
+    expect(within(totalCard as HTMLElement).getByText("40,000원")).toBeDefined();
+    expect(fetchMock.mock.calls[1][0]).toContain("payer=PARTNER");
+    expect(screen.queryByRole("heading", { name: "결제자" })).toBeNull();
   });
 });
 

@@ -25,18 +25,20 @@ class SpendingStatisticsRepository(
         householdId: Long,
         start: OffsetDateTime,
         endExclusive: OffsetDateTime,
+        payerId: Long?,
     ): SpendingAggregate =
         requireNotNull(
             jdbcTemplate.queryForObject(
                 """
                 SELECT COALESCE(SUM(amount), 0) AS total_amount,
                        COUNT(*) AS transaction_count
-                FROM transactions
-                WHERE household_id = :householdId
-                  AND occurred_at >= :start
-                  AND occurred_at < :endExclusive
+                FROM transactions AS t
+                WHERE t.household_id = :householdId
+                  AND t.occurred_at >= :start
+                  AND t.occurred_at < :endExclusive
+                  ${payerCondition("t", payerId)}
                 """.trimIndent(),
-                parameters(householdId, start, endExclusive),
+                parameters(householdId, start, endExclusive, payerId),
             ) { resultSet, _ ->
                 SpendingAggregate(
                     totalAmount = resultSet.getLong("total_amount"),
@@ -49,6 +51,7 @@ class SpendingStatisticsRepository(
         householdId: Long,
         start: OffsetDateTime,
         endExclusive: OffsetDateTime,
+        payerId: Long?,
     ): List<SpendingBreakdown> =
         jdbcTemplate.query(
             """
@@ -61,10 +64,11 @@ class SpendingStatisticsRepository(
             WHERE transactions.household_id = :householdId
               AND transactions.occurred_at >= :start
               AND transactions.occurred_at < :endExclusive
+              ${payerCondition("transactions", payerId)}
             GROUP BY transactions.payer_id, users.display_name
             ORDER BY total_amount DESC, item_label
             """.trimIndent(),
-            parameters(householdId, start, endExclusive),
+            parameters(householdId, start, endExclusive, payerId),
             ::breakdown,
         )
 
@@ -72,21 +76,23 @@ class SpendingStatisticsRepository(
         householdId: Long,
         start: OffsetDateTime,
         endExclusive: OffsetDateTime,
+        payerId: Long?,
     ): List<SpendingBreakdown> =
         jdbcTemplate.query(
             """
-            SELECT payment_method AS item_key,
-                   payment_method AS item_label,
-                   SUM(amount) AS total_amount,
+            SELECT t.payment_method AS item_key,
+                   t.payment_method AS item_label,
+                   SUM(t.amount) AS total_amount,
                    COUNT(*) AS transaction_count
-            FROM transactions
-            WHERE household_id = :householdId
-              AND occurred_at >= :start
-              AND occurred_at < :endExclusive
-            GROUP BY payment_method
+            FROM transactions AS t
+            WHERE t.household_id = :householdId
+              AND t.occurred_at >= :start
+              AND t.occurred_at < :endExclusive
+              ${payerCondition("t", payerId)}
+            GROUP BY t.payment_method
             ORDER BY total_amount DESC, item_label
             """.trimIndent(),
-            parameters(householdId, start, endExclusive),
+            parameters(householdId, start, endExclusive, payerId),
             ::breakdown,
         )
 
@@ -94,21 +100,23 @@ class SpendingStatisticsRepository(
         householdId: Long,
         start: OffsetDateTime,
         endExclusive: OffsetDateTime,
+        payerId: Long?,
     ): List<SpendingBreakdown> =
         jdbcTemplate.query(
             """
-            SELECT category AS item_key,
-                   category AS item_label,
-                   SUM(amount) AS total_amount,
+            SELECT t.category AS item_key,
+                   t.category AS item_label,
+                   SUM(t.amount) AS total_amount,
                    COUNT(*) AS transaction_count
-            FROM transactions
-            WHERE household_id = :householdId
-              AND occurred_at >= :start
-              AND occurred_at < :endExclusive
-            GROUP BY category
+            FROM transactions AS t
+            WHERE t.household_id = :householdId
+              AND t.occurred_at >= :start
+              AND t.occurred_at < :endExclusive
+              ${payerCondition("t", payerId)}
+            GROUP BY t.category
             ORDER BY total_amount DESC, item_label
             """.trimIndent(),
-            parameters(householdId, start, endExclusive),
+            parameters(householdId, start, endExclusive, payerId),
             ::breakdown,
         )
 
@@ -116,11 +124,25 @@ class SpendingStatisticsRepository(
         householdId: Long,
         start: OffsetDateTime,
         endExclusive: OffsetDateTime,
+        payerId: Long?,
     ): MapSqlParameterSource =
         MapSqlParameterSource()
             .addValue("householdId", householdId)
             .addValue("start", start)
             .addValue("endExclusive", endExclusive)
+            .also { parameters ->
+                if (payerId != null) parameters.addValue("payerId", payerId)
+            }
+
+    private fun payerCondition(
+        tableAlias: String,
+        payerId: Long?,
+    ): String =
+        if (payerId == null) {
+            ""
+        } else {
+            "AND $tableAlias.payer_id = :payerId"
+        }
 
     private fun breakdown(
         resultSet: java.sql.ResultSet,

@@ -127,6 +127,59 @@ class SpendingStatisticsControllerTests(
     }
 
     @Test
+    fun `filters current and previous statistics by the selected household payer`() {
+        val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
+        val partnerId = createMember(currentUser.householdId, "배우자")
+        saveTransaction(currentUser.householdId, currentUser.id, 10_000, "식비", "2026-06-15T12:00:00+09:00")
+        saveTransaction(currentUser.householdId, currentUser.id, 12_000, "식비", "2026-07-10T12:00:00+09:00")
+        saveTransaction(
+            currentUser.householdId,
+            partnerId,
+            8_000,
+            "생활",
+            "2026-07-15T12:00:00+09:00",
+            PaymentMethod.CASH,
+        )
+
+        mockMvc
+            .get("/statistics/spending") {
+                param("period", "month")
+                param("payer", "me")
+                param("date", "2026-07-26")
+                with(allowedOidcLogin())
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.payer") { value("ME") }
+                jsonPath("$.current.totalAmount") { value(12_000) }
+                jsonPath("$.previous.totalAmount") { value(10_000) }
+                jsonPath("$.amountChange") { value(2_000) }
+                jsonPath("$.changeRatePercent") { value(20.0) }
+                jsonPath("$.byPayer", hasSize<Any>(1))
+                jsonPath("$.byPayer[0].label") { value("첫 번째 사용자") }
+                jsonPath("$.byPaymentMethod", hasSize<Any>(1))
+                jsonPath("$.byPaymentMethod[0].label") { value("카드") }
+                jsonPath("$.byCategory[0].label") { value("식비") }
+            }
+
+        mockMvc
+            .get("/statistics/spending") {
+                param("period", "month")
+                param("payer", "partner")
+                param("date", "2026-07-26")
+                with(allowedOidcLogin())
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.payer") { value("PARTNER") }
+                jsonPath("$.current.totalAmount") { value(8_000) }
+                jsonPath("$.previous.totalAmount") { value(0) }
+                jsonPath("$.byPayer", hasSize<Any>(1))
+                jsonPath("$.byPayer[0].label") { value("배우자") }
+                jsonPath("$.byPaymentMethod[0].label") { value("현금") }
+                jsonPath("$.byCategory[0].label") { value("생활") }
+            }
+    }
+
+    @Test
     fun `returns an empty summary and rejects invalid or anonymous requests`() {
         googleAccountService.provision(TestOidcUsers.allowed())
 
@@ -147,6 +200,14 @@ class SpendingStatisticsControllerTests(
         mockMvc
             .get("/statistics/spending") {
                 param("period", "year")
+                with(allowedOidcLogin())
+            }.andExpect {
+                status { isBadRequest() }
+            }
+
+        mockMvc
+            .get("/statistics/spending") {
+                param("payer", "other")
                 with(allowedOidcLogin())
             }.andExpect {
                 status { isBadRequest() }

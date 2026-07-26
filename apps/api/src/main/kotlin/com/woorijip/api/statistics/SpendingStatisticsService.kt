@@ -1,6 +1,7 @@
 package com.woorijip.api.statistics
 
 import com.woorijip.api.auth.CurrentUser
+import com.woorijip.api.household.HouseholdMembershipRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -16,6 +17,12 @@ enum class SpendingPeriod {
     MONTH,
 }
 
+enum class SpendingPayer {
+    ALL,
+    ME,
+    PARTNER,
+}
+
 data class SpendingPeriodSummary(
     val totalAmount: Long,
     val transactionCount: Long,
@@ -23,6 +30,7 @@ data class SpendingPeriodSummary(
 
 data class SpendingStatistics(
     val period: SpendingPeriod,
+    val payer: SpendingPayer,
     val referenceDate: LocalDate,
     val startDate: LocalDate,
     val endDateExclusive: LocalDate,
@@ -38,28 +46,34 @@ data class SpendingStatistics(
 @Service
 class SpendingStatisticsService(
     private val spendingStatisticsRepository: SpendingStatisticsRepository,
+    private val householdMembershipRepository: HouseholdMembershipRepository,
 ) {
     @Transactional(readOnly = true)
     fun find(
         currentUser: CurrentUser,
         period: SpendingPeriod,
+        payer: SpendingPayer = SpendingPayer.ALL,
         referenceDate: LocalDate = LocalDate.now(SEOUL),
     ): SpendingStatistics {
         val currentRange = range(period, referenceDate)
         val previousRange = previousRange(period, currentRange.start)
+        val payerId = resolvePayerId(currentUser, payer)
         val current = spendingStatisticsRepository.aggregate(
             currentUser.householdId,
             currentRange.startAt,
             currentRange.endExclusiveAt,
+            payerId,
         )
         val previous = spendingStatisticsRepository.aggregate(
             currentUser.householdId,
             previousRange.startAt,
             previousRange.endExclusiveAt,
+            payerId,
         )
 
         return SpendingStatistics(
             period = period,
+            payer = payer,
             referenceDate = referenceDate,
             startDate = currentRange.start,
             endDateExclusive = currentRange.endExclusive,
@@ -71,20 +85,38 @@ class SpendingStatisticsService(
                 currentUser.householdId,
                 currentRange.startAt,
                 currentRange.endExclusiveAt,
+                payerId,
             ),
             byPaymentMethod = spendingStatisticsRepository
                 .byPaymentMethod(
                     currentUser.householdId,
                     currentRange.startAt,
                     currentRange.endExclusiveAt,
+                    payerId,
                 ).map { item -> item.copy(label = paymentMethodLabel(item.key)) },
             byCategory = spendingStatisticsRepository.byCategory(
                 currentUser.householdId,
                 currentRange.startAt,
                 currentRange.endExclusiveAt,
+                payerId,
             ),
         )
     }
+
+    private fun resolvePayerId(
+        currentUser: CurrentUser,
+        payer: SpendingPayer,
+    ): Long? =
+        when (payer) {
+            SpendingPayer.ALL -> null
+            SpendingPayer.ME -> currentUser.id
+            SpendingPayer.PARTNER ->
+                householdMembershipRepository
+                    .findMembersByHouseholdId(currentUser.householdId)
+                    .singleOrNull { member -> member.userId != currentUser.id }
+                    ?.userId
+                    ?: NO_PAYER_ID
+        }
 
     private fun range(
         period: SpendingPeriod,
@@ -147,5 +179,6 @@ class SpendingStatisticsService(
     private companion object {
         val SEOUL: ZoneId = ZoneId.of("Asia/Seoul")
         val HUNDRED: BigDecimal = BigDecimal.valueOf(100)
+        const val NO_PAYER_ID: Long = -1
     }
 }

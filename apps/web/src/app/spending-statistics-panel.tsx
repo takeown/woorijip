@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 type SpendingPeriod = "DAY" | "WEEK" | "MONTH";
+type SpendingPayer = "ALL" | "ME" | "PARTNER";
 
 type PeriodSummary = {
   totalAmount: number;
@@ -18,6 +19,7 @@ type BreakdownItem = {
 
 type SpendingStatistics = {
   period: SpendingPeriod;
+  payer: SpendingPayer;
   referenceDate: string;
   startDate: string;
   endDateExclusive: string;
@@ -48,9 +50,10 @@ const monthFormatter = new Intl.DateTimeFormat("ko-KR", {
 
 export function SpendingStatisticsPanel({ refreshKey }: SpendingStatisticsPanelProps) {
   const [period, setPeriod] = useState<SpendingPeriod>("MONTH");
+  const [payer, setPayer] = useState<SpendingPayer>("ALL");
   const [referenceDate, setReferenceDate] = useState(seoulToday);
-  const requestKey = `${period}:${referenceDate}:${refreshKey}`;
-  const requestUrl = `${apiUrl}/statistics/spending?period=${period}&date=${referenceDate}`;
+  const requestKey = `${period}:${payer}:${referenceDate}:${refreshKey}`;
+  const requestUrl = `${apiUrl}/statistics/spending?period=${period}&payer=${payer}&date=${referenceDate}`;
   const [loadResult, setLoadResult] = useState<{
     requestKey: string;
     statistics: SpendingStatistics | null;
@@ -136,6 +139,30 @@ export function SpendingStatisticsPanel({ refreshKey }: SpendingStatisticsPanelP
         </div>
       </div>
 
+      <div className="mt-5 flex flex-wrap items-center gap-3">
+        <p className="text-sm font-medium text-stone-600">누구의 지출</p>
+        <div className="flex rounded-full bg-stone-100 p-1" aria-label="통계 결제자">
+          {([
+            ["ALL", "전체"],
+            ["ME", "나"],
+            ["PARTNER", "배우자"],
+          ] as const).map(([value, label]) => (
+            <button
+              className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                payer === value
+                  ? "bg-stone-800 text-white"
+                  : "text-stone-600 hover:bg-stone-200"
+              }`}
+              key={value}
+              onClick={() => setPayer(value)}
+              type="button"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="mt-6 flex flex-wrap items-center gap-2">
         <button
           aria-label="이전 기간"
@@ -206,8 +233,18 @@ export function SpendingStatisticsPanel({ refreshKey }: SpendingStatisticsPanelP
               </p>
             </div>
           ) : (
-            <div className="mt-6 grid gap-4 lg:grid-cols-3">
-              <Breakdown title="결제자" items={statistics.byPayer} total={statistics.current.totalAmount} />
+            <div
+              className={`mt-6 grid gap-4 ${
+                statistics.payer === "ALL" ? "lg:grid-cols-3" : "lg:grid-cols-2"
+              }`}
+            >
+              {statistics.payer === "ALL" ? (
+                <Breakdown
+                  title="결제자"
+                  items={statistics.byPayer}
+                  total={statistics.current.totalAmount}
+                />
+              ) : null}
               <Breakdown
                 title="결제수단"
                 items={statistics.byPaymentMethod}
