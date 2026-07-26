@@ -11,7 +11,7 @@ class WebConfig(
     private val allowedOrigins: Array<String>,
 ) : WebMvcConfigurer {
     override fun addCorsMappings(registry: CorsRegistry) {
-        listOf("/auth/**", "/transactions/**", "/households/**", "/ai/**").forEach { path ->
+        listOf("/auth/**", "/transactions/**", "/households/**", "/ai/**", "/statistics/**").forEach { path ->
             registry
                 .addMapping(path)
                 .allowedOrigins(*allowedOrigins)
