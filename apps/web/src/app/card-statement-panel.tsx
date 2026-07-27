@@ -292,30 +292,32 @@ export function CardStatementPanel() {
           선택한 누락과 불일치 보정만 확인 후 거래 내역에 반영합니다.
         </p>
 
-        <form className="mt-7 flex flex-col gap-4 sm:flex-row sm:items-end" onSubmit={handleUpload}>
-          <div className="flex-1">
-            <label
-              className="mb-2 block text-sm font-medium text-stone-700"
-              htmlFor="statementFile"
+        <form className="mt-7" onSubmit={handleUpload}>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+            <div className="flex-1">
+              <label
+                className="mb-2 block text-sm font-medium text-stone-700"
+                htmlFor="statementFile"
+              >
+                KB국민카드 명세서
+              </label>
+              <input
+                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                className="block w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-sm file:mr-4 file:rounded-lg file:border-0 file:bg-stone-100 file:px-3 file:py-2 file:font-medium file:text-stone-700"
+                id="statementFile"
+                name="statementFile"
+                type="file"
+              />
+            </div>
+            <button
+              className="w-full rounded-xl bg-emerald-700 px-6 py-3 font-medium text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+              disabled={isUploading}
+              type="submit"
             >
-              KB국민카드 명세서
-            </label>
-            <input
-              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-              className="block w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-sm file:mr-4 file:rounded-lg file:border-0 file:bg-stone-100 file:px-3 file:py-2 file:font-medium file:text-stone-700"
-              id="statementFile"
-              name="statementFile"
-              type="file"
-            />
-            <p className="mt-2 text-xs text-stone-500">XLSX 형식, 최대 2MB</p>
+              {isUploading ? "대조 중..." : "업로드하고 대조"}
+            </button>
           </div>
-          <button
-            className="rounded-xl bg-emerald-700 px-6 py-3 font-medium text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={isUploading}
-            type="submit"
-          >
-            {isUploading ? "대조 중..." : "업로드하고 대조"}
-          </button>
+          <p className="mt-2 text-xs text-stone-500">XLSX 형식, 최대 2MB</p>
         </form>
 
         {error ? (
