@@ -37,7 +37,9 @@ describe("CardStatementPanel", () => {
       .mockResolvedValueOnce(csrfResponse())
       .mockResolvedValueOnce(
         jsonResponse({
-          transactions: [{ sourceRow: 11, transactionId: 201, created: true }],
+          transactions: [
+            { sourceRow: 11, transactionId: 201, created: true, updated: false },
+          ],
         }),
       );
     vi.stubGlobal("fetch", fetchMock);
@@ -54,7 +56,7 @@ describe("CardStatementPanel", () => {
     expect(screen.getByText("KB국민카드 · 2026년 7월 명세서")).toBeDefined();
     expect(screen.getByText("누락 가맹점")).toBeDefined();
     expect(screen.getByText("중복 후보점")).toBeDefined();
-    expect(screen.getByText("불일치 후보점")).toBeDefined();
+    expect(screen.getAllByText("불일치 후보점")).toHaveLength(2);
     expect(screen.queryByText("기존 일치점")).toBeNull();
 
     const previewRequest = fetchMock.mock.calls[1];
@@ -65,7 +67,7 @@ describe("CardStatementPanel", () => {
     expect((previewBody.get("file") as File).name).toBe("kb-statement.xlsx");
 
     const saveButton = screen.getByRole("button", {
-      name: "선택한 거래 확인하고 저장",
+      name: "선택한 변경 확인하고 반영",
     }) as HTMLButtonElement;
     expect(saveButton.disabled).toBe(true);
     await user.type(screen.getByLabelText("카테고리"), "식비");
@@ -74,7 +76,7 @@ describe("CardStatementPanel", () => {
     await user.click(saveButton);
 
     expect(
-      await screen.findByText("1건을 거래 내역에 저장했습니다."),
+      await screen.findByText("1건의 변경 사항을 반영했습니다."),
     ).toBeDefined();
     const applyRequest = fetchMock.mock.calls[3];
     expect(applyRequest[0]).toBe(
@@ -88,8 +90,61 @@ describe("CardStatementPanel", () => {
           description: "점심",
         },
       ],
+      corrections: [],
     });
     expect(screen.queryByText("누락 가맹점")).toBeNull();
+  });
+
+  test("shows the mismatch comparison and sends the confirmed correction", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(csrfResponse())
+      .mockResolvedValueOnce(jsonResponse(preview))
+      .mockResolvedValueOnce(csrfResponse())
+      .mockResolvedValueOnce(
+        jsonResponse({
+          transactions: [
+            { sourceRow: 13, transactionId: 104, created: false, updated: true },
+          ],
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<CardStatementPanel />);
+    await user.upload(
+      screen.getByLabelText("KB국민카드 명세서"),
+      new File(["xlsx"], "kb-statement.xlsx"),
+    );
+    await user.click(screen.getByRole("button", { name: "업로드하고 대조" }));
+
+    expect(await screen.findByText("현재 거래")).toBeDefined();
+    expect(screen.getByText("기존 불일치점")).toBeDefined();
+    expect(screen.getByText("명세서 기준")).toBeDefined();
+
+    await user.click(screen.getByLabelText("누락 가맹점 저장 선택"));
+    await user.click(
+      screen.getByLabelText("불일치 후보점 명세서 기준 수정 선택"),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "선택한 변경 확인하고 반영" }),
+    );
+
+    expect(
+      await screen.findByText("1건의 변경 사항을 반영했습니다."),
+    ).toBeDefined();
+    expect(JSON.parse(String(fetchMock.mock.calls[3][1]?.body))).toEqual({
+      candidates: [],
+      corrections: [
+        {
+          sourceRow: 13,
+          transactionId: 104,
+          expectedMerchant: "기존 불일치점",
+          expectedAmount: 102_000,
+        },
+      ],
+    });
+    expect(screen.queryByText("불일치 후보점")).toBeNull();
   });
 
   test("shows the server detail when a statement is invalid", async () => {
@@ -141,6 +196,19 @@ function candidate(
     remainingPrincipal: null,
     matchStatus,
     transactionIds,
+    relatedTransactions: transactionIds.map((transactionId, index) => ({
+      id: transactionId,
+      merchant:
+        matchStatus === "MISMATCH"
+          ? "기존 불일치점"
+          : index === 0
+            ? merchant
+            : `${merchant} ${index + 1}`,
+      description: null,
+      amount: approvedAmount,
+      category: "생활",
+      occurredAt: "2026-06-09T12:00:00+09:00",
+    })),
   };
 }
 

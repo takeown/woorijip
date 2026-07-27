@@ -214,6 +214,126 @@ class CardStatementControllerTests(
     }
 
     @Test
+    fun `updates a confirmed mismatched transaction and preserves user details`() {
+        val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
+        val existingTransaction = transactionRepository.save(
+            Transaction(
+                householdId = currentUser.householdId,
+                payerId = currentUser.id,
+                merchant = "수정 전 가맹점",
+                description = "사용자가 적은 내역",
+                amount = 2_300,
+                category = "생활",
+                paymentMethod = PaymentMethod.CARD,
+                cardIssuer = CardIssuer.KB_KOOKMIN,
+                occurredAt = OffsetDateTime.parse("2026-06-09T18:30:00+09:00"),
+                createdAt = OffsetDateTime.parse("2026-07-01T00:00:00+09:00"),
+            ),
+        )
+        val transactionId = requireNotNull(existingTransaction.id)
+        val previewJson = objectMapper.readTree(previewStatement().response.contentAsString)
+        val importId = previewJson.path("importId").longValue()
+        val mismatch = previewJson.path("candidates").first()
+        val sourceRow = mismatch.path("sourceRow").intValue()
+
+        assertEquals("MISMATCH", mismatch.path("matchStatus").stringValue())
+        assertEquals(transactionId, mismatch.path("relatedTransactions").first().path("id").longValue())
+        assertEquals(
+            "수정 전 가맹점",
+            mismatch.path("relatedTransactions").first().path("merchant").stringValue(),
+        )
+
+        mockMvc
+            .post("/card-statements/$importId/apply") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content = """
+                    {
+                      "corrections": [
+                        {
+                          "sourceRow": $sourceRow,
+                          "transactionId": $transactionId,
+                          "expectedMerchant": "수정 전 가맹점",
+                          "expectedAmount": 2300
+                        }
+                      ]
+                    }
+                """.trimIndent()
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.transactions[0].sourceRow") { value(sourceRow) }
+                jsonPath("$.transactions[0].transactionId") { value(transactionId) }
+                jsonPath("$.transactions[0].created") { value(false) }
+                jsonPath("$.transactions[0].updated") { value(true) }
+            }
+
+        val updatedTransaction = transactionRepository.findById(transactionId).orElseThrow()
+        assertEquals("세븐일레븐 테스트점", updatedTransaction.merchant)
+        assertEquals(2_300, updatedTransaction.amount)
+        assertEquals("사용자가 적은 내역", updatedTransaction.description)
+        assertEquals("생활", updatedTransaction.category)
+        assertEquals(existingTransaction.occurredAt.toInstant(), updatedTransaction.occurredAt.toInstant())
+        assertEquals(existingTransaction.createdAt.toInstant(), updatedTransaction.createdAt.toInstant())
+        assertEquals(1, transactionRepository.count())
+    }
+
+    @Test
+    fun `rejects a correction when the reviewed transaction changed after preview`() {
+        val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
+        val reviewedTransaction = transactionRepository.save(
+            Transaction(
+                householdId = currentUser.householdId,
+                payerId = currentUser.id,
+                merchant = "수정 전 가맹점",
+                description = "보존할 내역",
+                amount = 2_300,
+                category = "생활",
+                paymentMethod = PaymentMethod.CARD,
+                cardIssuer = CardIssuer.KB_KOOKMIN,
+                occurredAt = OffsetDateTime.parse("2026-06-09T18:30:00+09:00"),
+                createdAt = OffsetDateTime.parse("2026-07-01T00:00:00+09:00"),
+            ),
+        )
+        val transactionId = requireNotNull(reviewedTransaction.id)
+        val previewJson = objectMapper.readTree(previewStatement().response.contentAsString)
+        val importId = previewJson.path("importId").longValue()
+        val sourceRow = previewJson.path("candidates").first().path("sourceRow").intValue()
+        transactionRepository.save(
+            reviewedTransaction.copy(
+                merchant = "세븐일레븐 테스트점",
+                amount = 2_400,
+            ),
+        )
+
+        mockMvc
+            .post("/card-statements/$importId/apply") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content = """
+                    {
+                      "corrections": [
+                        {
+                          "sourceRow": $sourceRow,
+                          "transactionId": $transactionId,
+                          "expectedMerchant": "수정 전 가맹점",
+                          "expectedAmount": 2300
+                        }
+                      ]
+                    }
+                """.trimIndent()
+            }.andExpect {
+                status { isBadRequest() }
+            }
+
+        val unchangedTransaction = transactionRepository.findById(transactionId).orElseThrow()
+        assertEquals("세븐일레븐 테스트점", unchangedTransaction.merchant)
+        assertEquals(2_400, unchangedTransaction.amount)
+        assertEquals("보존할 내역", unchangedTransaction.description)
+    }
+
+    @Test
     fun `rejects unsupported files and requires authentication and CSRF`() {
         googleAccountService.provision(TestOidcUsers.allowed())
         val unsupportedFile = MockMultipartFile(

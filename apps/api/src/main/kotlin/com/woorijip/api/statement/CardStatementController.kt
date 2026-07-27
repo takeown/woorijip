@@ -2,6 +2,7 @@ package com.woorijip.api.statement
 
 import com.woorijip.api.auth.GoogleAccountService
 import com.woorijip.api.transaction.CardIssuer
+import com.woorijip.api.transaction.Transaction
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Positive
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.multipart.MultipartFile
 import org.springframework.web.server.ResponseStatusException
 import java.time.LocalDate
+import java.time.OffsetDateTime
 
 data class CardStatementPreviewResponse(
     val importId: Long,
@@ -49,11 +51,21 @@ data class StatementCandidateResponse(
     val remainingPrincipal: Long?,
     val matchStatus: StatementMatchStatus,
     val transactionIds: List<Long>,
+    val relatedTransactions: List<StatementTransactionResponse>,
+)
+
+data class StatementTransactionResponse(
+    val id: Long,
+    val merchant: String,
+    val description: String?,
+    val amount: Long,
+    val category: String,
+    val occurredAt: OffsetDateTime,
 )
 
 data class ApplyCardStatementRequest(
-    @field:Size(min = 1)
-    val candidates: List<@Valid ApplyStatementCandidateRequest>,
+    val candidates: List<@Valid ApplyStatementCandidateRequest> = emptyList(),
+    val corrections: List<@Valid CorrectStatementCandidateRequest> = emptyList(),
 )
 
 data class ApplyStatementCandidateRequest(
@@ -64,6 +76,18 @@ data class ApplyStatementCandidateRequest(
     val category: String,
     @field:Size(max = 500)
     val description: String?,
+)
+
+data class CorrectStatementCandidateRequest(
+    @field:Positive
+    val sourceRow: Int,
+    @field:Positive
+    val transactionId: Long,
+    @field:NotBlank
+    @field:Size(max = 200)
+    val expectedMerchant: String,
+    @field:Positive
+    val expectedAmount: Long,
 )
 
 data class ApplyCardStatementResponse(
@@ -115,6 +139,14 @@ class CardStatementController(
                             description = candidate.description?.trim()?.takeIf(String::isNotEmpty),
                         )
                     },
+                    corrections = request.corrections.map { correction ->
+                        StatementCandidateCorrection(
+                            sourceRow = correction.sourceRow,
+                            transactionId = correction.transactionId,
+                            expectedMerchant = correction.expectedMerchant,
+                            expectedAmount = correction.expectedAmount,
+                        )
+                    },
                 ),
             )
         } catch (exception: InvalidCardStatementException) {
@@ -140,10 +172,12 @@ private fun CardStatementPreview.toResponse(): CardStatementPreviewResponse =
             it.status == StatementMatchStatus.DUPLICATE_SUSPECTED
         },
         mismatchCount = matches.count { it.status == StatementMatchStatus.MISMATCH },
-        candidates = matches.map(StatementMatch::toResponse),
+        candidates = matches.map { match -> match.toResponse(transactionsById) },
     )
 
-private fun StatementMatch.toResponse(): StatementCandidateResponse =
+private fun StatementMatch.toResponse(
+    transactionsById: Map<Long, Transaction>,
+): StatementCandidateResponse =
     StatementCandidateResponse(
         sourceRow = candidate.sourceRow,
         occurredOn = candidate.occurredOn,
@@ -159,4 +193,14 @@ private fun StatementMatch.toResponse(): StatementCandidateResponse =
         remainingPrincipal = candidate.remainingPrincipal,
         matchStatus = status,
         transactionIds = transactionIds,
+        relatedTransactions = transactionIds.mapNotNull(transactionsById::get).map { transaction ->
+            StatementTransactionResponse(
+                id = requireNotNull(transaction.id),
+                merchant = transaction.merchant,
+                description = transaction.description,
+                amount = transaction.amount,
+                category = transaction.category,
+                occurredAt = transaction.occurredAt,
+            )
+        },
     )

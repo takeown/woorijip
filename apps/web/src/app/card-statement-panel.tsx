@@ -25,6 +25,16 @@ type StatementCandidate = {
   remainingPrincipal: number | null;
   matchStatus: StatementMatchStatus;
   transactionIds: number[];
+  relatedTransactions: RelatedTransaction[];
+};
+
+type RelatedTransaction = {
+  id: number;
+  merchant: string;
+  description: string | null;
+  amount: number;
+  category: string;
+  occurredAt: string;
 };
 
 type CardStatementPreview = {
@@ -47,6 +57,7 @@ type AppliedStatementTransaction = {
   sourceRow: number;
   transactionId: number;
   created: boolean;
+  updated: boolean;
 };
 
 type ApplyCardStatementResponse = {
@@ -64,6 +75,7 @@ const amountFormatter = new Intl.NumberFormat("ko-KR");
 export function CardStatementPanel() {
   const [preview, setPreview] = useState<CardStatementPreview | null>(null);
   const [selections, setSelections] = useState<Record<number, CandidateSelection>>({});
+  const [corrections, setCorrections] = useState<Record<number, boolean>>({});
   const [filter, setFilter] = useState<CandidateFilter>("REVIEW");
   const [isUploading, setIsUploading] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
@@ -111,10 +123,22 @@ export function CardStatementPanel() {
             ]),
         ),
       );
+      setCorrections(
+        Object.fromEntries(
+          nextPreview.candidates
+            .filter(
+              (candidate) =>
+                candidate.matchStatus === "MISMATCH" &&
+                candidate.relatedTransactions.length === 1,
+            )
+            .map((candidate) => [candidate.sourceRow, false]),
+        ),
+      );
       setFilter("REVIEW");
     } catch (caughtError) {
       setPreview(null);
       setSelections({});
+      setCorrections({});
       setError(errorMessage(caughtError, "명세서를 처리하지 못했습니다."));
     } finally {
       setIsUploading(false);
@@ -126,14 +150,34 @@ export function CardStatementPanel() {
     if (!preview) return;
 
     const selected = preview.candidates
-      .filter((candidate) => selections[candidate.sourceRow]?.selected)
+      .filter(
+        (candidate) =>
+          candidate.matchStatus === "MISSING" &&
+          selections[candidate.sourceRow]?.selected,
+      )
       .map((candidate) => ({
         sourceRow: candidate.sourceRow,
         category: selections[candidate.sourceRow].category.trim(),
         description: selections[candidate.sourceRow].description.trim() || null,
       }));
-    if (selected.length === 0) {
-      setError("저장할 누락 거래를 선택해 주세요.");
+    const selectedCorrections = preview.candidates
+      .filter(
+        (candidate) =>
+          candidate.matchStatus === "MISMATCH" &&
+          corrections[candidate.sourceRow] &&
+          candidate.relatedTransactions.length === 1,
+      )
+      .map((candidate) => {
+        const relatedTransaction = candidate.relatedTransactions[0];
+        return {
+          sourceRow: candidate.sourceRow,
+          transactionId: relatedTransaction.id,
+          expectedMerchant: relatedTransaction.merchant,
+          expectedAmount: relatedTransaction.amount,
+        };
+      });
+    if (selected.length === 0 && selectedCorrections.length === 0) {
+      setError("반영할 명세서 변경 사항을 선택해 주세요.");
       return;
     }
     if (selected.some((candidate) => candidate.category.length === 0)) {
@@ -153,7 +197,10 @@ export function CardStatementPanel() {
           "Content-Type": "application/json",
           [csrfToken.headerName]: csrfToken.token,
         },
-        body: JSON.stringify({ candidates: selected }),
+        body: JSON.stringify({
+          candidates: selected,
+          corrections: selectedCorrections,
+        }),
       });
       if (!response.ok) {
         throw new Error(await responseError(response, "선택한 거래를 저장하지 못했습니다."));
@@ -173,6 +220,16 @@ export function CardStatementPanel() {
                       ...candidate,
                       matchStatus: "MATCHED",
                       transactionIds: [applied.transactionId],
+                      relatedTransactions: candidate.relatedTransactions.map(
+                        (transaction) =>
+                          transaction.id === applied.transactionId
+                            ? {
+                                ...transaction,
+                                merchant: candidate.merchant,
+                                amount: candidate.approvedAmount,
+                              }
+                            : transaction,
+                      ),
                     }
                   : candidate;
               }),
@@ -186,7 +243,14 @@ export function CardStatementPanel() {
         });
         return next;
       });
-      setSuccess(`${result.transactions.length}건을 거래 내역에 저장했습니다.`);
+      setCorrections((current) => {
+        const next = { ...current };
+        result.transactions.forEach((transaction) => {
+          delete next[transaction.sourceRow];
+        });
+        return next;
+      });
+      setSuccess(`${result.transactions.length}건의 변경 사항을 반영했습니다.`);
     } catch (caughtError) {
       setError(errorMessage(caughtError, "선택한 거래를 저장하지 못했습니다."));
     } finally {
@@ -201,8 +265,19 @@ export function CardStatementPanel() {
       )
     : [];
   const selectedCandidates = preview
-    ? preview.candidates.filter((candidate) => selections[candidate.sourceRow]?.selected)
+    ? preview.candidates.filter(
+        (candidate) =>
+          candidate.matchStatus === "MISSING" &&
+          selections[candidate.sourceRow]?.selected,
+      )
     : [];
+  const selectedCorrectionCount = preview
+    ? preview.candidates.filter(
+        (candidate) =>
+          candidate.matchStatus === "MISMATCH" && corrections[candidate.sourceRow],
+      ).length
+    : 0;
+  const selectedChangeCount = selectedCandidates.length + selectedCorrectionCount;
   const hasIncompleteCategory = selectedCandidates.some(
     (candidate) => selections[candidate.sourceRow].category.trim().length === 0,
   );
@@ -214,7 +289,7 @@ export function CardStatementPanel() {
         <h1 className="mt-2 text-3xl font-semibold tracking-tight">카드 명세서 대조</h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-stone-600">
           KB국민카드 XLSX 명세서를 기존 거래와 비교합니다. 원본 파일은 저장하지 않으며,
-          선택한 누락 항목만 확인 후 거래 내역에 반영합니다.
+          선택한 누락과 불일치 보정만 확인 후 거래 내역에 반영합니다.
         </p>
 
         <form className="mt-7 flex flex-col gap-4 sm:flex-row sm:items-end" onSubmit={handleUpload}>
@@ -321,27 +396,34 @@ export function CardStatementPanel() {
                         [candidate.sourceRow]: nextSelection,
                       }))
                     }
+                    correctionSelected={corrections[candidate.sourceRow] ?? false}
+                    onCorrectionChange={(selected) =>
+                      setCorrections((current) => ({
+                        ...current,
+                        [candidate.sourceRow]: selected,
+                      }))
+                    }
                     selection={selections[candidate.sourceRow]}
                   />
                 ))}
               </ul>
             )}
 
-            {counts.MISSING > 0 ? (
+            {counts.MISSING > 0 || counts.MISMATCH > 0 ? (
               <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-stone-200 pt-6">
                 <p className="text-sm text-stone-600">
-                  선택한 누락 거래 {selectedCandidates.length}건을 저장합니다.
+                  선택한 변경 사항 {selectedChangeCount}건을 반영합니다.
                 </p>
                 <button
                   className="rounded-xl bg-emerald-700 px-6 py-3 font-medium text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={
                     isApplying ||
-                    selectedCandidates.length === 0 ||
+                    selectedChangeCount === 0 ||
                     hasIncompleteCategory
                   }
                   type="submit"
                 >
-                  {isApplying ? "저장 중..." : "선택한 거래 확인하고 저장"}
+                  {isApplying ? "반영 중..." : "선택한 변경 확인하고 반영"}
                 </button>
               </div>
             ) : null}
@@ -354,14 +436,22 @@ export function CardStatementPanel() {
 
 function CandidateCard({
   candidate,
+  correctionSelected,
+  onCorrectionChange,
   onSelectionChange,
   selection,
 }: {
   candidate: StatementCandidate;
+  correctionSelected: boolean;
+  onCorrectionChange: (selected: boolean) => void;
   onSelectionChange: (selection: CandidateSelection) => void;
   selection?: CandidateSelection;
 }) {
   const canApply = candidate.matchStatus === "MISSING";
+  const canCorrect =
+    candidate.matchStatus === "MISMATCH" &&
+    candidate.relatedTransactions.length === 1;
+  const relatedTransaction = canCorrect ? candidate.relatedTransactions[0] : null;
   const inputId = `candidate-${candidate.sourceRow}`;
 
   return (
@@ -376,6 +466,15 @@ function CandidateCard({
             onChange={(event) =>
               onSelectionChange({ ...selection, selected: event.target.checked })
             }
+            type="checkbox"
+          />
+        ) : canCorrect ? (
+          <input
+            aria-label={`${candidate.merchant} 명세서 기준 수정 선택`}
+            checked={correctionSelected}
+            className="mt-1 h-5 w-5 rounded border-stone-300 text-emerald-700 accent-emerald-700"
+            id={inputId}
+            onChange={(event) => onCorrectionChange(event.target.checked)}
             type="checkbox"
           />
         ) : null}
@@ -444,6 +543,33 @@ function CandidateCard({
                   value={selection.description}
                 />
               </div>
+            </div>
+          ) : relatedTransaction ? (
+            <div className="mt-4 border-t border-stone-100 pt-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl bg-stone-50 p-4">
+                  <p className="text-xs font-medium text-stone-500">현재 거래</p>
+                  <p className="mt-2 text-sm font-medium text-stone-800">
+                    {relatedTransaction.merchant}
+                  </p>
+                  <p className="mt-1 text-sm text-stone-600">
+                    {amountFormatter.format(relatedTransaction.amount)}원 ·{" "}
+                    {relatedTransaction.category}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-amber-50 p-4">
+                  <p className="text-xs font-medium text-amber-700">명세서 기준</p>
+                  <p className="mt-2 text-sm font-medium text-stone-800">
+                    {candidate.merchant}
+                  </p>
+                  <p className="mt-1 text-sm text-stone-600">
+                    {amountFormatter.format(candidate.approvedAmount)}원
+                  </p>
+                </div>
+              </div>
+              <p className="mt-3 text-xs text-stone-500">
+                선택하면 가맹점과 금액만 수정하며 카테고리, 내역, 결제 시각은 유지합니다.
+              </p>
             </div>
           ) : candidate.matchStatus === "MATCHED" ? (
             <p className="mt-3 text-xs text-stone-500">기존 거래와 일치해 저장 대상에서 제외됩니다.</p>

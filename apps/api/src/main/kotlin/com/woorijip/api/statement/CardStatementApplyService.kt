@@ -2,6 +2,7 @@ package com.woorijip.api.statement
 
 import com.woorijip.api.auth.CurrentUser
 import com.woorijip.api.transaction.PaymentMethod
+import com.woorijip.api.transaction.Transaction
 import com.woorijip.api.transaction.TransactionDraft
 import com.woorijip.api.transaction.TransactionRepository
 import com.woorijip.api.transaction.TransactionService
@@ -17,10 +18,18 @@ data class StatementCandidateSelection(
     val description: String?,
 )
 
+data class StatementCandidateCorrection(
+    val sourceRow: Int,
+    val transactionId: Long,
+    val expectedMerchant: String,
+    val expectedAmount: Long,
+)
+
 data class AppliedStatementTransaction(
     val sourceRow: Int,
     val transactionId: Long,
     val created: Boolean,
+    val updated: Boolean,
 )
 
 @Service
@@ -35,29 +44,41 @@ class CardStatementApplyService(
         currentUser: CurrentUser,
         importId: Long,
         selections: List<StatementCandidateSelection>,
+        corrections: List<StatementCandidateCorrection>,
     ): List<AppliedStatementTransaction> {
-        if (selections.isEmpty()) {
+        if (selections.isEmpty() && corrections.isEmpty()) {
             throw InvalidCardStatementException("반영할 명세서 거래를 선택해 주세요.")
         }
-        if (selections.map(StatementCandidateSelection::sourceRow).distinct().size != selections.size) {
+        val selectedSourceRows =
+            selections.map(StatementCandidateSelection::sourceRow) +
+                corrections.map(StatementCandidateCorrection::sourceRow)
+        if (selectedSourceRows.distinct().size != selectedSourceRows.size) {
             throw InvalidCardStatementException("같은 명세서 거래를 중복 선택할 수 없습니다.")
+        }
+        if (
+            corrections.map(StatementCandidateCorrection::transactionId).distinct().size !=
+            corrections.size
+        ) {
+            throw InvalidCardStatementException("같은 기존 거래를 중복 수정할 수 없습니다.")
         }
 
         val statementImport = importRepository.findByIdForUpdate(importId, currentUser)
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "명세서 가져오기를 찾을 수 없습니다.")
         val storedCandidates = importRepository.findCandidates(importId)
-        val selectedCandidates = selections.map { selection ->
+        val selectedCandidatesByRow = selectedSourceRows.associateWith { sourceRow ->
             val storedCandidate = storedCandidates.firstOrNull {
-                it.candidate.sourceRow == selection.sourceRow
+                it.candidate.sourceRow == sourceRow
             } ?: throw InvalidCardStatementException("선택한 명세서 거래를 찾을 수 없습니다.")
-            selection to storedCandidate
+            storedCandidate
         }
 
-        val unappliedCandidates = selectedCandidates
-            .map(Pair<StatementCandidateSelection, StoredStatementCandidate>::second)
+        val unappliedCandidates = selectedCandidatesByRow.values
             .filter { it.appliedTransactionId == null }
-        val matchesBySourceRow = if (unappliedCandidates.isEmpty()) {
-            emptyMap()
+        val matchesBySourceRow: Map<Int, StatementMatch>
+        val transactionsById: Map<Long, Transaction>
+        if (unappliedCandidates.isEmpty()) {
+            matchesBySourceRow = emptyMap()
+            transactionsById = emptyMap()
         } else {
             val firstDate = storedCandidates.minOf { it.candidate.occurredOn }
             val lastDate = storedCandidates.maxOf { it.candidate.occurredOn }
@@ -69,18 +90,21 @@ class CardStatementApplyService(
                     occurredAtFrom = firstDate.atStartOfDay(SEOUL_ZONE_ID).toOffsetDateTime(),
                     occurredAtTo = lastDate.plusDays(1).atStartOfDay(SEOUL_ZONE_ID).toOffsetDateTime(),
                 )
-            matcher
+            matchesBySourceRow = matcher
                 .match(storedCandidates.map(StoredStatementCandidate::candidate), transactions)
                 .associateBy { it.candidate.sourceRow }
+            transactionsById = transactions.associateBy { requireNotNull(it.id) }
         }
 
-        return selectedCandidates.map { (selection, storedCandidate) ->
+        val createdTransactions = selections.map { selection ->
+            val storedCandidate = requireNotNull(selectedCandidatesByRow[selection.sourceRow])
             val existingTransactionId = storedCandidate.appliedTransactionId
             if (existingTransactionId != null) {
                 return@map AppliedStatementTransaction(
                     sourceRow = selection.sourceRow,
                     transactionId = existingTransactionId,
                     created = false,
+                    updated = false,
                 )
             }
 
@@ -115,8 +139,78 @@ class CardStatementApplyService(
                 sourceRow = candidate.sourceRow,
                 transactionId = transactionId,
                 created = true,
+                updated = false,
             )
         }
+
+        val updatedTransactions = corrections.map { correction ->
+            val storedCandidate = requireNotNull(selectedCandidatesByRow[correction.sourceRow])
+            val existingTransactionId = storedCandidate.appliedTransactionId
+            if (existingTransactionId != null) {
+                if (existingTransactionId != correction.transactionId) {
+                    throw InvalidCardStatementException("선택한 기존 거래가 명세서 반영 기록과 일치하지 않습니다.")
+                }
+                return@map AppliedStatementTransaction(
+                    sourceRow = correction.sourceRow,
+                    transactionId = existingTransactionId,
+                    created = false,
+                    updated = false,
+                )
+            }
+
+            val candidate = storedCandidate.candidate
+            if (candidate.approvedAmount <= 0 || candidate.type == StatementEntryType.REVERSAL) {
+                throw InvalidCardStatementException("취소 또는 0원 이하 거래로 기존 거래를 수정할 수 없습니다.")
+            }
+            val match = requireNotNull(matchesBySourceRow[candidate.sourceRow])
+            if (
+                match.status == StatementMatchStatus.MATCHED &&
+                match.transactionIds == listOf(correction.transactionId)
+            ) {
+                return@map AppliedStatementTransaction(
+                    sourceRow = candidate.sourceRow,
+                    transactionId = correction.transactionId,
+                    created = false,
+                    updated = false,
+                )
+            }
+            if (
+                match.status != StatementMatchStatus.MISMATCH ||
+                match.transactionIds != listOf(correction.transactionId)
+            ) {
+                throw InvalidCardStatementException("현재 단일 불일치 상태인 거래만 수정할 수 있습니다.")
+            }
+            val transaction = transactionsById[correction.transactionId]
+                ?: throw InvalidCardStatementException("수정할 기존 거래를 찾을 수 없습니다.")
+            if (
+                transaction.merchant != correction.expectedMerchant ||
+                transaction.amount != correction.expectedAmount
+            ) {
+                throw InvalidCardStatementException("기존 거래가 변경되었습니다. 명세서를 다시 대조해 주세요.")
+            }
+            val updated = transactionRepository.updateStatementDetailsIfUnchanged(
+                id = correction.transactionId,
+                householdId = currentUser.householdId,
+                payerId = currentUser.id,
+                cardIssuer = statementImport.cardIssuer.name,
+                expectedMerchant = correction.expectedMerchant,
+                expectedAmount = correction.expectedAmount,
+                expectedOccurredAt = transaction.occurredAt,
+                merchant = candidate.merchant,
+                amount = candidate.approvedAmount,
+            )
+            if (updated != 1) {
+                throw InvalidCardStatementException("대조 결과가 변경되었습니다. 명세서를 다시 대조해 주세요.")
+            }
+            AppliedStatementTransaction(
+                sourceRow = candidate.sourceRow,
+                transactionId = correction.transactionId,
+                created = false,
+                updated = true,
+            )
+        }
+
+        return createdTransactions + updatedTransactions
     }
 
     private companion object {

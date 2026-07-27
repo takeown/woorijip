@@ -1,6 +1,7 @@
 package com.woorijip.api.statement
 
 import com.woorijip.api.auth.CurrentUser
+import com.woorijip.api.transaction.Transaction
 import com.woorijip.api.transaction.TransactionRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -11,6 +12,7 @@ data class CardStatementPreview(
     val importId: Long,
     val statement: ParsedCardStatement,
     val matches: List<StatementMatch>,
+    val transactionsById: Map<Long, Transaction>,
 )
 
 @Service
@@ -51,6 +53,7 @@ class CardStatementPreviewService(
                 importId = importId,
                 statement = statement,
                 matches = emptyList(),
+                transactionsById = emptyMap(),
             )
         }
         val firstDate = statement.candidates.minOf(StatementCandidate::occurredOn)
@@ -68,6 +71,7 @@ class CardStatementPreviewService(
             importId = importId,
             statement = statement,
             matches = matcher.match(statement.candidates, transactions),
+            transactionsById = transactions.associateBy { requireNotNull(it.id) },
         )
     }
 
