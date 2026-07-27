@@ -147,6 +147,9 @@ export function AuthenticatedShell({ children }: AuthenticatedShellProps) {
             <NavigationLink active={pathname === "/stats"} href="/stats">
               통계
             </NavigationLink>
+            <NavigationLink active={pathname === "/statements"} href="/statements">
+              명세서
+            </NavigationLink>
           </nav>
         </div>
         <div className="flex items-center gap-4 text-sm text-stone-600">
