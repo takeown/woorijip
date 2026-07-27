@@ -17,6 +17,10 @@ spring:
     timeout: 30d
     jdbc:
       initialize-schema: never
+  servlet:
+    multipart:
+      max-file-size: 2MB
+      max-request-size: 2MB
 
 app:
   auth:
