@@ -1,8 +1,11 @@
 package com.woorijip.api.statement
 
+import com.woorijip.api.auth.GoogleAccountService
 import com.woorijip.api.transaction.CardIssuer
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
+import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.security.oauth2.core.oidc.user.OidcUser
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestPart
@@ -17,6 +20,10 @@ data class CardStatementPreviewResponse(
     val totalCount: Int,
     val totalBilledAmount: Long,
     val adjustmentCount: Int,
+    val matchedCount: Int,
+    val missingCount: Int,
+    val duplicateSuspectedCount: Int,
+    val mismatchCount: Int,
     val candidates: List<StatementCandidateResponse>,
 )
 
@@ -33,11 +40,14 @@ data class StatementCandidateResponse(
     val installmentSequence: Int?,
     val remainingInstallments: Int?,
     val remainingPrincipal: Long?,
+    val matchStatus: StatementMatchStatus,
+    val transactionIds: List<Long>,
 )
 
 @RestController
 @RequestMapping("/card-statements")
 class CardStatementController(
+    private val googleAccountService: GoogleAccountService,
     private val previewService: CardStatementPreviewService,
 ) {
     @PostMapping(
@@ -45,10 +55,12 @@ class CardStatementController(
         consumes = [MediaType.MULTIPART_FORM_DATA_VALUE],
     )
     fun preview(
+        @AuthenticationPrincipal oidcUser: OidcUser,
         @RequestPart("file") file: MultipartFile,
     ): CardStatementPreviewResponse =
         try {
-            previewService.preview(file).toResponse()
+            val currentUser = googleAccountService.findByGoogleSubject(oidcUser.subject)
+            previewService.preview(currentUser, file).toResponse()
         } catch (exception: InvalidCardStatementException) {
             throw ResponseStatusException(
                 HttpStatus.BAD_REQUEST,
@@ -58,28 +70,36 @@ class CardStatementController(
         }
 }
 
-private fun ParsedCardStatement.toResponse(): CardStatementPreviewResponse =
+private fun CardStatementPreview.toResponse(): CardStatementPreviewResponse =
     CardStatementPreviewResponse(
-        cardIssuer = cardIssuer,
-        statementMonth = statementMonth.toString(),
-        totalCount = totalCount,
-        totalBilledAmount = totalBilledAmount,
-        adjustmentCount = adjustments.size,
-        candidates = candidates.map(StatementCandidate::toResponse),
+        cardIssuer = statement.cardIssuer,
+        statementMonth = statement.statementMonth.toString(),
+        totalCount = statement.totalCount,
+        totalBilledAmount = statement.totalBilledAmount,
+        adjustmentCount = statement.adjustments.size,
+        matchedCount = matches.count { it.status == StatementMatchStatus.MATCHED },
+        missingCount = matches.count { it.status == StatementMatchStatus.MISSING },
+        duplicateSuspectedCount = matches.count {
+            it.status == StatementMatchStatus.DUPLICATE_SUSPECTED
+        },
+        mismatchCount = matches.count { it.status == StatementMatchStatus.MISMATCH },
+        candidates = matches.map(StatementMatch::toResponse),
     )
 
-private fun StatementCandidate.toResponse(): StatementCandidateResponse =
+private fun StatementMatch.toResponse(): StatementCandidateResponse =
     StatementCandidateResponse(
-        sourceRow = sourceRow,
-        occurredOn = occurredOn,
-        cardLabel = cardLabel,
-        merchant = merchant,
-        approvedAmount = approvedAmount,
-        billedAmount = billedAmount,
-        interestAmount = interestAmount,
-        type = type,
-        installmentMonths = installmentMonths,
-        installmentSequence = installmentSequence,
-        remainingInstallments = remainingInstallments,
-        remainingPrincipal = remainingPrincipal,
+        sourceRow = candidate.sourceRow,
+        occurredOn = candidate.occurredOn,
+        cardLabel = candidate.cardLabel,
+        merchant = candidate.merchant,
+        approvedAmount = candidate.approvedAmount,
+        billedAmount = candidate.billedAmount,
+        interestAmount = candidate.interestAmount,
+        type = candidate.type,
+        installmentMonths = candidate.installmentMonths,
+        installmentSequence = candidate.installmentSequence,
+        remainingInstallments = candidate.remainingInstallments,
+        remainingPrincipal = candidate.remainingPrincipal,
+        matchStatus = status,
+        transactionIds = transactionIds,
     )
