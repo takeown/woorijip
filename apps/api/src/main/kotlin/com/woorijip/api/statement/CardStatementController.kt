@@ -2,11 +2,17 @@ package com.woorijip.api.statement
 
 import com.woorijip.api.auth.GoogleAccountService
 import com.woorijip.api.transaction.CardIssuer
+import jakarta.validation.Valid
+import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.Positive
+import jakarta.validation.constraints.Size
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.security.oauth2.core.oidc.user.OidcUser
+import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestPart
 import org.springframework.web.bind.annotation.RestController
@@ -15,6 +21,7 @@ import org.springframework.web.server.ResponseStatusException
 import java.time.LocalDate
 
 data class CardStatementPreviewResponse(
+    val importId: Long,
     val cardIssuer: CardIssuer,
     val statementMonth: String,
     val totalCount: Int,
@@ -44,11 +51,31 @@ data class StatementCandidateResponse(
     val transactionIds: List<Long>,
 )
 
+data class ApplyCardStatementRequest(
+    @field:Size(min = 1)
+    val candidates: List<@Valid ApplyStatementCandidateRequest>,
+)
+
+data class ApplyStatementCandidateRequest(
+    @field:Positive
+    val sourceRow: Int,
+    @field:NotBlank
+    @field:Size(max = 100)
+    val category: String,
+    @field:Size(max = 500)
+    val description: String?,
+)
+
+data class ApplyCardStatementResponse(
+    val transactions: List<AppliedStatementTransaction>,
+)
+
 @RestController
 @RequestMapping("/card-statements")
 class CardStatementController(
     private val googleAccountService: GoogleAccountService,
     private val previewService: CardStatementPreviewService,
+    private val applyService: CardStatementApplyService,
 ) {
     @PostMapping(
         "/preview",
@@ -68,10 +95,40 @@ class CardStatementController(
                 exception,
             )
         }
+
+    @PostMapping("/{importId}/apply")
+    fun apply(
+        @AuthenticationPrincipal oidcUser: OidcUser,
+        @PathVariable importId: Long,
+        @Valid @RequestBody request: ApplyCardStatementRequest,
+    ): ApplyCardStatementResponse =
+        try {
+            val currentUser = googleAccountService.findByGoogleSubject(oidcUser.subject)
+            ApplyCardStatementResponse(
+                transactions = applyService.apply(
+                    currentUser = currentUser,
+                    importId = importId,
+                    selections = request.candidates.map { candidate ->
+                        StatementCandidateSelection(
+                            sourceRow = candidate.sourceRow,
+                            category = candidate.category.trim(),
+                            description = candidate.description?.trim()?.takeIf(String::isNotEmpty),
+                        )
+                    },
+                ),
+            )
+        } catch (exception: InvalidCardStatementException) {
+            throw ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                exception.message,
+                exception,
+            )
+        }
 }
 
 private fun CardStatementPreview.toResponse(): CardStatementPreviewResponse =
     CardStatementPreviewResponse(
+        importId = importId,
         cardIssuer = statement.cardIssuer,
         statementMonth = statement.statementMonth.toString(),
         totalCount = statement.totalCount,

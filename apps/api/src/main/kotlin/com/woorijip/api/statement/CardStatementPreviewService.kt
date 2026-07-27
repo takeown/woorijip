@@ -8,6 +8,7 @@ import org.springframework.web.multipart.MultipartFile
 import java.time.ZoneId
 
 data class CardStatementPreview(
+    val importId: Long,
     val statement: ParsedCardStatement,
     val matches: List<StatementMatch>,
 )
@@ -17,8 +18,10 @@ class CardStatementPreviewService(
     private val parsers: List<CardStatementParser>,
     private val transactionRepository: TransactionRepository,
     private val matcher: CardStatementMatcher,
+    private val importRepository: CardStatementImportRepository,
+    private val fingerprint: CardStatementFingerprint,
 ) {
-    @Transactional(readOnly = true)
+    @Transactional
     fun preview(
         currentUser: CurrentUser,
         file: MultipartFile,
@@ -38,8 +41,17 @@ class CardStatementPreviewService(
         val parser = parsers.firstOrNull { it.supports(statementFile) }
             ?: throw InvalidCardStatementException("지원하지 않는 명세서 파일 형식입니다.")
         val statement = parser.parse(statementFile)
+        val importId = importRepository.save(
+            currentUser = currentUser,
+            statement = statement,
+            fingerprint = fingerprint.calculate(statement),
+        )
         if (statement.candidates.isEmpty()) {
-            return CardStatementPreview(statement = statement, matches = emptyList())
+            return CardStatementPreview(
+                importId = importId,
+                statement = statement,
+                matches = emptyList(),
+            )
         }
         val firstDate = statement.candidates.minOf(StatementCandidate::occurredOn)
         val lastDate = statement.candidates.maxOf(StatementCandidate::occurredOn)
@@ -53,6 +65,7 @@ class CardStatementPreviewService(
             )
 
         return CardStatementPreview(
+            importId = importId,
             statement = statement,
             matches = matcher.match(statement.candidates, transactions),
         )
