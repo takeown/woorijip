@@ -3,6 +3,7 @@ package com.woorijip.api.statement
 import com.woorijip.api.transaction.CardIssuer
 import com.woorijip.api.transaction.PaymentMethod
 import com.woorijip.api.transaction.Transaction
+import com.woorijip.api.transaction.TransactionCategory
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import kotlin.test.Test
@@ -102,7 +103,7 @@ class CardStatementMatcherTests {
         merchant = merchant,
         description = null,
         amount = amount,
-        category = "테스트",
+        category = TransactionCategory.OTHER,
         paymentMethod = PaymentMethod.CARD,
         cardIssuer = CardIssuer.KB_KOOKMIN,
         occurredAt = OffsetDateTime.parse(occurredAt),

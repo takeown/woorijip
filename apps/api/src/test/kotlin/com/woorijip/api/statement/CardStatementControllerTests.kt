@@ -6,6 +6,7 @@ import com.woorijip.api.auth.TestOidcUsers
 import com.woorijip.api.transaction.CardIssuer
 import com.woorijip.api.transaction.PaymentMethod
 import com.woorijip.api.transaction.Transaction
+import com.woorijip.api.transaction.TransactionCategory
 import com.woorijip.api.transaction.TransactionRepository
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -52,7 +53,7 @@ class CardStatementControllerTests(
                     merchant = "세븐일레븐 테스트점",
                     description = null,
                     amount = 2_300,
-                    category = "생활",
+                    category = TransactionCategory.LIVING,
                     paymentMethod = PaymentMethod.CARD,
                     cardIssuer = CardIssuer.KB_KOOKMIN,
                     occurredAt = OffsetDateTime.parse("2026-06-09T12:00:00+09:00"),
@@ -118,7 +119,7 @@ class CardStatementControllerTests(
                       "candidates": [
                         {
                           "sourceRow": $sourceRow,
-                          "category": "생활",
+                          "category": "LIVING",
                           "description": "명세서 확인"
                         }
                       ]
@@ -134,7 +135,7 @@ class CardStatementControllerTests(
         val savedTransaction = transactionRepository.findAll().single()
         assertEquals("세븐일레븐 테스트점", savedTransaction.merchant)
         assertEquals(2_300, savedTransaction.amount)
-        assertEquals("생활", savedTransaction.category)
+        assertEquals(TransactionCategory.LIVING, savedTransaction.category)
         assertEquals("명세서 확인", savedTransaction.description)
         assertEquals(PaymentMethod.CARD, savedTransaction.paymentMethod)
         assertEquals(CardIssuer.KB_KOOKMIN, savedTransaction.cardIssuer)
@@ -153,7 +154,7 @@ class CardStatementControllerTests(
                       "candidates": [
                         {
                           "sourceRow": $sourceRow,
-                          "category": "생활",
+                          "category": "LIVING",
                           "description": "명세서 확인"
                         }
                       ]
@@ -183,7 +184,7 @@ class CardStatementControllerTests(
                 merchant = "세븐일레븐 테스트점",
                 description = null,
                 amount = 2_300,
-                category = "생활",
+                category = TransactionCategory.LIVING,
                 paymentMethod = PaymentMethod.CARD,
                 cardIssuer = CardIssuer.KB_KOOKMIN,
                 occurredAt = OffsetDateTime.parse("2026-06-09T12:00:00+09:00"),
@@ -201,7 +202,7 @@ class CardStatementControllerTests(
                       "candidates": [
                         {
                           "sourceRow": $sourceRow,
-                          "category": "생활"
+                          "category": "LIVING"
                         }
                       ]
                     }
@@ -223,7 +224,7 @@ class CardStatementControllerTests(
                 merchant = "수정 전 가맹점",
                 description = "사용자가 적은 내역",
                 amount = 2_300,
-                category = "생활",
+                category = TransactionCategory.LIVING,
                 paymentMethod = PaymentMethod.CARD,
                 cardIssuer = CardIssuer.KB_KOOKMIN,
                 occurredAt = OffsetDateTime.parse("2026-06-09T18:30:00+09:00"),
@@ -272,7 +273,7 @@ class CardStatementControllerTests(
         assertEquals("세븐일레븐 테스트점", updatedTransaction.merchant)
         assertEquals(2_300, updatedTransaction.amount)
         assertEquals("사용자가 적은 내역", updatedTransaction.description)
-        assertEquals("생활", updatedTransaction.category)
+        assertEquals(TransactionCategory.LIVING, updatedTransaction.category)
         assertEquals(existingTransaction.occurredAt.toInstant(), updatedTransaction.occurredAt.toInstant())
         assertEquals(existingTransaction.createdAt.toInstant(), updatedTransaction.createdAt.toInstant())
         assertEquals(1, transactionRepository.count())
@@ -288,7 +289,7 @@ class CardStatementControllerTests(
                 merchant = "수정 전 가맹점",
                 description = "보존할 내역",
                 amount = 2_300,
-                category = "생활",
+                category = TransactionCategory.LIVING,
                 paymentMethod = PaymentMethod.CARD,
                 cardIssuer = CardIssuer.KB_KOOKMIN,
                 occurredAt = OffsetDateTime.parse("2026-06-09T18:30:00+09:00"),

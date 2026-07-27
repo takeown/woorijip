@@ -2,6 +2,8 @@ package com.woorijip.api.ai
 
 import com.woorijip.api.transaction.CardIssuer
 import com.woorijip.api.transaction.PaymentMethod
+import com.woorijip.api.transaction.TransactionCategory
+import com.woorijip.api.transaction.TransactionTag
 import org.springframework.http.HttpHeaders
 import org.springframework.stereotype.Component
 import org.springframework.web.client.RestClient
@@ -82,7 +84,11 @@ class OpenAiTransactionDraftGenerator(
         결제수단은 CARD 또는 CASH만 사용하세요. 카드 결제면 국내 카드사를 cardIssuer로 반환하세요.
         카드사가 언급되지 않은 카드 결제는 NEEDS_CLARIFICATION으로 카드사를 질문하세요.
         현금 결제면 cardIssuer는 null입니다.
-        카테고리는 짧은 한국어 명사로 추론하세요.
+        카테고리는 제공된 영문 코드 중 하나만 사용하세요.
+        FOOD는 식비, HOUSING은 주거, TRANSPORT는 교통, LIVING은 생활, HEALTH는 건강,
+        LEISURE는 여가, EDUCATION은 교육, FINANCE_INSURANCE는 금융·보험,
+        FAMILY_EVENT는 경조사, OTHER는 기타입니다.
+        태그는 SUBSCRIPTION, UTILITY, RECURRING_PAYMENT 중 해당하는 값을 모두 사용하세요.
         내역은 구매 품목이나 사용 목적을 사용자가 말한 경우에만 짧게 정리하고, 알 수 없으면 null로 반환하세요.
         내역이 없다는 이유로 추가 질문하지 마세요.
         가맹점, 양의 정수 KRW 금액, 카테고리, ISO 8601 발생 시각, 결제자, 결제수단을 모두 알면 READY입니다.
@@ -118,7 +124,18 @@ class OpenAiTransactionDraftGenerator(
                 "merchant" to nullableString,
                 "description" to nullableString,
                 "amount" to mapOf("type" to listOf("integer", "null")),
-                "category" to nullableString,
+                "category" to mapOf(
+                    "type" to listOf("string", "null"),
+                    "enum" to TransactionCategory.entries.map(TransactionCategory::name) + null,
+                ),
+                "tags" to mapOf(
+                    "type" to "array",
+                    "items" to mapOf(
+                        "type" to "string",
+                        "enum" to TransactionTag.entries.map(TransactionTag::name),
+                    ),
+                    "uniqueItems" to true,
+                ),
                 "occurredAt" to nullableString,
                 "payer" to mapOf(
                     "type" to listOf("string", "null"),
@@ -140,6 +157,7 @@ class OpenAiTransactionDraftGenerator(
                 "description",
                 "amount",
                 "category",
+                "tags",
                 "occurredAt",
                 "payer",
                 "paymentMethod",

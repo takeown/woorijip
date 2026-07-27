@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { cardIssuers, type PaymentMethod } from "./payment-details";
+import { TransactionClassificationFields } from "./transaction-classification-fields";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
@@ -60,6 +61,8 @@ export function TransactionForm({
           description: String(formData.get("description") ?? "").trim() || null,
           amount: Number(formData.get("amount")),
           category: formData.get("category"),
+          tags: formData.getAll("tags"),
+          classificationSource: "USER",
           paymentMethod,
           cardIssuer: paymentMethod === "CARD" ? formData.get("cardIssuer") : null,
           occurredAt: occurredAt
@@ -133,38 +136,24 @@ export function TransactionForm({
         />
       </div>
 
-      <div className="grid gap-5 sm:grid-cols-2">
-        <div>
-          <label className="mb-2 block text-sm font-medium text-stone-700" htmlFor="amount">
-            금액
-          </label>
-          <input
-            className="w-full rounded-xl border border-stone-300 px-4 py-3 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-            id="amount"
-            name="amount"
-            type="number"
-            min="1"
-            step="1"
-            inputMode="numeric"
-            placeholder="8000"
-            required
-          />
-        </div>
-
-        <div>
-          <label className="mb-2 block text-sm font-medium text-stone-700" htmlFor="category">
-            카테고리
-          </label>
-          <input
-            className="w-full rounded-xl border border-stone-300 px-4 py-3 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
-            id="category"
-            name="category"
-            placeholder="식비"
-            required
-            maxLength={100}
-          />
-        </div>
+      <div>
+        <label className="mb-2 block text-sm font-medium text-stone-700" htmlFor="amount">
+          금액
+        </label>
+        <input
+          className="w-full rounded-xl border border-stone-300 px-4 py-3 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+          id="amount"
+          name="amount"
+          type="number"
+          min="1"
+          step="1"
+          inputMode="numeric"
+          placeholder="8000"
+          required
+        />
       </div>
+
+      <TransactionClassificationFields idPrefix="transaction" />
 
       <div>
         <label className="mb-2 block text-sm font-medium text-stone-700" htmlFor="paymentMethod">

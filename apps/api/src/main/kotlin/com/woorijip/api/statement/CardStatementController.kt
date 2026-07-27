@@ -3,8 +3,11 @@ package com.woorijip.api.statement
 import com.woorijip.api.auth.GoogleAccountService
 import com.woorijip.api.transaction.CardIssuer
 import com.woorijip.api.transaction.Transaction
+import com.woorijip.api.transaction.TransactionCategory
+import com.woorijip.api.transaction.TransactionTag
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Positive
 import jakarta.validation.constraints.Size
 import org.springframework.http.HttpStatus
@@ -59,7 +62,8 @@ data class StatementTransactionResponse(
     val merchant: String,
     val description: String?,
     val amount: Long,
-    val category: String,
+    val category: TransactionCategory,
+    val tags: Set<TransactionTag>,
     val occurredAt: OffsetDateTime,
 )
 
@@ -71,9 +75,10 @@ data class ApplyCardStatementRequest(
 data class ApplyStatementCandidateRequest(
     @field:Positive
     val sourceRow: Int,
-    @field:NotBlank
-    @field:Size(max = 100)
-    val category: String,
+    @field:NotNull
+    val category: TransactionCategory?,
+    @field:Size(max = 3)
+    val tags: Set<TransactionTag> = emptySet(),
     @field:Size(max = 500)
     val description: String?,
 )
@@ -135,7 +140,8 @@ class CardStatementController(
                     selections = request.candidates.map { candidate ->
                         StatementCandidateSelection(
                             sourceRow = candidate.sourceRow,
-                            category = candidate.category.trim(),
+                            category = requireNotNull(candidate.category),
+                            tags = candidate.tags,
                             description = candidate.description?.trim()?.takeIf(String::isNotEmpty),
                         )
                     },
@@ -200,6 +206,7 @@ private fun StatementMatch.toResponse(
                 description = transaction.description,
                 amount = transaction.amount,
                 category = transaction.category,
+                tags = transaction.tags,
                 occurredAt = transaction.occurredAt,
             )
         },

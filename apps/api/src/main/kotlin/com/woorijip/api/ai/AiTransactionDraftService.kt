@@ -5,6 +5,8 @@ import com.woorijip.api.household.HouseholdMember
 import com.woorijip.api.household.HouseholdMembershipRepository
 import com.woorijip.api.transaction.CardIssuer
 import com.woorijip.api.transaction.PaymentMethod
+import com.woorijip.api.transaction.TransactionCategory
+import com.woorijip.api.transaction.TransactionTag
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
@@ -16,7 +18,8 @@ data class AiTransactionDraft(
     val merchant: String? = null,
     val description: String? = null,
     val amount: Long? = null,
-    val category: String? = null,
+    val category: TransactionCategory? = null,
+    val tags: Set<TransactionTag> = emptySet(),
     val occurredAt: OffsetDateTime? = null,
     val payerId: Long? = null,
     val payerDisplayName: String? = null,
@@ -69,7 +72,7 @@ class AiTransactionDraftService(
         val merchant = generated.merchant?.trim()?.takeIf { it.isNotEmpty() && it.length <= 200 }
         val description = generated.description?.trim()?.takeIf { it.isNotEmpty() && it.length <= 500 }
         val amount = generated.amount?.takeIf { it > 0 }
-        val category = generated.category?.trim()?.takeIf { it.isNotEmpty() && it.length <= 100 }
+        val category = generated.category
         val occurredAt = generated.occurredAt?.let { value ->
             runCatching { OffsetDateTime.parse(value) }.getOrNull()
         }
@@ -100,6 +103,7 @@ class AiTransactionDraftService(
             description = description,
             amount = amount,
             category = category,
+            tags = generated.tags,
             occurredAt = occurredAt,
             payerId = payer.userId,
             payerDisplayName = payer.displayName,
