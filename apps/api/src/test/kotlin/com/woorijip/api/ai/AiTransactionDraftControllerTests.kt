@@ -10,6 +10,7 @@ import com.woorijip.api.identity.AppUserRepository
 import com.woorijip.api.transaction.TransactionRepository
 import com.woorijip.api.transaction.CardIssuer
 import com.woorijip.api.transaction.PaymentMethod
+import com.woorijip.api.transaction.TransactionCategory
 import org.hamcrest.Matchers.containsString
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -61,7 +62,7 @@ class AiTransactionDraftControllerTests(
                 jsonPath("$.merchant") { value("김밥천국") }
                 jsonPath("$.description") { value("점심 식사") }
                 jsonPath("$.amount") { value(8000) }
-                jsonPath("$.category") { value("식비") }
+                jsonPath("$.category") { value("FOOD") }
                 jsonPath("$.payerId") { value(currentUser.id) }
                 jsonPath("$.paymentMethod") { value("CARD") }
                 jsonPath("$.cardIssuer") { value("SHINHAN") }
@@ -232,7 +233,7 @@ class AiTransactionDraftTestConfiguration {
                     status = GeneratedDraftStatus.READY,
                     merchant = "김밥천국",
                     amount = 8_000,
-                    category = "식비",
+                    category = TransactionCategory.FOOD,
                     occurredAt = "2026-07-21T12:30:00+09:00",
                     payer = GeneratedPayer.ME,
                 )
@@ -240,7 +241,7 @@ class AiTransactionDraftTestConfiguration {
                     status = GeneratedDraftStatus.READY,
                     merchant = "이마트",
                     amount = 30_000,
-                    category = "생활",
+                    category = TransactionCategory.LIVING,
                     occurredAt = "2026-07-21T12:30:00+09:00",
                     payer = GeneratedPayer.PARTNER,
                     paymentMethod = PaymentMethod.CASH,
@@ -250,7 +251,7 @@ class AiTransactionDraftTestConfiguration {
                     merchant = "김밥천국",
                     description = "점심 식사",
                     amount = 8_000,
-                    category = "식비",
+                    category = TransactionCategory.FOOD,
                     occurredAt = "2026-07-21T12:30:00+09:00",
                     payer = GeneratedPayer.ME,
                     paymentMethod = PaymentMethod.CARD,

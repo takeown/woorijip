@@ -12,6 +12,7 @@ import com.woorijip.api.identity.AppUserRepository
 import com.woorijip.api.transaction.CardIssuer
 import com.woorijip.api.transaction.PaymentMethod
 import com.woorijip.api.transaction.Transaction
+import com.woorijip.api.transaction.TransactionCategory
 import com.woorijip.api.transaction.TransactionRepository
 import org.hamcrest.Matchers.hasSize
 import org.springframework.beans.factory.annotation.Autowired
@@ -235,7 +236,7 @@ class SpendingStatisticsControllerTests(
                 merchant = "테스트 가맹점",
                 description = null,
                 amount = amount,
-                category = category,
+                category = TransactionCategory.entries.single { it.label == category },
                 paymentMethod = paymentMethod,
                 cardIssuer = if (paymentMethod == PaymentMethod.CARD) CardIssuer.SHINHAN else null,
                 occurredAt = OffsetDateTime.parse(occurredAt),

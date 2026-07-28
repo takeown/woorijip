@@ -64,7 +64,7 @@ class TransactionRepositoryTests(
         merchant = merchant,
         description = description,
         amount = 8_000,
-        category = "식비",
+        category = TransactionCategory.FOOD,
         paymentMethod = PaymentMethod.CARD,
         cardIssuer = CardIssuer.SHINHAN,
         occurredAt = OffsetDateTime.parse(occurredAt),

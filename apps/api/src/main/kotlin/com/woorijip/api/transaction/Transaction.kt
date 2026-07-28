@@ -1,6 +1,7 @@
 package com.woorijip.api.transaction
 
 import org.springframework.data.annotation.Id
+import org.springframework.data.annotation.Transient
 import org.springframework.data.relational.core.mapping.Table
 import java.time.OffsetDateTime
 
@@ -13,9 +14,16 @@ data class Transaction(
     val merchant: String,
     val description: String?,
     val amount: Long,
-    val category: String,
+    val legacyCategory: String? = null,
+    val category: TransactionCategory,
+    val classificationSource: ClassificationSource = ClassificationSource.USER,
+    val classificationConfidence: ClassificationConfidence = ClassificationConfidence.HIGH,
+    val classificationConfirmedAt: OffsetDateTime? = null,
     val paymentMethod: PaymentMethod,
     val cardIssuer: CardIssuer?,
     val occurredAt: OffsetDateTime,
     val createdAt: OffsetDateTime,
+    val updatedAt: OffsetDateTime = createdAt,
+    @Transient
+    val tags: Set<TransactionTag> = emptySet(),
 )

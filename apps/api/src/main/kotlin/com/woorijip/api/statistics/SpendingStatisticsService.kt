@@ -2,6 +2,7 @@ package com.woorijip.api.statistics
 
 import com.woorijip.api.auth.CurrentUser
 import com.woorijip.api.household.HouseholdMembershipRepository
+import com.woorijip.api.transaction.TransactionCategory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -94,12 +95,15 @@ class SpendingStatisticsService(
                     currentRange.endExclusiveAt,
                     payerId,
                 ).map { item -> item.copy(label = paymentMethodLabel(item.key)) },
-            byCategory = spendingStatisticsRepository.byCategory(
-                currentUser.householdId,
-                currentRange.startAt,
-                currentRange.endExclusiveAt,
-                payerId,
-            ),
+            byCategory = spendingStatisticsRepository
+                .byCategory(
+                    currentUser.householdId,
+                    currentRange.startAt,
+                    currentRange.endExclusiveAt,
+                    payerId,
+                ).map { item ->
+                    item.copy(label = TransactionCategory.valueOf(item.key).label)
+                },
         )
     }
 

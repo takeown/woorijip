@@ -1,6 +1,13 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import {
+  categoryLabel,
+  transactionCategories,
+  transactionTags,
+  type TransactionCategory,
+  type TransactionTag,
+} from "./transaction-classification";
 
 type StatementEntryType = "PURCHASE" | "REVERSAL" | "FEE" | "INSTALLMENT";
 type StatementMatchStatus =
@@ -33,7 +40,8 @@ type RelatedTransaction = {
   merchant: string;
   description: string | null;
   amount: number;
-  category: string;
+  category: TransactionCategory;
+  tags: TransactionTag[];
   occurredAt: string;
 };
 
@@ -49,7 +57,8 @@ type CardStatementPreview = {
 
 type CandidateSelection = {
   selected: boolean;
-  category: string;
+  category: TransactionCategory | "";
+  tags: TransactionTag[];
   description: string;
 };
 
@@ -119,7 +128,7 @@ export function CardStatementPanel() {
             .filter((candidate) => candidate.matchStatus === "MISSING")
             .map((candidate) => [
               candidate.sourceRow,
-              { selected: true, category: "", description: "" },
+              { selected: true, category: "", tags: [], description: "" },
             ]),
         ),
       );
@@ -157,7 +166,8 @@ export function CardStatementPanel() {
       )
       .map((candidate) => ({
         sourceRow: candidate.sourceRow,
-        category: selections[candidate.sourceRow].category.trim(),
+        category: selections[candidate.sourceRow].category,
+        tags: selections[candidate.sourceRow].tags,
         description: selections[candidate.sourceRow].description.trim() || null,
       }));
     const selectedCorrections = preview.candidates
@@ -513,18 +523,56 @@ function CandidateCard({
                 >
                   카테고리
                 </label>
-                <input
-                  className="w-full rounded-xl border border-stone-300 px-3 py-2.5 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 disabled:bg-stone-100"
+                <select
+                  className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 disabled:bg-stone-100"
                   disabled={!selection.selected}
                   id={`${inputId}-category`}
-                  maxLength={100}
                   onChange={(event) =>
-                    onSelectionChange({ ...selection, category: event.target.value })
+                    onSelectionChange({
+                      ...selection,
+                      category: event.target.value as TransactionCategory,
+                    })
                   }
-                  placeholder="식비"
                   required={selection.selected}
                   value={selection.category}
-                />
+                >
+                  <option disabled value="">카테고리를 선택해 주세요</option>
+                  {transactionCategories.map((category) => (
+                    <option key={category.value} value={category.value}>
+                      {category.label} — {category.examples.slice(0, 3).join("·")}
+                    </option>
+                  ))}
+                </select>
+                {selection.category ? (
+                  <p className="mt-2 text-xs leading-5 text-stone-500">
+                    {transactionCategories
+                      .find((category) => category.value === selection.category)
+                      ?.examples.join(", ")}
+                  </p>
+                ) : null}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {transactionTags.map((tag) => (
+                    <label
+                      className="flex items-center gap-1.5 text-xs text-stone-600"
+                      key={tag.value}
+                    >
+                      <input
+                        checked={selection.tags.includes(tag.value)}
+                        disabled={!selection.selected}
+                        onChange={(event) =>
+                          onSelectionChange({
+                            ...selection,
+                            tags: event.target.checked
+                              ? [...selection.tags, tag.value]
+                              : selection.tags.filter((value) => value !== tag.value),
+                          })
+                        }
+                        type="checkbox"
+                      />
+                      {tag.label}
+                    </label>
+                  ))}
+                </div>
               </div>
               <div>
                 <label
@@ -556,7 +604,7 @@ function CandidateCard({
                   </p>
                   <p className="mt-1 text-sm text-stone-600">
                     {amountFormatter.format(relatedTransaction.amount)}원 ·{" "}
-                    {relatedTransaction.category}
+                    {categoryLabel(relatedTransaction.category)}
                   </p>
                 </div>
                 <div className="rounded-xl bg-amber-50 p-4">

@@ -19,7 +19,9 @@ data class TransactionDraft(
     val merchant: String,
     val description: String?,
     val amount: Long,
-    val category: String,
+    val category: TransactionCategory,
+    val tags: Set<TransactionTag> = emptySet(),
+    val classificationSource: ClassificationSource = ClassificationSource.USER,
     val paymentMethod: PaymentMethod,
     val cardIssuer: CardIssuer?,
     val occurredAt: OffsetDateTime,
@@ -28,6 +30,7 @@ data class TransactionDraft(
 @Service
 class TransactionService(
     private val transactionRepository: TransactionRepository,
+    private val transactionTagRepository: TransactionTagRepository,
     private val householdMembershipRepository: HouseholdMembershipRepository,
 ) {
     @Transactional
@@ -37,8 +40,9 @@ class TransactionService(
     ): Transaction {
         requireHouseholdMember(currentUser.householdId, draft.payerId)
         requirePaymentDetails(draft.paymentMethod, draft.cardIssuer)
+        val now = OffsetDateTime.now()
 
-        return transactionRepository.save(
+        val saved = transactionRepository.save(
             Transaction(
                 householdId = currentUser.householdId,
                 payerId = draft.payerId,
@@ -46,20 +50,27 @@ class TransactionService(
                 description = draft.description,
                 amount = draft.amount,
                 category = draft.category,
+                classificationSource = draft.classificationSource,
+                classificationConfidence = confidenceFor(draft.classificationSource),
+                classificationConfirmedAt = now,
                 paymentMethod = draft.paymentMethod,
                 cardIssuer = draft.cardIssuer,
                 occurredAt = draft.occurredAt,
-                createdAt = OffsetDateTime.now(),
+                createdAt = now,
+                updatedAt = now,
             ),
         )
+        val transactionId = requireNotNull(saved.id)
+        transactionTagRepository.replaceAll(transactionId, draft.tags)
+        return saved.copy(tags = draft.tags)
     }
 
     @Transactional(readOnly = true)
     fun findAll(
         currentUser: CurrentUser,
         payerFilter: PayerFilter,
-    ): List<Transaction> =
-        when (payerFilter) {
+    ): List<Transaction> {
+        val transactions = when (payerFilter) {
             PayerFilter.ALL ->
                 transactionRepository.findAllByHouseholdIdOrderByOccurredAtDescIdDesc(currentUser.householdId)
             PayerFilter.ME ->
@@ -73,6 +84,86 @@ class TransactionService(
                     currentUser.id,
                 )
         }
+        return withTags(transactions)
+    }
+
+    @Transactional
+    fun update(
+        currentUser: CurrentUser,
+        transactionId: Long,
+        expectedUpdatedAt: OffsetDateTime,
+        draft: TransactionDraft,
+    ): Transaction {
+        requireHouseholdMember(currentUser.householdId, draft.payerId)
+        requirePaymentDetails(draft.paymentMethod, draft.cardIssuer)
+        val updatedAt = OffsetDateTime.now()
+        val updated = transactionRepository.updateIfUnchanged(
+            id = transactionId,
+            householdId = currentUser.householdId,
+            expectedUpdatedAt = expectedUpdatedAt,
+            payerId = draft.payerId,
+            merchant = draft.merchant,
+            description = draft.description,
+            amount = draft.amount,
+            category = draft.category.name,
+            paymentMethod = draft.paymentMethod.name,
+            cardIssuer = draft.cardIssuer?.name,
+            occurredAt = draft.occurredAt,
+            updatedAt = updatedAt,
+        )
+        if (updated != 1) {
+            throwNotFoundOrConflict(currentUser, transactionId)
+        }
+        transactionTagRepository.replaceAll(transactionId, draft.tags)
+        val transaction = requireNotNull(
+            transactionRepository.findByIdAndHouseholdId(transactionId, currentUser.householdId),
+        )
+        return transaction.copy(tags = draft.tags)
+    }
+
+    @Transactional
+    fun delete(
+        currentUser: CurrentUser,
+        transactionId: Long,
+        expectedUpdatedAt: OffsetDateTime,
+    ) {
+        val deleted = transactionRepository.deleteIfUnchanged(
+            id = transactionId,
+            householdId = currentUser.householdId,
+            expectedUpdatedAt = expectedUpdatedAt,
+        )
+        if (deleted != 1) {
+            throwNotFoundOrConflict(currentUser, transactionId)
+        }
+    }
+
+    private fun withTags(transactions: List<Transaction>): List<Transaction> {
+        val tagsByTransactionId = transactionTagRepository.findAllByTransactionIds(
+            transactions.mapNotNull(Transaction::id),
+        )
+        return transactions.map { transaction ->
+            transaction.copy(tags = tagsByTransactionId[transaction.id].orEmpty())
+        }
+    }
+
+    private fun confidenceFor(source: ClassificationSource): ClassificationConfidence =
+        when (source) {
+            ClassificationSource.USER -> ClassificationConfidence.HIGH
+            ClassificationSource.MERCHANT_RULE -> ClassificationConfidence.HIGH
+            ClassificationSource.HISTORY -> ClassificationConfidence.MEDIUM
+            ClassificationSource.AI -> ClassificationConfidence.LOW
+            ClassificationSource.MIGRATION -> ClassificationConfidence.LOW
+        }
+
+    private fun throwNotFoundOrConflict(
+        currentUser: CurrentUser,
+        transactionId: Long,
+    ): Nothing {
+        if (transactionRepository.findByIdAndHouseholdId(transactionId, currentUser.householdId) == null) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "거래를 찾을 수 없습니다.")
+        }
+        throw ResponseStatusException(HttpStatus.CONFLICT, "거래가 변경되었습니다. 새로고침 후 다시 시도해 주세요.")
+    }
 
     private fun requireHouseholdMember(
         householdId: Long,

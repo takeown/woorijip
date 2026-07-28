@@ -18,8 +18,10 @@ import org.springframework.http.MediaType
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.oidcLogin
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.delete
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
+import org.springframework.test.web.servlet.put
 import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
 import kotlin.test.Test
@@ -68,6 +70,11 @@ class TransactionControllerTests(
                 jsonPath("$[0].merchant") { value("김밥천국") }
                 jsonPath("$[0].description") { value("점심 식사") }
                 jsonPath("$[0].payerId") { value(currentUser.id) }
+                jsonPath("$[0].category") { value("FOOD") }
+                jsonPath("$[0].tags", hasSize<Any>(2))
+                jsonPath("$[0].classificationSource") { value("USER") }
+                jsonPath("$[0].classificationConfidence") { value("HIGH") }
+                jsonPath("$[0].classificationConfirmedAt") { exists() }
             }
 
         mockMvc
@@ -112,7 +119,7 @@ class TransactionControllerTests(
                 merchant = "다른 집 거래",
                 description = null,
                 amount = 10_000,
-                category = "식비",
+                category = TransactionCategory.FOOD,
                 paymentMethod = PaymentMethod.UNKNOWN,
                 cardIssuer = null,
                 occurredAt = now,
@@ -253,6 +260,82 @@ class TransactionControllerTests(
     }
 
     @Test
+    fun `updates a household transaction and rejects a stale update`() {
+        val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
+        createTransaction(currentUser.id, "수정 전")
+        val transaction = transactionRepository.findAll().single()
+        val transactionId = assertNotNull(transaction.id)
+
+        val updateJson = """
+            {
+              "expectedUpdatedAt": "${transaction.updatedAt}",
+              "payerId": ${currentUser.id},
+              "merchant": "수정 후",
+              "description": "수정한 내역",
+              "amount": 12000,
+              "category": "LIVING",
+              "tags": ["UTILITY"],
+              "paymentMethod": "CASH",
+              "cardIssuer": null,
+              "occurredAt": "2026-07-16T10:00:00+09:00"
+            }
+        """.trimIndent()
+
+        mockMvc
+            .put("/transactions/$transactionId") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content = updateJson
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.merchant") { value("수정 후") }
+                jsonPath("$.category") { value("LIVING") }
+                jsonPath("$.tags[0]") { value("UTILITY") }
+                jsonPath("$.classificationSource") { value("USER") }
+                jsonPath("$.classificationConfidence") { value("HIGH") }
+            }
+
+        mockMvc
+            .put("/transactions/$transactionId") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content = updateJson
+            }.andExpect {
+                status { isConflict() }
+            }
+    }
+
+    @Test
+    fun `deletes only a current household transaction`() {
+        val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
+        createTransaction(currentUser.id, "삭제할 거래")
+        val transaction = transactionRepository.findAll().single()
+        val transactionId = assertNotNull(transaction.id)
+
+        mockMvc
+            .delete("/transactions/$transactionId") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"expectedUpdatedAt":"${transaction.updatedAt}"}"""
+            }.andExpect {
+                status { isNoContent() }
+            }
+
+        mockMvc
+            .delete("/transactions/$transactionId") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"expectedUpdatedAt":"${transaction.updatedAt}"}"""
+            }.andExpect {
+                status { isNotFound() }
+            }
+    }
+
+    @Test
     fun `rejects a description longer than 500 characters`() {
         val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
 
@@ -312,7 +395,8 @@ class TransactionControllerTests(
           "merchant": "$merchant",
           "description": ${description?.let { "\"$it\"" } ?: "null"},
           "amount": 8000,
-          "category": "식비",
+          "category": "FOOD",
+          "tags": ["SUBSCRIPTION", "RECURRING_PAYMENT"],
           "paymentMethod": "$paymentMethod",
           "cardIssuer": ${cardIssuer?.let { "\"$it\"" } ?: "null"},
           "occurredAt": "2026-07-15T12:30:00+09:00"

@@ -70,7 +70,7 @@ describe("CardStatementPanel", () => {
       name: "선택한 변경 확인하고 반영",
     }) as HTMLButtonElement;
     expect(saveButton.disabled).toBe(true);
-    await user.type(screen.getByLabelText("카테고리"), "식비");
+    await user.selectOptions(screen.getByLabelText("카테고리"), "FOOD");
     await user.type(screen.getByLabelText(/내역/), "점심");
     expect(saveButton.disabled).toBe(false);
     await user.click(saveButton);
@@ -86,7 +86,8 @@ describe("CardStatementPanel", () => {
       candidates: [
         {
           sourceRow: 11,
-          category: "식비",
+          category: "FOOD",
+          tags: [],
           description: "점심",
         },
       ],
@@ -206,7 +207,8 @@ function candidate(
             : `${merchant} ${index + 1}`,
       description: null,
       amount: approvedAmount,
-      category: "생활",
+      category: "LIVING",
+      tags: [],
       occurredAt: "2026-06-09T12:00:00+09:00",
     })),
   };

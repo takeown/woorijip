@@ -3,9 +3,11 @@ package com.woorijip.api.statement
 import com.woorijip.api.auth.CurrentUser
 import com.woorijip.api.transaction.PaymentMethod
 import com.woorijip.api.transaction.Transaction
+import com.woorijip.api.transaction.TransactionCategory
 import com.woorijip.api.transaction.TransactionDraft
 import com.woorijip.api.transaction.TransactionRepository
 import com.woorijip.api.transaction.TransactionService
+import com.woorijip.api.transaction.TransactionTag
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -14,7 +16,8 @@ import java.time.ZoneId
 
 data class StatementCandidateSelection(
     val sourceRow: Int,
-    val category: String,
+    val category: TransactionCategory,
+    val tags: Set<TransactionTag>,
     val description: String?,
 )
 
@@ -125,6 +128,7 @@ class CardStatementApplyService(
                     description = selection.description,
                     amount = candidate.approvedAmount,
                     category = selection.category,
+                    tags = selection.tags,
                     paymentMethod = PaymentMethod.CARD,
                     cardIssuer = statementImport.cardIssuer,
                     occurredAt = candidate.occurredOn

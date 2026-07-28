@@ -3,6 +3,7 @@ package com.woorijip.api.statement
 import com.woorijip.api.auth.CurrentUser
 import com.woorijip.api.transaction.Transaction
 import com.woorijip.api.transaction.TransactionRepository
+import com.woorijip.api.transaction.TransactionTagRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.multipart.MultipartFile
@@ -19,6 +20,7 @@ data class CardStatementPreview(
 class CardStatementPreviewService(
     private val parsers: List<CardStatementParser>,
     private val transactionRepository: TransactionRepository,
+    private val transactionTagRepository: TransactionTagRepository,
     private val matcher: CardStatementMatcher,
     private val importRepository: CardStatementImportRepository,
     private val fingerprint: CardStatementFingerprint,
@@ -58,7 +60,7 @@ class CardStatementPreviewService(
         }
         val firstDate = statement.candidates.minOf(StatementCandidate::occurredOn)
         val lastDate = statement.candidates.maxOf(StatementCandidate::occurredOn)
-        val transactions = transactionRepository
+        val storedTransactions = transactionRepository
             .findAllByHouseholdIdAndPayerIdAndCardIssuerAndOccurredAtGreaterThanEqualAndOccurredAtLessThanOrderByOccurredAtAscIdAsc(
                 householdId = currentUser.householdId,
                 payerId = currentUser.id,
@@ -66,6 +68,12 @@ class CardStatementPreviewService(
                 occurredAtFrom = firstDate.atStartOfDay(SEOUL_ZONE_ID).toOffsetDateTime(),
                 occurredAtTo = lastDate.plusDays(1).atStartOfDay(SEOUL_ZONE_ID).toOffsetDateTime(),
             )
+        val tagsByTransactionId = transactionTagRepository.findAllByTransactionIds(
+            storedTransactions.mapNotNull(Transaction::id),
+        )
+        val transactions = storedTransactions.map { transaction ->
+            transaction.copy(tags = tagsByTransactionId[transaction.id].orEmpty())
+        }
 
         return CardStatementPreview(
             importId = importId,

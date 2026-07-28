@@ -6,25 +6,15 @@ import {
   AuthenticatedShell,
   type CurrentUser,
 } from "./authenticated-shell";
-import {
-  paymentDetailsLabel,
-  type CardIssuer,
-  type StoredPaymentMethod,
-} from "./payment-details";
+import { paymentDetailsLabel } from "./payment-details";
 import { TransactionForm, type HouseholdMember } from "./transaction-form";
+import {
+  TransactionEditForm,
+  type EditableTransaction,
+} from "./transaction-edit-form";
+import { categoryLabel, tagLabel } from "./transaction-classification";
 
-type Transaction = {
-  id: number;
-  payerId: number;
-  merchant: string;
-  description: string | null;
-  amount: number;
-  category: string;
-  paymentMethod: StoredPaymentMethod;
-  cardIssuer: CardIssuer | null;
-  occurredAt: string;
-  createdAt: string;
-};
+type Transaction = EditableTransaction;
 
 type PayerFilter = "all" | "me" | "partner";
 
@@ -48,6 +38,7 @@ function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) {
   const [householdMembers, setHouseholdMembers] = useState<HouseholdMember[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [payerFilter, setPayerFilter] = useState<PayerFilter>("all");
+  const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -113,6 +104,11 @@ function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) {
 
   async function handleTransactionCreated() {
     setTransactions(await fetchTransactions(payerFilter));
+  }
+
+  async function handleTransactionChanged() {
+    setTransactions(await fetchTransactions(payerFilter));
+    setEditingTransactionId(null);
   }
 
   if (isLoading) {
@@ -192,23 +188,62 @@ function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) {
           <ul className="mt-8 divide-y divide-stone-200">
             {transactions.map((transaction) => (
               <li className="flex items-center justify-between gap-5 py-5" key={transaction.id}>
-                <div className="min-w-0">
-                  <p className="truncate font-medium text-stone-900">{transaction.merchant}</p>
-                  {transaction.description ? (
-                    <p className="mt-1 truncate text-sm text-stone-700">
-                      {transaction.description}
-                    </p>
-                  ) : null}
-                  <p className="mt-1 text-sm text-stone-500">
-                    {householdMembers.find((member) => member.userId === transaction.payerId)
-                      ?.displayName ?? "알 수 없음"} · {transaction.category} ·{" "}
-                    {paymentDetailsLabel(transaction.paymentMethod, transaction.cardIssuer)} ·{" "}
-                    {dateFormatter.format(new Date(transaction.occurredAt))}
-                  </p>
-                </div>
-                <p className="shrink-0 font-semibold text-stone-900">
-                  {amountFormatter.format(transaction.amount)}원
-                </p>
+                {editingTransactionId === transaction.id ? (
+                  <TransactionEditForm
+                    householdMembers={householdMembers}
+                    onCancel={() => setEditingTransactionId(null)}
+                    onChanged={handleTransactionChanged}
+                    transaction={transaction}
+                  />
+                ) : (
+                  <>
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-stone-900">
+                        {transaction.merchant}
+                      </p>
+                      {transaction.description ? (
+                        <p className="mt-1 truncate text-sm text-stone-700">
+                          {transaction.description}
+                        </p>
+                      ) : null}
+                      <p className="mt-1 text-sm text-stone-500">
+                        {householdMembers.find(
+                          (member) => member.userId === transaction.payerId,
+                        )?.displayName ?? "알 수 없음"}{" "}
+                        · {categoryLabel(transaction.category)} ·{" "}
+                        {paymentDetailsLabel(
+                          transaction.paymentMethod,
+                          transaction.cardIssuer,
+                        )}{" "}
+                        · {dateFormatter.format(new Date(transaction.occurredAt))}
+                      </p>
+                      {transaction.tags.length > 0 ? (
+                        <p className="mt-2 flex flex-wrap gap-1.5">
+                          {transaction.tags.map((tag) => (
+                            <span
+                              className="rounded-full bg-stone-100 px-2 py-1 text-xs text-stone-600"
+                              key={tag}
+                            >
+                              {tagLabel(tag)}
+                            </span>
+                          ))}
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="font-semibold text-stone-900">
+                        {amountFormatter.format(transaction.amount)}원
+                      </p>
+                      <button
+                        className="mt-2 text-sm font-medium text-emerald-700 hover:text-emerald-800"
+                        onClick={() => setEditingTransactionId(transaction.id)}
+                        type="button"
+                      >
+                        수정
+                      </button>
+                    </div>
+                  </>
+                )}
               </li>
             ))}
           </ul>
