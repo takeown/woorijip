@@ -1,0 +1,198 @@
+# API 구조 안내
+
+Kotlin과 Spring을 처음 보는 상태에서 이 저장소의 API를 읽고 고칠 수 있도록 정리한
+문서다. 일반적인 Spring 설명이 아니라 이 프로젝트에 실제로 있는 파일만 다룬다.
+
+제품 방향과 결정 배경은 `docs/PLAN.md`, 작업 규칙은 `AGENTS.md`를 본다.
+
+## 1. 전체 그림
+
+```
+브라우저
+   │
+   ▼
+Caddy (운영에만 존재)            deploy/Caddyfile
+   ├── /api/*  ──▶ Spring API   apps/api
+   └── 그 외    ──▶ Next.js 웹   apps/web
+                        │
+Spring API ──▶ PostgreSQL
+```
+
+운영에서는 Caddy가 한 도메인을 웹과 API로 나눈다. Caddy는 `/api` 접두사를 떼지 않고
+그대로 넘기고, API 컨테이너가 `SERVER_SERVLET_CONTEXT_PATH=/api`로 떠 있어서
+`/api/transactions` 요청이 코드의 `/transactions` 매핑에 도달한다.
+
+로컬 개발에서는 Caddy가 없다. 웹은 `localhost:3100`, API는 `localhost:8080`으로 따로
+뜨고 context path도 없다. 서로 다른 출처이므로 이때만 CORS 설정이 실제로 동작한다.
+운영에서 CORS 문제가 안 보이는데 로컬에서만 막힌다면 이 차이 때문이다.
+
+## 2. 요청 하나가 지나가는 길
+
+거래를 등록하는 `POST /transactions`를 따라가면 전체 구조가 한 번에 보인다.
+
+| 순서 | 파일 | 하는 일 |
+| --- | --- | --- |
+| 1 | `config/SecurityConfig.kt` | 로그인 여부 확인. 안 했으면 여기서 401로 끝난다 |
+| 2 | `auth/AllowedGoogleAccountFilter.kt` | 허용된 Google 계정인지 매 요청 다시 확인 |
+| 3 | `auth/CurrentUserArgumentResolver.kt` | 로그인 정보를 `CurrentUser`(내부 사용자 + household)로 변환 |
+| 4 | `transaction/TransactionController.kt` | JSON을 객체로 받고 입력값 검증 |
+| 5 | `transaction/TransactionService.kt` | 실제 규칙 판단 (결제자가 우리 household인가 등) |
+| 6 | `transaction/TransactionRepository.kt` | SQL 실행 |
+| 7 | PostgreSQL | 저장 |
+
+중간에 문제가 생기면 `error/ApiExceptionHandler.kt`가 받아서 오류 JSON을 만든다.
+
+읽는 순서를 하나만 고르라면 **Controller → Service → Repository**다. 이 세 개만
+따라가면 대부분의 기능을 이해할 수 있다.
+
+## 3. 각 계층이 맡는 일
+
+### Controller — HTTP 담당
+
+`transaction/TransactionController.kt`
+
+바깥세상(HTTP, JSON)과 안쪽(Kotlin 객체) 사이를 번역한다. 비즈니스 판단은 하지
+않는다. 하는 일은 세 가지다.
+
+- 어떤 주소가 어떤 함수인지 연결 (`@PostMapping("/transactions")`)
+- 요청 JSON을 객체로 받기 (`@RequestBody`)
+- 값이 말이 되는지 검사 (`@Valid`와 `@field:NotNull` 같은 표시)
+
+응답으로 내보내는 모양은 `TransactionResponse` 같은 별도 클래스로 정의한다. 데이터베이스
+모델(`Transaction`)을 그대로 내보내지 않는다. 그래야 내부 구조를 바꿔도 API 약속이
+안 깨진다.
+
+### Service — 규칙 담당
+
+`transaction/TransactionService.kt`
+
+"이 거래를 저장해도 되는가"를 판단한다. 예를 들어 결제자가 우리 household 구성원인지,
+카드 결제인데 카드사가 비어 있지는 않은지 확인한다.
+
+`@Transactional`이 붙은 함수는 **중간에 실패하면 그때까지 한 일이 전부 취소된다.**
+거래를 저장하고 태그를 저장하는 두 단계 중 뒤가 실패하면 앞도 없던 일이 된다.
+
+### Repository — 데이터베이스 담당
+
+`transaction/TransactionRepository.kt`
+
+이 프로젝트는 두 가지 방식을 섞어 쓴다.
+
+**함수 이름으로 쿼리 만들기** — 몸통이 없는데 동작한다. Spring이 이름을 읽어서 SQL을
+자동으로 만든다.
+
+```kotlin
+fun findAllByHouseholdIdOrderByOccurredAtDescIdDesc(householdId: Long): List<Transaction>
+// → household_id로 걸러서 occurred_at 내림차순, id 내림차순 정렬
+```
+
+**SQL 직접 쓰기** — 조건이 복잡하면 `@Query`에 SQL을 적는다. `:householdId`처럼 콜론이
+붙은 자리에 함수 인자가 들어간다.
+
+집계처럼 더 복잡한 건 `statistics/SpendingStatisticsRepository.kt`처럼 `JdbcTemplate`으로
+직접 쓴다.
+
+### Flyway — 데이터베이스 구조 변경
+
+`src/main/resources/db/migration/`
+
+`V1__...sql`부터 번호 순서대로 실행된다. 애플리케이션이 뜰 때 아직 실행 안 된 파일만
+자동으로 돈다.
+
+**이미 배포된 파일은 절대 수정하지 않는다.** 운영 데이터베이스에는 이미 실행 기록이
+남아 있어서, 내용을 바꾸면 다음 배포가 실패한다. 바꾸고 싶으면 새 번호 파일을 추가한다.
+
+## 4. Spring이 대신 해주는 것
+
+Kotlin 문법은 아는데 "이건 왜 동작하지?" 싶은 지점들이다.
+
+**생성자에 적은 것이 자동으로 채워진다**
+
+```kotlin
+class TransactionController(
+    private val transactionService: TransactionService,
+)
+```
+
+`TransactionService`를 직접 만들어 넣는 코드가 어디에도 없다. `@Service`, `@Repository`,
+`@Component`, `@RestController`가 붙은 클래스는 Spring이 시작할 때 하나씩 만들어두고,
+필요한 곳에 알아서 넣어준다. 그래서 생성자에 타입만 적으면 된다.
+
+**함수 인자가 자동으로 채워진다**
+
+```kotlin
+fun create(currentUser: CurrentUser, @Valid @RequestBody request: CreateTransactionRequest)
+```
+
+`currentUser`에 아무 표시가 없는데도 값이 들어온다. `auth/CurrentUserArgumentResolver.kt`가
+"`CurrentUser` 타입 인자를 보면 이렇게 채워라"고 등록돼 있기 때문이다. 등록은
+`config/WebConfig.kt`의 `addArgumentResolvers`에서 한다.
+
+**오류가 한곳으로 모인다**
+
+`error/ApiExceptionHandler.kt`에 `@RestControllerAdvice`가 붙어 있다. 어느 Controller에서
+예외가 나든 여기로 온다. 그래서 Controller마다 try/catch를 쓰지 않는다.
+
+`ApiException(ErrorCode.TRANSACTION_NOT_FOUND, "거래를 찾을 수 없습니다.")` 하나를
+던지면 404 상태와 `code` 필드가 붙은 JSON이 알아서 나간다.
+
+## 5. 무엇을 바꾸려면 어디를 고치나
+
+| 하고 싶은 것 | 고칠 곳 |
+| --- | --- |
+| 거래에 필드 추가 | 새 Flyway 파일 → `transaction/Transaction.kt` → `TransactionController.kt`의 요청·응답 클래스 |
+| 카테고리 목록 변경 | `transaction/TransactionClassification.kt` + 새 Flyway 파일(CHECK 제약도 함께) |
+| 새 API 주소 추가 | 해당 도메인 폴더에 Controller 함수 추가 |
+| 검증 규칙 변경 | 단순 형식이면 요청 클래스의 `@field:` 표시, 판단이 필요하면 Service |
+| 오류 메시지·코드 변경 | `error/ErrorCode.kt`와 예외를 던지는 곳 |
+| 로그인 허용 계정 변경 | 코드가 아니라 환경변수 `GOOGLE_ALLOWED_EMAILS` |
+| CORS 허용 주소·메서드 | `config/WebConfig.kt` |
+| AI 프롬프트·모델 | `ai/OpenAiTransactionDraftGenerator.kt`, 모델은 환경변수 `OPENAI_MODEL` |
+
+## 6. 고장났을 때
+
+**로그 보기 (운영)**
+
+```bash
+docker compose -f compose.prod.yaml logs -f api
+docker compose -f compose.prod.yaml ps        # 컨테이너 상태
+```
+
+**증상별 확인 지점**
+
+| 증상 | 먼저 볼 곳 |
+| --- | --- |
+| 애플리케이션이 아예 안 뜬다 | Flyway 오류일 가능성이 높다. 로그 맨 위쪽의 migration 실패 메시지 |
+| 로그인이 안 된다 | `GOOGLE_ALLOWED_EMAILS`에 이메일이 있는지, Google 콘솔의 redirect URI |
+| 로그인은 되는데 401이 계속 뜬다 | `AllowedGoogleAccountFilter`가 매 요청 allowlist를 검사한다 |
+| 로컬에서만 특정 요청이 막힌다 | CORS. `config/WebConfig.kt`의 `allowedMethods` |
+| 저장은 되는데 화면에 안 보인다 | household 경계. 조회 쿼리에 `household_id` 조건이 있다 |
+| AI 입력이 502를 낸다 | OpenAI 키·모델 설정, 또는 타임아웃(연결 5초·읽기 30초) |
+
+**되돌리기**
+
+배포는 `Release production` workflow를 수동 실행하는 구조다. 문제가 생기면 이전에
+성공한 commit SHA로 `Deploy production`을 다시 실행하면 애플리케이션은 돌아간다.
+다만 **Flyway로 이미 바뀐 데이터베이스 구조는 되돌아가지 않는다.** 스키마를 바꾼
+배포를 되돌릴 때는 이 점을 먼저 확인한다.
+
+## 7. 테스트를 명세로 읽기
+
+문서는 낡지만 테스트는 낡으면 실패해서 티가 난다. 어떤 동작이 보장되는지 확실히
+알고 싶으면 테스트를 본다.
+
+```bash
+pnpm test:api      # 저장소 루트에서
+```
+
+테스트 이름이 곧 보장 내용이다.
+
+```
+`updates a confirmed mismatched transaction and preserves user details`
+`rejects a correction when the reviewed transaction changed after preview`
+```
+
+이 테스트들은 진짜 PostgreSQL을 임시로 띄워서(Testcontainers) 실제 Flyway migration을
+적용한 뒤 돈다. 그래서 통과했다면 SQL과 스키마까지 함께 검증된 것이다.
+
+기능을 바꿀 때는 관련 테스트부터 찾아 읽으면 무엇을 깨뜨리면 안 되는지 먼저 알 수 있다.
