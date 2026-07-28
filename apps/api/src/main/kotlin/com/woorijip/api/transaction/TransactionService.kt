@@ -32,15 +32,32 @@ class TransactionService(
     private val transactionRepository: TransactionRepository,
     private val transactionTagRepository: TransactionTagRepository,
     private val householdMembershipRepository: HouseholdMembershipRepository,
+    private val merchantClassificationRuleService: MerchantClassificationRuleService,
 ) {
     @Transactional
     fun create(
         currentUser: CurrentUser,
         draft: TransactionDraft,
+        classificationRuleId: Long? = null,
+        saveMerchantRule: Boolean = false,
     ): Transaction {
         requireHouseholdMember(currentUser.householdId, draft.payerId)
         requirePaymentDetails(draft.paymentMethod, draft.cardIssuer)
         val now = OffsetDateTime.now()
+        val classificationSource = if (
+            classificationRuleId != null &&
+            merchantClassificationRuleService.matches(
+                currentUser = currentUser,
+                ruleId = classificationRuleId,
+                merchant = draft.merchant,
+                category = draft.category,
+                tags = draft.tags,
+            )
+        ) {
+            ClassificationSource.MERCHANT_RULE
+        } else {
+            draft.classificationSource
+        }
 
         val saved = transactionRepository.save(
             Transaction(
@@ -50,8 +67,8 @@ class TransactionService(
                 description = draft.description,
                 amount = draft.amount,
                 category = draft.category,
-                classificationSource = draft.classificationSource,
-                classificationConfidence = confidenceFor(draft.classificationSource),
+                classificationSource = classificationSource,
+                classificationConfidence = confidenceFor(classificationSource),
                 classificationConfirmedAt = now,
                 paymentMethod = draft.paymentMethod,
                 cardIssuer = draft.cardIssuer,
@@ -62,6 +79,15 @@ class TransactionService(
         )
         val transactionId = requireNotNull(saved.id)
         transactionTagRepository.replaceAll(transactionId, draft.tags)
+        if (saveMerchantRule) {
+            merchantClassificationRuleService.save(
+                currentUser = currentUser,
+                merchant = draft.merchant,
+                category = draft.category,
+                tags = draft.tags,
+                now = now,
+            )
+        }
         return saved.copy(tags = draft.tags)
     }
 

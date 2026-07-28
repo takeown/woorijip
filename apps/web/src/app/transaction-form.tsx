@@ -1,8 +1,12 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FocusEvent, FormEvent, useRef, useState } from "react";
 import { cardIssuers, type PaymentMethod } from "./payment-details";
 import { TransactionClassificationFields } from "./transaction-classification-fields";
+import type {
+  TransactionCategory,
+  TransactionTag,
+} from "./transaction-classification";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
@@ -22,6 +26,13 @@ type CsrfToken = {
   headerName: string;
 };
 
+type MerchantClassificationRecommendation = {
+  ruleId: number;
+  category: TransactionCategory;
+  tags: TransactionTag[];
+  source: "MERCHANT_RULE";
+};
+
 export function TransactionForm({
   onCreated,
   currentUserId,
@@ -30,6 +41,74 @@ export function TransactionForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CARD");
+  const [classificationKey, setClassificationKey] = useState(0);
+  const [recommendedCategory, setRecommendedCategory] =
+    useState<TransactionCategory>();
+  const [recommendedTags, setRecommendedTags] = useState<TransactionTag[]>([]);
+  const [appliedRuleId, setAppliedRuleId] = useState<number | null>(null);
+  const [recommendationMessage, setRecommendationMessage] = useState<
+    string | null
+  >(null);
+  const recommendationRequest = useRef(0);
+  const classificationRevision = useRef(0);
+
+  async function recommendClassification(event: FocusEvent<HTMLInputElement>) {
+    const merchant = event.currentTarget.value.trim();
+    if (!merchant) {
+      return;
+    }
+    const requestId = recommendationRequest.current + 1;
+    const revision = classificationRevision.current;
+    recommendationRequest.current = requestId;
+
+    try {
+      const response = await fetch(
+        `${apiUrl}/merchant-classification-rules/recommendation?merchant=${encodeURIComponent(merchant)}`,
+        {
+          credentials: "include",
+          cache: "no-store",
+        },
+      );
+      if (
+        requestId !== recommendationRequest.current ||
+        revision !== classificationRevision.current
+      ) {
+        return;
+      }
+      if (response.status === 204) {
+        if (appliedRuleId !== null) {
+          setRecommendedCategory(undefined);
+          setRecommendedTags([]);
+          setClassificationKey((current) => current + 1);
+        }
+        setAppliedRuleId(null);
+        setRecommendationMessage(null);
+        return;
+      }
+      if (!response.ok) {
+        throw new Error();
+      }
+
+      const recommendation: MerchantClassificationRecommendation =
+        await response.json();
+      setRecommendedCategory(recommendation.category);
+      setRecommendedTags(recommendation.tags);
+      setAppliedRuleId(recommendation.ruleId);
+      setClassificationKey((current) => current + 1);
+      setRecommendationMessage("이 가맹점에 저장된 분류를 적용했습니다.");
+    } catch {
+      setAppliedRuleId(null);
+      setRecommendationMessage("가맹점 분류 추천을 불러오지 못했습니다.");
+    }
+  }
+
+  function markClassificationChanged() {
+    classificationRevision.current += 1;
+    if (appliedRuleId !== null) {
+      setAppliedRuleId(null);
+      setRecommendationMessage("추천을 수정해 이번 거래의 분류로 사용합니다.");
+    }
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -63,6 +142,8 @@ export function TransactionForm({
           category: formData.get("category"),
           tags: formData.getAll("tags"),
           classificationSource: "USER",
+          classificationRuleId: appliedRuleId,
+          saveMerchantRule: formData.get("saveMerchantRule") === "on",
           paymentMethod,
           cardIssuer: paymentMethod === "CARD" ? formData.get("cardIssuer") : null,
           occurredAt: occurredAt
@@ -76,6 +157,11 @@ export function TransactionForm({
       }
 
       form.reset();
+      setRecommendedCategory(undefined);
+      setRecommendedTags([]);
+      setAppliedRuleId(null);
+      setRecommendationMessage(null);
+      setClassificationKey((current) => current + 1);
       await onCreated();
     } catch (caughtError) {
       setError(
@@ -117,6 +203,12 @@ export function TransactionForm({
           className="w-full rounded-xl border border-stone-300 px-4 py-3 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
           id="merchant"
           name="merchant"
+          onBlur={recommendClassification}
+          onChange={() => {
+            recommendationRequest.current += 1;
+            setAppliedRuleId(null);
+            setRecommendationMessage(null);
+          }}
           placeholder="김밥천국"
           required
           maxLength={200}
@@ -153,7 +245,30 @@ export function TransactionForm({
         />
       </div>
 
-      <TransactionClassificationFields idPrefix="transaction" />
+      <TransactionClassificationFields
+        defaultCategory={recommendedCategory}
+        defaultTags={recommendedTags}
+        idPrefix="transaction"
+        key={`transaction-classification-${classificationKey}`}
+        onUserChange={markClassificationChanged}
+      />
+
+      {recommendationMessage ? (
+        <p className="text-sm text-stone-600" role="status">
+          {recommendationMessage}
+        </p>
+      ) : null}
+
+      <label className="flex items-start gap-3 rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-700">
+        <input
+          className="mt-0.5 h-4 w-4 rounded border-stone-300 text-emerald-700 focus:ring-emerald-600"
+          name="saveMerchantRule"
+          type="checkbox"
+        />
+        <span>
+          앞으로 이 가맹점에도 같은 카테고리와 태그 적용
+        </span>
+      </label>
 
       <div>
         <label className="mb-2 block text-sm font-medium text-stone-700" htmlFor="paymentMethod">

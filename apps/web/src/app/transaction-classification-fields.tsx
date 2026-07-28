@@ -12,15 +12,20 @@ type TransactionClassificationFieldsProps = {
   idPrefix: string;
   defaultCategory?: TransactionCategory;
   defaultTags?: TransactionTag[];
+  onUserChange?: () => void;
 };
 
 export function TransactionClassificationFields({
   idPrefix,
   defaultCategory,
   defaultTags = [],
+  onUserChange,
 }: TransactionClassificationFieldsProps) {
   const [category, setCategory] = useState<TransactionCategory | "">(
     defaultCategory ?? "",
+  );
+  const [tags, setTags] = useState<Set<TransactionTag>>(
+    () => new Set(defaultTags),
   );
   const selectedCategory = transactionCategories.find(
     (item) => item.value === category,
@@ -39,9 +44,10 @@ export function TransactionClassificationFields({
           className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
           id={`${idPrefix}-category`}
           name="category"
-          onChange={(event) =>
-            setCategory(event.target.value as TransactionCategory)
-          }
+          onChange={(event) => {
+            setCategory(event.target.value as TransactionCategory);
+            onUserChange?.();
+          }}
           required
           value={category}
         >
@@ -80,8 +86,20 @@ export function TransactionClassificationFields({
             >
               <input
                 className="sr-only"
-                defaultChecked={defaultTags.includes(tag.value)}
+                checked={tags.has(tag.value)}
                 name="tags"
+                onChange={(event) => {
+                  setTags((current) => {
+                    const next = new Set(current);
+                    if (event.target.checked) {
+                      next.add(tag.value);
+                    } else {
+                      next.delete(tag.value);
+                    }
+                    return next;
+                  });
+                  onUserChange?.();
+                }}
                 type="checkbox"
                 value={tag.value}
               />

@@ -45,6 +45,7 @@ class TransactionControllerTests(
     @Autowired private val householdRepository: HouseholdRepository,
     @Autowired private val householdMembershipRepository: HouseholdMembershipRepository,
     @Autowired private val transactionRepository: TransactionRepository,
+    @Autowired private val merchantClassificationRuleRepository: MerchantClassificationRuleRepository,
 ) {
     @Test
     fun `creates household transactions and filters them by payer`() {
@@ -268,6 +269,106 @@ class TransactionControllerTests(
     }
 
     @Test
+    fun `saves and applies a normalized merchant classification rule within the household`() {
+        val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
+
+        mockMvc
+            .post("/transactions") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content = transactionJson(
+                    payerId = currentUser.id,
+                    merchant = "김밥천국",
+                    saveMerchantRule = true,
+                )
+            }.andExpect {
+                status { isCreated() }
+                jsonPath("$.classificationSource") { value("USER") }
+            }
+
+        val rule = assertNotNull(
+            merchantClassificationRuleRepository.find(
+                currentUser.householdId,
+                normalizeMerchant("김밥천국"),
+            ),
+        )
+
+        mockMvc
+            .get("/merchant-classification-rules/recommendation") {
+                param("merchant", " 김밥 천국! ")
+                with(allowedOidcLogin())
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.ruleId") { value(rule.id) }
+                jsonPath("$.category") { value("FOOD") }
+                jsonPath("$.tags", hasSize<Any>(2))
+                jsonPath("$.source") { value("MERCHANT_RULE") }
+            }
+
+        mockMvc
+            .post("/transactions") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content = transactionJson(
+                    payerId = currentUser.id,
+                    merchant = "김밥 천국!",
+                    classificationRuleId = rule.id,
+                )
+            }.andExpect {
+                status { isCreated() }
+                jsonPath("$.classificationSource") { value("MERCHANT_RULE") }
+                jsonPath("$.classificationConfidence") { value("HIGH") }
+            }
+    }
+
+    @Test
+    fun `does not expose or apply another household merchant rule`() {
+        val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
+        val otherHouseholdId = createHousehold("다른 집")
+        val otherUserId = createMember(otherHouseholdId, "다른 사용자")
+        merchantClassificationRuleRepository.upsert(
+            householdId = otherHouseholdId,
+            merchant = "동네마트",
+            normalizedMerchant = normalizeMerchant("동네마트"),
+            category = TransactionCategory.LIVING,
+            tags = setOf(TransactionTag.UTILITY),
+            confirmedByUserId = otherUserId,
+            now = now,
+        )
+        val otherRule = assertNotNull(
+            merchantClassificationRuleRepository.find(
+                otherHouseholdId,
+                normalizeMerchant("동네마트"),
+            ),
+        )
+
+        mockMvc
+            .get("/merchant-classification-rules/recommendation") {
+                param("merchant", "동네마트")
+                with(allowedOidcLogin())
+            }.andExpect {
+                status { isNoContent() }
+            }
+
+        mockMvc
+            .post("/transactions") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content = transactionJson(
+                    payerId = currentUser.id,
+                    merchant = "동네마트",
+                    classificationRuleId = otherRule.id,
+                )
+            }.andExpect {
+                status { isCreated() }
+                jsonPath("$.classificationSource") { value("USER") }
+            }
+    }
+
+    @Test
     fun `updates a household transaction and rejects a stale update`() {
         val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
         createTransaction(currentUser.id, "수정 전")
@@ -412,6 +513,8 @@ class TransactionControllerTests(
         paymentMethod: String = "CARD",
         cardIssuer: String? = "SHINHAN",
         description: String? = null,
+        classificationRuleId: Long? = null,
+        saveMerchantRule: Boolean = false,
     ) =
         """
         {
@@ -421,6 +524,8 @@ class TransactionControllerTests(
           "amount": 8000,
           "category": "FOOD",
           "tags": ["SUBSCRIPTION", "RECURRING_PAYMENT"],
+          "classificationRuleId": ${classificationRuleId ?: "null"},
+          "saveMerchantRule": $saveMerchantRule,
           "paymentMethod": "$paymentMethod",
           "cardIssuer": ${cardIssuer?.let { "\"$it\"" } ?: "null"},
           "occurredAt": "2026-07-15T12:30:00+09:00"
