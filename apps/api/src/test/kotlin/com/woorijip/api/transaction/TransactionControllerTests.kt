@@ -9,6 +9,7 @@ import com.woorijip.api.household.HouseholdMembershipRepository
 import com.woorijip.api.household.HouseholdRepository
 import com.woorijip.api.identity.AppUser
 import com.woorijip.api.identity.AppUserRepository
+import org.hamcrest.Matchers.containsString
 import org.hamcrest.Matchers.hasSize
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -20,6 +21,7 @@ import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequ
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.delete
 import org.springframework.test.web.servlet.get
+import org.springframework.test.web.servlet.options
 import org.springframework.test.web.servlet.post
 import org.springframework.test.web.servlet.put
 import org.springframework.transaction.annotation.Transactional
@@ -357,6 +359,20 @@ class TransactionControllerTests(
             .andExpect {
                 status { isUnauthorized() }
             }
+    }
+
+    @Test
+    fun `allows browser preflight for editing and deleting transactions`() {
+        listOf("PUT", "DELETE").forEach { method ->
+            mockMvc
+                .options("/transactions/1") {
+                    header("Origin", "http://localhost:3100")
+                    header("Access-Control-Request-Method", method)
+                }.andExpect {
+                    status { isOk() }
+                    header { string("Access-Control-Allow-Methods", containsString(method)) }
+                }
+        }
     }
 
     private fun createTransaction(

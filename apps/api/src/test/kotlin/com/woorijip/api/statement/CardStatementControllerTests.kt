@@ -26,6 +26,7 @@ import tools.jackson.databind.ObjectMapper
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 @SpringBootTest(
     properties = [
@@ -276,6 +277,10 @@ class CardStatementControllerTests(
         assertEquals(TransactionCategory.LIVING, updatedTransaction.category)
         assertEquals(existingTransaction.occurredAt.toInstant(), updatedTransaction.occurredAt.toInstant())
         assertEquals(existingTransaction.createdAt.toInstant(), updatedTransaction.createdAt.toInstant())
+        assertTrue(
+            updatedTransaction.updatedAt.toInstant().isAfter(existingTransaction.updatedAt.toInstant()),
+            "명세서 반영은 updated_at을 갱신해 이후 거래 수정의 낙관적 잠금이 동작해야 한다.",
+        )
         assertEquals(1, transactionRepository.count())
     }
 
