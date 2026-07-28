@@ -8,6 +8,7 @@ import org.springframework.http.HttpHeaders
 import org.springframework.stereotype.Component
 import org.springframework.web.client.RestClient
 import org.springframework.web.client.RestClientException
+import org.springframework.web.client.RestClientResponseException
 import tools.jackson.databind.ObjectMapper
 
 @Component
@@ -34,8 +35,13 @@ class OpenAiTransactionDraftGenerator(
                 .body(requestBody(message, context))
                 .retrieve()
                 .body(OpenAiResponse::class.java)
+        } catch (exception: RestClientResponseException) {
+            throw DraftGenerationException(
+                "OpenAI가 ${exception.statusCode.value()} 응답을 반환했습니다. ${exception.errorSummary()}",
+                exception,
+            )
         } catch (exception: RestClientException) {
-            throw DraftGenerationException("OpenAI 응답을 받지 못했습니다.", exception)
+            throw DraftGenerationException("OpenAI 응답을 받지 못했습니다. ${exception.javaClass.simpleName}", exception)
         } ?: throw DraftGenerationException("OpenAI 응답이 비어 있습니다.")
 
         val outputText = response.output
@@ -44,7 +50,9 @@ class OpenAiTransactionDraftGenerator(
             .flatMap { item -> item.content.asSequence() }
             .firstOrNull { content -> content.type == "output_text" }
             ?.text
-            ?: throw DraftGenerationException("OpenAI 응답에 거래 초안이 없습니다.")
+            ?: throw DraftGenerationException(
+                "OpenAI 응답에 거래 초안이 없습니다. status=${response.status ?: "unknown"}",
+            )
 
         return try {
             objectMapper.readValue(outputText, GeneratedTransactionDraft::class.java)
@@ -98,6 +106,7 @@ class OpenAiTransactionDraftGenerator(
         """.trimIndent()
 
     private data class OpenAiResponse(
+        val status: String? = null,
         val output: List<OpenAiOutputItem> = emptyList(),
     )
 
@@ -111,7 +120,7 @@ class OpenAiTransactionDraftGenerator(
         val text: String? = null,
     )
 
-    private companion object {
+    internal companion object {
         val nullableString = mapOf("type" to listOf("string", "null"))
         val responseSchema: Map<String, Any> = mapOf(
             "type" to "object",
@@ -128,13 +137,14 @@ class OpenAiTransactionDraftGenerator(
                     "type" to listOf("string", "null"),
                     "enum" to TransactionCategory.entries.map(TransactionCategory::name) + null,
                 ),
+                // strict 스키마는 지원 키워드가 제한적이라 uniqueItems를 쓰지 않는다.
+                // 중복 태그는 Set<TransactionTag>로 역직렬화하면서 제거된다.
                 "tags" to mapOf(
                     "type" to "array",
                     "items" to mapOf(
                         "type" to "string",
                         "enum" to TransactionTag.entries.map(TransactionTag::name),
                     ),
-                    "uniqueItems" to true,
                 ),
                 "occurredAt" to nullableString,
                 "payer" to mapOf(
@@ -167,6 +177,17 @@ class OpenAiTransactionDraftGenerator(
         )
     }
 }
+
+/**
+ * OpenAI 오류 응답에서 진단에 필요한 부분만 짧게 뽑는다.
+ * 우리가 보낸 요청 내용은 포함하지 않는다.
+ */
+private fun RestClientResponseException.errorSummary(): String =
+    responseBodyAsString
+        .replace(Regex("""\s+"""), " ")
+        .trim()
+        .take(300)
+        .ifEmpty { "(응답 본문 없음)" }
 
 class DraftGenerationException(
     message: String,
