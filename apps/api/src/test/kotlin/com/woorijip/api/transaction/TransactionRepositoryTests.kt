@@ -52,12 +52,56 @@ class TransactionRepositoryTests(
         )
     }
 
+    @Test
+    fun `finds statement window transactions in half-open range ordered by occurred time then id`() {
+        val (householdId, payerId) = createHouseholdMember()
+        val otherPayerId = createMember(householdId, "지은")
+        val windowStart = OffsetDateTime.parse("2026-07-14T00:00:00+09:00")
+        val windowEnd = OffsetDateTime.parse("2026-07-16T00:00:00+09:00")
+
+        val atWindowStart = transactionRepository.save(
+            transaction(householdId, payerId, "시작 경계", "2026-07-14T00:00:00+09:00"),
+        )
+        val sameTimeFirst = transactionRepository.save(
+            transaction(householdId, payerId, "같은 시각 1", "2026-07-15T12:00:00+09:00"),
+        )
+        val sameTimeSecond = transactionRepository.save(
+            transaction(householdId, payerId, "같은 시각 2", "2026-07-15T12:00:00+09:00"),
+        )
+        transactionRepository.save(transaction(householdId, payerId, "종료 경계", "2026-07-16T00:00:00+09:00"))
+        transactionRepository.save(transaction(householdId, payerId, "기간 이전", "2026-07-13T23:59:59+09:00"))
+        transactionRepository.save(transaction(householdId, otherPayerId, "다른 결제자", "2026-07-15T12:00:00+09:00"))
+        transactionRepository.save(
+            transaction(
+                householdId,
+                payerId,
+                "다른 카드사",
+                "2026-07-15T12:00:00+09:00",
+                cardIssuer = CardIssuer.HYUNDAI,
+            ),
+        )
+
+        val found = transactionRepository.findAllInStatementWindow(
+            householdId = householdId,
+            payerId = payerId,
+            cardIssuer = CardIssuer.SHINHAN,
+            occurredAtFrom = windowStart,
+            occurredAtTo = windowEnd,
+        )
+
+        assertEquals(
+            listOf(atWindowStart.id, sameTimeFirst.id, sameTimeSecond.id),
+            found.map(Transaction::id),
+        )
+    }
+
     private fun transaction(
         householdId: Long,
         payerId: Long,
         merchant: String,
         occurredAt: String,
         description: String? = null,
+        cardIssuer: CardIssuer = CardIssuer.SHINHAN,
     ) = Transaction(
         householdId = householdId,
         payerId = payerId,
@@ -66,7 +110,7 @@ class TransactionRepositoryTests(
         amount = 8_000,
         category = TransactionCategory.FOOD,
         paymentMethod = PaymentMethod.CARD,
-        cardIssuer = CardIssuer.SHINHAN,
+        cardIssuer = cardIssuer,
         occurredAt = OffsetDateTime.parse(occurredAt),
         createdAt = OffsetDateTime.parse("2026-07-15T20:00:00+09:00"),
     )
@@ -76,8 +120,16 @@ class TransactionRepositoryTests(
         val householdId = assertNotNull(
             householdRepository.save(Household(name = "우리집", createdAt = createdAt)).id,
         )
+        return householdId to createMember(householdId, "원태")
+    }
+
+    private fun createMember(
+        householdId: Long,
+        displayName: String,
+    ): Long {
+        val createdAt = OffsetDateTime.parse("2026-07-15T20:00:00+09:00")
         val userId = assertNotNull(
-            appUserRepository.save(AppUser(displayName = "원태", createdAt = createdAt)).id,
+            appUserRepository.save(AppUser(displayName = displayName, createdAt = createdAt)).id,
         )
         householdMembershipRepository.save(
             HouseholdMembership(
@@ -86,6 +138,6 @@ class TransactionRepositoryTests(
                 createdAt = createdAt,
             ),
         )
-        return householdId to userId
+        return userId
     }
 }

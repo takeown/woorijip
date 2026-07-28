@@ -90,7 +90,7 @@ class CardStatementApplyService(
             val firstDate = storedCandidates.minOf { it.candidate.occurredOn }
             val lastDate = storedCandidates.maxOf { it.candidate.occurredOn }
             val transactions = transactionRepository
-                .findAllByHouseholdIdAndPayerIdAndCardIssuerAndOccurredAtGreaterThanEqualAndOccurredAtLessThanOrderByOccurredAtAscIdAsc(
+                .findAllInStatementWindow(
                     householdId = currentUser.householdId,
                     payerId = currentUser.id,
                     cardIssuer = statementImport.cardIssuer,

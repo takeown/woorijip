@@ -61,7 +61,7 @@ class CardStatementPreviewService(
         val firstDate = statement.candidates.minOf(StatementCandidate::occurredOn)
         val lastDate = statement.candidates.maxOf(StatementCandidate::occurredOn)
         val storedTransactions = transactionRepository
-            .findAllByHouseholdIdAndPayerIdAndCardIssuerAndOccurredAtGreaterThanEqualAndOccurredAtLessThanOrderByOccurredAtAscIdAsc(
+            .findAllInStatementWindow(
                 householdId = currentUser.householdId,
                 payerId = currentUser.id,
                 cardIssuer = statement.cardIssuer,
