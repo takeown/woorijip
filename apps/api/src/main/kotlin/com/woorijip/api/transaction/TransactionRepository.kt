@@ -23,7 +23,19 @@ interface TransactionRepository : CrudRepository<Transaction, Long> {
         payerId: Long,
     ): List<Transaction>
 
-    fun findAllByHouseholdIdAndPayerIdAndCardIssuerAndOccurredAtGreaterThanEqualAndOccurredAtLessThanOrderByOccurredAtAscIdAsc(
+    @Query(
+        """
+        SELECT *
+        FROM transactions
+        WHERE household_id = :householdId
+          AND payer_id = :payerId
+          AND card_issuer = :cardIssuer
+          AND occurred_at >= :occurredAtFrom
+          AND occurred_at < :occurredAtTo
+        ORDER BY occurred_at ASC, id ASC
+        """,
+    )
+    fun findAllInStatementWindow(
         householdId: Long,
         payerId: Long,
         cardIssuer: CardIssuer,
