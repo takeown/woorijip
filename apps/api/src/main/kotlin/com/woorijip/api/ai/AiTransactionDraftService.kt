@@ -9,6 +9,7 @@ import com.woorijip.api.transaction.CardIssuer
 import com.woorijip.api.transaction.PaymentMethod
 import com.woorijip.api.transaction.TransactionCategory
 import com.woorijip.api.transaction.TransactionTag
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.time.OffsetDateTime
 import java.time.ZoneId
@@ -46,7 +47,8 @@ class AiTransactionDraftService(
                     currentTime = OffsetDateTime.now(SEOUL),
                 ),
             )
-        } catch (_: DraftGenerationException) {
+        } catch (exception: DraftGenerationException) {
+            logger.warn("AI 거래 초안 생성 실패: {}", exception.message, exception)
             throw ApiException(
                 ErrorCode.AI_DRAFT_UNAVAILABLE,
                 "AI 거래 초안을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.",
@@ -139,5 +141,6 @@ class AiTransactionDraftService(
 
     private companion object {
         val SEOUL: ZoneId = ZoneId.of("Asia/Seoul")
+        val logger = LoggerFactory.getLogger(AiTransactionDraftService::class.java)
     }
 }
