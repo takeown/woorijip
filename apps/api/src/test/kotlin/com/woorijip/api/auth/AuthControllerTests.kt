@@ -57,6 +57,16 @@ class AuthControllerTests(
     }
 
     @Test
+    fun `rejects an allowed account that has no internal user yet`() {
+        mockMvc
+            .get("/auth/me") {
+                with(oidcLogin().oidcUser(TestOidcUsers.allowed()))
+            }.andExpect {
+                status { isUnauthorized() }
+            }
+    }
+
+    @Test
     fun `issues a CSRF token without authentication`() {
         mockMvc
             .get("/auth/csrf")

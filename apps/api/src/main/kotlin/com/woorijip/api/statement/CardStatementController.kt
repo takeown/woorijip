@@ -1,6 +1,6 @@
 package com.woorijip.api.statement
 
-import com.woorijip.api.auth.GoogleAccountService
+import com.woorijip.api.auth.CurrentUser
 import com.woorijip.api.transaction.CardIssuer
 import com.woorijip.api.transaction.Transaction
 import com.woorijip.api.transaction.TransactionCategory
@@ -11,8 +11,6 @@ import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Positive
 import jakarta.validation.constraints.Size
 import org.springframework.http.MediaType
-import org.springframework.security.core.annotation.AuthenticationPrincipal
-import org.springframework.security.oauth2.core.oidc.user.OidcUser
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
@@ -100,7 +98,6 @@ data class ApplyCardStatementResponse(
 @RestController
 @RequestMapping("/card-statements")
 class CardStatementController(
-    private val googleAccountService: GoogleAccountService,
     private val previewService: CardStatementPreviewService,
     private val applyService: CardStatementApplyService,
 ) {
@@ -109,20 +106,18 @@ class CardStatementController(
         consumes = [MediaType.MULTIPART_FORM_DATA_VALUE],
     )
     fun preview(
-        @AuthenticationPrincipal oidcUser: OidcUser,
+        currentUser: CurrentUser,
         @RequestPart("file") file: MultipartFile,
     ): CardStatementPreviewResponse {
-        val currentUser = googleAccountService.findByGoogleSubject(oidcUser.subject)
         return previewService.preview(currentUser, file).toResponse()
     }
 
     @PostMapping("/{importId}/apply")
     fun apply(
-        @AuthenticationPrincipal oidcUser: OidcUser,
+        currentUser: CurrentUser,
         @PathVariable importId: Long,
         @Valid @RequestBody request: ApplyCardStatementRequest,
     ): ApplyCardStatementResponse {
-        val currentUser = googleAccountService.findByGoogleSubject(oidcUser.subject)
         return ApplyCardStatementResponse(
             transactions = applyService.apply(
                 currentUser = currentUser,

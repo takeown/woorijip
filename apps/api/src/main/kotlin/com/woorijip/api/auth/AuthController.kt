@@ -1,7 +1,5 @@
 package com.woorijip.api.auth
 
-import org.springframework.security.core.annotation.AuthenticationPrincipal
-import org.springframework.security.oauth2.core.oidc.user.OidcUser
 import org.springframework.security.web.csrf.CsrfToken
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RestController
@@ -18,13 +16,9 @@ data class CsrfTokenResponse(
 )
 
 @RestController
-class AuthController(
-    private val googleAccountService: GoogleAccountService,
-) {
+class AuthController {
     @GetMapping("/auth/me")
-    fun me(
-        @AuthenticationPrincipal oidcUser: OidcUser,
-    ): CurrentUserResponse = googleAccountService.findByGoogleSubject(oidcUser.subject).toResponse()
+    fun me(currentUser: CurrentUser): CurrentUserResponse = currentUser.toResponse()
 
     @GetMapping("/auth/csrf")
     fun csrf(csrfToken: CsrfToken): CsrfTokenResponse =

@@ -1,6 +1,6 @@
 package com.woorijip.api.transaction
 
-import com.woorijip.api.auth.GoogleAccountService
+import com.woorijip.api.auth.CurrentUser
 import com.woorijip.api.error.ApiException
 import com.woorijip.api.error.ErrorCode
 import jakarta.validation.Valid
@@ -9,8 +9,6 @@ import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Positive
 import jakarta.validation.constraints.Size
 import org.springframework.http.HttpStatus
-import org.springframework.security.core.annotation.AuthenticationPrincipal
-import org.springframework.security.oauth2.core.oidc.user.OidcUser
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -96,16 +94,14 @@ data class DeleteTransactionRequest(
 
 @RestController
 class TransactionController(
-    private val googleAccountService: GoogleAccountService,
     private val transactionService: TransactionService,
 ) {
     @PostMapping("/transactions")
     @ResponseStatus(HttpStatus.CREATED)
     fun create(
-        @AuthenticationPrincipal oidcUser: OidcUser,
+        currentUser: CurrentUser,
         @Valid @RequestBody request: CreateTransactionRequest,
     ): TransactionResponse {
-        val currentUser = googleAccountService.findByGoogleSubject(oidcUser.subject)
         return transactionService
             .create(
                 currentUser,
@@ -126,10 +122,9 @@ class TransactionController(
 
     @GetMapping("/transactions")
     fun findAll(
-        @AuthenticationPrincipal oidcUser: OidcUser,
+        currentUser: CurrentUser,
         @RequestParam(defaultValue = "all") payer: String,
     ): List<TransactionResponse> {
-        val currentUser = googleAccountService.findByGoogleSubject(oidcUser.subject)
         val payerFilter = try {
             PayerFilter.valueOf(payer.uppercase())
         } catch (_: IllegalArgumentException) {
@@ -142,11 +137,10 @@ class TransactionController(
 
     @PutMapping("/transactions/{transactionId}")
     fun update(
-        @AuthenticationPrincipal oidcUser: OidcUser,
+        currentUser: CurrentUser,
         @PathVariable transactionId: Long,
         @Valid @RequestBody request: UpdateTransactionRequest,
     ): TransactionResponse {
-        val currentUser = googleAccountService.findByGoogleSubject(oidcUser.subject)
         return transactionService
             .update(
                 currentUser = currentUser,
@@ -170,11 +164,10 @@ class TransactionController(
     @DeleteMapping("/transactions/{transactionId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     fun delete(
-        @AuthenticationPrincipal oidcUser: OidcUser,
+        currentUser: CurrentUser,
         @PathVariable transactionId: Long,
         @Valid @RequestBody request: DeleteTransactionRequest,
     ) {
-        val currentUser = googleAccountService.findByGoogleSubject(oidcUser.subject)
         transactionService.delete(
             currentUser = currentUser,
             transactionId = transactionId,
