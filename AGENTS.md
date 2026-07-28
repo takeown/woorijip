@@ -15,8 +15,13 @@
 - `apps/api`: Kotlin, Spring Boot, Spring Data JDBC, Flyway
 - `compose.yaml`: 로컬 PostgreSQL
 - `docs/PLAN.md`: 제품 로드맵, 현재 마일스톤, 주요 결정
+- `docs/ARCHITECTURE.md`: API 요청 흐름, 계층별 역할, 변경 지점, 장애 확인 순서
 
 하나의 모노레포로 관리하지만 웹과 API는 독립적으로 배포한다.
+
+API 구조를 설명하거나 변경 지점을 안내할 때는 `docs/ARCHITECTURE.md`를 기준으로 삼고,
+구조가 달라졌다면 이 문서도 함께 갱신한다. 각 디렉터리의 `CLAUDE.md`는 같은 위치의
+`AGENTS.md`를 가리키는 한 줄 파일이므로 지침은 `AGENTS.md`에만 작성한다.
 
 ## 작업 방식
 

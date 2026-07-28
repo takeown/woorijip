@@ -1,6 +1,6 @@
 # 우리집 개발 계획
 
-마지막 수정: 2026-07-27
+마지막 수정: 2026-07-28
 
 ## 목표
 
@@ -446,6 +446,30 @@ AI는 서버가 전달한 카테고리와 태그 목록 밖의 값을 만들 수
 `updated_at`이 그대로일 때만 전체 입력값과 분류를 갱신해 다른 변경을 덮어쓰지 않는다.
 삭제는 사용자 확인을 받은 뒤 hard delete한다. 명세서 후보에 연결된 거래를 삭제하면
 후보 자체는 보존하고 거래 연결만 해제해 이후 다시 누락 후보로 검토할 수 있게 한다.
+
+### 2026-07-28 — 오류 응답을 ProblemDetail 하나로 통일
+
+모든 JSON 오류 응답은 RFC 9457 ProblemDetail을 사용하고, `status`와 별개로 안정적인
+기계 판독용 `code`를 함께 반환한다. `ResponseEntityExceptionHandler`를 상속한 advice
+하나가 이를 담당하며, 이 빈이 있으면 Spring Boot의 기본 ProblemDetails 처리는
+물러나므로 Bean Validation 실패 같은 프레임워크 예외도 같은 형식으로 나간다.
+
+`code`는 클라이언트가 분기할 의미가 있는 단위로만 정의하고 메시지마다 만들지 않는다.
+명세서 오류는 throw 지점이 많으므로 `INVALID_CARD_STATEMENT` 하나로 묶고 구체적인
+이유는 `detail`에 남긴다. HTTP status는 이전과 동일하게 유지한다. 웹은 현재 오류
+본문을 읽지 않고 status로만 분기하므로 `code` 활용은 필요해질 때 웹에서 따로 도입한다.
+
+Spring Security 필터에서 직접 나가는 인증 실패 응답은 이 advice를 거치지 않아 `code`가
+없다. 웹이 401을 status로만 처리하는 동안은 그대로 둔다.
+
+Controller가 반복하던 인증 사용자 조회는 `CurrentUser` 파라미터를 해석하는
+`HandlerMethodArgumentResolver`로 옮긴다. 허용 계정이지만 내부 사용자가 없는 경우는
+이전과 같은 인증 예외를 던져 401을 유지한다.
+
+외부 OpenAI 호출에는 연결 5초, 읽기 30초 타임아웃을 둔다. 단일 인스턴스 운영이라
+응답하지 않는 호출이 요청 스레드를 무기한 점유하면 안 된다. Spring Boot 4에서 RestClient
+자동 구성은 별도 모듈로 분리돼 이 프로젝트 클래스패스에 없으므로, 타임아웃은 직접
+구성한 `RestClient.Builder`에 설정한다.
 
 ## 백로그
 
