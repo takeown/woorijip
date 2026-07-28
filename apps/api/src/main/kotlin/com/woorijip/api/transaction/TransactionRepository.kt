@@ -36,7 +36,8 @@ interface TransactionRepository : CrudRepository<Transaction, Long> {
         """
         UPDATE transactions
         SET merchant = :merchant,
-            amount = :amount
+            amount = :amount,
+            updated_at = :updatedAt
         WHERE id = :id
           AND household_id = :householdId
           AND payer_id = :payerId
@@ -56,6 +57,7 @@ interface TransactionRepository : CrudRepository<Transaction, Long> {
         expectedOccurredAt: OffsetDateTime,
         merchant: String,
         amount: Long,
+        updatedAt: OffsetDateTime,
     ): Int
 
     @Modifying

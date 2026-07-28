@@ -12,6 +12,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
+import java.time.OffsetDateTime
 import java.time.ZoneId
 
 data class StatementCandidateSelection(
@@ -202,6 +203,7 @@ class CardStatementApplyService(
                 expectedOccurredAt = transaction.occurredAt,
                 merchant = candidate.merchant,
                 amount = candidate.approvedAmount,
+                updatedAt = OffsetDateTime.now(),
             )
             if (updated != 1) {
                 throw InvalidCardStatementException("대조 결과가 변경되었습니다. 명세서를 다시 대조해 주세요.")
