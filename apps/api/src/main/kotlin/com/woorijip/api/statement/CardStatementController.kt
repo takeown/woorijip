@@ -10,7 +10,6 @@ import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Positive
 import jakarta.validation.constraints.Size
-import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.security.oauth2.core.oidc.user.OidcUser
@@ -21,7 +20,6 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestPart
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.multipart.MultipartFile
-import org.springframework.web.server.ResponseStatusException
 import java.time.LocalDate
 import java.time.OffsetDateTime
 
@@ -113,55 +111,41 @@ class CardStatementController(
     fun preview(
         @AuthenticationPrincipal oidcUser: OidcUser,
         @RequestPart("file") file: MultipartFile,
-    ): CardStatementPreviewResponse =
-        try {
-            val currentUser = googleAccountService.findByGoogleSubject(oidcUser.subject)
-            previewService.preview(currentUser, file).toResponse()
-        } catch (exception: InvalidCardStatementException) {
-            throw ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                exception.message,
-                exception,
-            )
-        }
+    ): CardStatementPreviewResponse {
+        val currentUser = googleAccountService.findByGoogleSubject(oidcUser.subject)
+        return previewService.preview(currentUser, file).toResponse()
+    }
 
     @PostMapping("/{importId}/apply")
     fun apply(
         @AuthenticationPrincipal oidcUser: OidcUser,
         @PathVariable importId: Long,
         @Valid @RequestBody request: ApplyCardStatementRequest,
-    ): ApplyCardStatementResponse =
-        try {
-            val currentUser = googleAccountService.findByGoogleSubject(oidcUser.subject)
-            ApplyCardStatementResponse(
-                transactions = applyService.apply(
-                    currentUser = currentUser,
-                    importId = importId,
-                    selections = request.candidates.map { candidate ->
-                        StatementCandidateSelection(
-                            sourceRow = candidate.sourceRow,
-                            category = requireNotNull(candidate.category),
-                            tags = candidate.tags,
-                            description = candidate.description?.trim()?.takeIf(String::isNotEmpty),
-                        )
-                    },
-                    corrections = request.corrections.map { correction ->
-                        StatementCandidateCorrection(
-                            sourceRow = correction.sourceRow,
-                            transactionId = correction.transactionId,
-                            expectedMerchant = correction.expectedMerchant,
-                            expectedAmount = correction.expectedAmount,
-                        )
-                    },
-                ),
-            )
-        } catch (exception: InvalidCardStatementException) {
-            throw ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                exception.message,
-                exception,
-            )
-        }
+    ): ApplyCardStatementResponse {
+        val currentUser = googleAccountService.findByGoogleSubject(oidcUser.subject)
+        return ApplyCardStatementResponse(
+            transactions = applyService.apply(
+                currentUser = currentUser,
+                importId = importId,
+                selections = request.candidates.map { candidate ->
+                    StatementCandidateSelection(
+                        sourceRow = candidate.sourceRow,
+                        category = requireNotNull(candidate.category),
+                        tags = candidate.tags,
+                        description = candidate.description?.trim()?.takeIf(String::isNotEmpty),
+                    )
+                },
+                corrections = request.corrections.map { correction ->
+                    StatementCandidateCorrection(
+                        sourceRow = correction.sourceRow,
+                        transactionId = correction.transactionId,
+                        expectedMerchant = correction.expectedMerchant,
+                        expectedAmount = correction.expectedAmount,
+                    )
+                },
+            ),
+        )
+    }
 }
 
 private fun CardStatementPreview.toResponse(): CardStatementPreviewResponse =

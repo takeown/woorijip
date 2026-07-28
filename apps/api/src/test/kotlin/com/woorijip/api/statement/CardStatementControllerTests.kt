@@ -210,6 +210,7 @@ class CardStatementControllerTests(
                 """.trimIndent()
             }.andExpect {
                 status { isBadRequest() }
+                jsonPath("$.code") { value("INVALID_CARD_STATEMENT") }
             }
 
         assertEquals(1, transactionRepository.count())

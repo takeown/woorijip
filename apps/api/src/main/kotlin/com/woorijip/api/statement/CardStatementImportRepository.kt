@@ -197,7 +197,9 @@ class CardStatementImportRepository(
                 "transactionId" to transactionId,
             ),
         )
-        check(updated == 1)
+        if (updated != 1) {
+            throw InvalidCardStatementException("대조 결과가 변경되었습니다. 명세서를 다시 대조해 주세요.")
+        }
     }
 
     private fun mapImport(
