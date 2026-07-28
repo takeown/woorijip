@@ -1,11 +1,11 @@
 package com.woorijip.api.transaction
 
 import com.woorijip.api.auth.CurrentUser
+import com.woorijip.api.error.ApiException
+import com.woorijip.api.error.ErrorCode
 import com.woorijip.api.household.HouseholdMembershipRepository
-import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.web.server.ResponseStatusException
 import java.time.OffsetDateTime
 
 enum class PayerFilter {
@@ -160,9 +160,9 @@ class TransactionService(
         transactionId: Long,
     ): Nothing {
         if (transactionRepository.findByIdAndHouseholdId(transactionId, currentUser.householdId) == null) {
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "거래를 찾을 수 없습니다.")
+            throw ApiException(ErrorCode.TRANSACTION_NOT_FOUND, "거래를 찾을 수 없습니다.")
         }
-        throw ResponseStatusException(HttpStatus.CONFLICT, "거래가 변경되었습니다. 새로고침 후 다시 시도해 주세요.")
+        throw ApiException(ErrorCode.TRANSACTION_MODIFIED, "거래가 변경되었습니다. 새로고침 후 다시 시도해 주세요.")
     }
 
     private fun requireHouseholdMember(
@@ -171,7 +171,7 @@ class TransactionService(
     ) {
         val isMember = householdMembershipRepository.existsByHouseholdIdAndUserId(householdId, payerId)
         if (!isMember) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "결제자는 현재 가구의 구성원이어야 합니다.")
+            throw ApiException(ErrorCode.PAYER_NOT_IN_HOUSEHOLD, "결제자는 현재 가구의 구성원이어야 합니다.")
         }
     }
 
@@ -185,7 +185,7 @@ class TransactionService(
             PaymentMethod.UNKNOWN -> false
         }
         if (!isValid) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "결제수단과 카드사를 확인해 주세요.")
+            throw ApiException(ErrorCode.INVALID_PAYMENT_DETAILS, "결제수단과 카드사를 확인해 주세요.")
         }
     }
 }

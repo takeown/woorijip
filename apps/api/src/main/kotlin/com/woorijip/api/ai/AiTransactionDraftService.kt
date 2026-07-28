@@ -1,15 +1,15 @@
 package com.woorijip.api.ai
 
 import com.woorijip.api.auth.CurrentUser
+import com.woorijip.api.error.ApiException
+import com.woorijip.api.error.ErrorCode
 import com.woorijip.api.household.HouseholdMember
 import com.woorijip.api.household.HouseholdMembershipRepository
 import com.woorijip.api.transaction.CardIssuer
 import com.woorijip.api.transaction.PaymentMethod
 import com.woorijip.api.transaction.TransactionCategory
 import com.woorijip.api.transaction.TransactionTag
-import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
-import org.springframework.web.server.ResponseStatusException
 import java.time.OffsetDateTime
 import java.time.ZoneId
 
@@ -47,7 +47,10 @@ class AiTransactionDraftService(
                 ),
             )
         } catch (_: DraftGenerationException) {
-            throw ResponseStatusException(HttpStatus.BAD_GATEWAY, "AI 거래 초안을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.")
+            throw ApiException(
+                ErrorCode.AI_DRAFT_UNAVAILABLE,
+                "AI 거래 초안을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.",
+            )
         }
 
         return when (generated.status) {

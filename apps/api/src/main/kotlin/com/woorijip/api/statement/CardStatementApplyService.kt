@@ -1,6 +1,8 @@
 package com.woorijip.api.statement
 
 import com.woorijip.api.auth.CurrentUser
+import com.woorijip.api.error.ApiException
+import com.woorijip.api.error.ErrorCode
 import com.woorijip.api.transaction.PaymentMethod
 import com.woorijip.api.transaction.Transaction
 import com.woorijip.api.transaction.TransactionCategory
@@ -8,10 +10,8 @@ import com.woorijip.api.transaction.TransactionDraft
 import com.woorijip.api.transaction.TransactionRepository
 import com.woorijip.api.transaction.TransactionService
 import com.woorijip.api.transaction.TransactionTag
-import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.web.server.ResponseStatusException
 import java.time.OffsetDateTime
 import java.time.ZoneId
 
@@ -67,7 +67,10 @@ class CardStatementApplyService(
         }
 
         val statementImport = importRepository.findByIdForUpdate(importId, currentUser)
-            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "명세서 가져오기를 찾을 수 없습니다.")
+            ?: throw ApiException(
+                ErrorCode.CARD_STATEMENT_IMPORT_NOT_FOUND,
+                "명세서 가져오기를 찾을 수 없습니다.",
+            )
         val storedCandidates = importRepository.findCandidates(importId)
         val selectedCandidatesByRow = selectedSourceRows.associateWith { sourceRow ->
             val storedCandidate = storedCandidates.firstOrNull {

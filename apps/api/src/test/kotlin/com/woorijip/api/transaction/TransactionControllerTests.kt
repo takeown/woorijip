@@ -171,6 +171,9 @@ class TransactionControllerTests(
                     """.trimIndent()
             }.andExpect {
                 status { isBadRequest() }
+                content { contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON) }
+                jsonPath("$.status") { value(400) }
+                jsonPath("$.code") { value("INVALID_REQUEST") }
             }
 
         mockMvc
@@ -179,6 +182,8 @@ class TransactionControllerTests(
                 with(allowedOidcLogin())
             }.andExpect {
                 status { isBadRequest() }
+                jsonPath("$.code") { value("UNSUPPORTED_FILTER") }
+                jsonPath("$.detail") { value("지원하지 않는 결제자 필터입니다.") }
             }
     }
 
@@ -194,6 +199,7 @@ class TransactionControllerTests(
                 content = transactionJson(currentUser.id, "카드 결제", "CARD", null)
             }.andExpect {
                 status { isBadRequest() }
+                jsonPath("$.code") { value("INVALID_PAYMENT_DETAILS") }
             }
 
         mockMvc
@@ -306,6 +312,7 @@ class TransactionControllerTests(
                 content = updateJson
             }.andExpect {
                 status { isConflict() }
+                jsonPath("$.code") { value("TRANSACTION_MODIFIED") }
             }
     }
 
@@ -334,6 +341,7 @@ class TransactionControllerTests(
                 content = """{"expectedUpdatedAt":"${transaction.updatedAt}"}"""
             }.andExpect {
                 status { isNotFound() }
+                jsonPath("$.code") { value("TRANSACTION_NOT_FOUND") }
             }
     }
 
