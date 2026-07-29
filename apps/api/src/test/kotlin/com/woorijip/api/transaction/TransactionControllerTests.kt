@@ -321,6 +321,21 @@ class TransactionControllerTests(
                 jsonPath("$.classificationSource") { value("MERCHANT_RULE") }
                 jsonPath("$.classificationConfidence") { value("HIGH") }
             }
+
+        mockMvc
+            .post("/transactions") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content = transactionJson(
+                    payerId = currentUser.id,
+                    merchant = "다른가맹점",
+                    classificationRuleId = rule.id,
+                )
+            }.andExpect {
+                status { isBadRequest() }
+                jsonPath("$.code") { value("INVALID_CLASSIFICATION_RULE") }
+            }
     }
 
     @Test
@@ -363,9 +378,31 @@ class TransactionControllerTests(
                     classificationRuleId = otherRule.id,
                 )
             }.andExpect {
-                status { isCreated() }
-                jsonPath("$.classificationSource") { value("USER") }
+                status { isBadRequest() }
+                jsonPath("$.code") { value("INVALID_CLASSIFICATION_RULE") }
             }
+    }
+
+    @Test
+    fun `rejects automatic classification sources without a verified rule`() {
+        val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
+
+        listOf("MERCHANT_RULE", "HISTORY", "MIGRATION").forEach { source ->
+            mockMvc
+                .post("/transactions") {
+                    with(allowedOidcLogin())
+                    with(csrf())
+                    contentType = MediaType.APPLICATION_JSON
+                    content = transactionJson(
+                        payerId = currentUser.id,
+                        merchant = "동네마트",
+                        classificationSource = source,
+                    )
+                }.andExpect {
+                    status { isBadRequest() }
+                    jsonPath("$.code") { value("INVALID_CLASSIFICATION_SOURCE") }
+                }
+        }
     }
 
     @Test
@@ -513,6 +550,7 @@ class TransactionControllerTests(
         paymentMethod: String = "CARD",
         cardIssuer: String? = "SHINHAN",
         description: String? = null,
+        classificationSource: String = "USER",
         classificationRuleId: Long? = null,
         saveMerchantRule: Boolean = false,
     ) =
@@ -524,6 +562,7 @@ class TransactionControllerTests(
           "amount": 8000,
           "category": "FOOD",
           "tags": ["SUBSCRIPTION", "RECURRING_PAYMENT"],
+          "classificationSource": "$classificationSource",
           "classificationRuleId": ${classificationRuleId ?: "null"},
           "saveMerchantRule": $saveMerchantRule,
           "paymentMethod": "$paymentMethod",

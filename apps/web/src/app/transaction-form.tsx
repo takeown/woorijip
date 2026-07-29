@@ -91,13 +91,24 @@ export function TransactionForm({
 
       const recommendation: MerchantClassificationRecommendation =
         await response.json();
+      if (
+        requestId !== recommendationRequest.current ||
+        revision !== classificationRevision.current
+      ) {
+        return;
+      }
       setRecommendedCategory(recommendation.category);
       setRecommendedTags(recommendation.tags);
       setAppliedRuleId(recommendation.ruleId);
       setClassificationKey((current) => current + 1);
       setRecommendationMessage("이 가맹점에 저장된 분류를 적용했습니다.");
     } catch {
-      setAppliedRuleId(null);
+      if (
+        requestId !== recommendationRequest.current ||
+        revision !== classificationRevision.current
+      ) {
+        return;
+      }
       setRecommendationMessage("가맹점 분류 추천을 불러오지 못했습니다.");
     }
   }
@@ -206,6 +217,11 @@ export function TransactionForm({
           onBlur={recommendClassification}
           onChange={() => {
             recommendationRequest.current += 1;
+            if (appliedRuleId !== null) {
+              setRecommendedCategory(undefined);
+              setRecommendedTags([]);
+              setClassificationKey((current) => current + 1);
+            }
             setAppliedRuleId(null);
             setRecommendationMessage(null);
           }}
