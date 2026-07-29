@@ -27,7 +27,10 @@ import org.springframework.test.web.servlet.put
 import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 @SpringBootTest(
     properties = [
@@ -45,6 +48,7 @@ class TransactionControllerTests(
     @Autowired private val householdRepository: HouseholdRepository,
     @Autowired private val householdMembershipRepository: HouseholdMembershipRepository,
     @Autowired private val transactionRepository: TransactionRepository,
+    @Autowired private val transactionTagRepository: TransactionTagRepository,
     @Autowired private val merchantClassificationRuleRepository: MerchantClassificationRuleRepository,
 ) {
     @Test
@@ -339,6 +343,181 @@ class TransactionControllerTests(
     }
 
     @Test
+    fun `backfills only matching migration transactions in the current household`() {
+        val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
+        val migrated = saveExistingTransaction(
+            householdId = currentUser.householdId,
+            payerId = currentUser.id,
+            merchant = " 김밥 천국! ",
+            source = ClassificationSource.MIGRATION,
+            legacyCategory = "분식",
+        )
+        val migratedStandardCategory = saveExistingTransaction(
+            householdId = currentUser.householdId,
+            payerId = currentUser.id,
+            merchant = "김밥천국",
+            source = ClassificationSource.MIGRATION,
+            legacyCategory = "식비",
+            category = TransactionCategory.FOOD,
+        )
+        val userConfirmed = saveExistingTransaction(
+            householdId = currentUser.householdId,
+            payerId = currentUser.id,
+            merchant = "김밥천국",
+            source = ClassificationSource.USER,
+        )
+        val aiClassified = saveExistingTransaction(
+            householdId = currentUser.householdId,
+            payerId = currentUser.id,
+            merchant = "김밥천국",
+            source = ClassificationSource.AI,
+        )
+        val similarMerchant = saveExistingTransaction(
+            householdId = currentUser.householdId,
+            payerId = currentUser.id,
+            merchant = "김밥천국 강남점",
+            source = ClassificationSource.MIGRATION,
+            legacyCategory = "분식",
+        )
+        val otherHouseholdId = createHousehold("다른 집")
+        val otherUserId = createMember(otherHouseholdId, "다른 사용자")
+        val otherHousehold = saveExistingTransaction(
+            householdId = otherHouseholdId,
+            payerId = otherUserId,
+            merchant = "김밥천국",
+            source = ClassificationSource.MIGRATION,
+            legacyCategory = "분식",
+        )
+        val existingIds = listOf(
+            migrated,
+            migratedStandardCategory,
+            userConfirmed,
+            aiClassified,
+            similarMerchant,
+            otherHousehold,
+        )
+            .map { requireNotNull(it.id) }
+        existingIds.forEach { transactionId ->
+            transactionTagRepository.replaceAll(transactionId, setOf(TransactionTag.UTILITY))
+        }
+
+        mockMvc
+            .post("/transactions") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content = transactionJson(
+                    payerId = currentUser.id,
+                    merchant = "김밥천국",
+                    saveMerchantRule = true,
+                )
+            }.andExpect {
+                status { isCreated() }
+            }
+
+        val updated = requireNotNull(
+            transactionRepository.findByIdAndHouseholdId(
+                requireNotNull(migrated.id),
+                currentUser.householdId,
+            ),
+        )
+        assertEquals(TransactionCategory.FOOD, updated.category)
+        assertEquals(ClassificationSource.MERCHANT_RULE, updated.classificationSource)
+        assertEquals(ClassificationConfidence.HIGH, updated.classificationConfidence)
+        assertNull(updated.classificationConfirmedAt)
+        assertTrue(updated.updatedAt > migrated.updatedAt)
+
+        val preserved = listOf(
+            migratedStandardCategory,
+            userConfirmed,
+            aiClassified,
+            similarMerchant,
+            otherHousehold,
+        )
+        preserved.forEach { original ->
+            val found = requireNotNull(
+                transactionRepository.findByIdAndHouseholdId(
+                    requireNotNull(original.id),
+                    original.householdId,
+                ),
+            )
+            assertEquals(original.category, found.category)
+            assertEquals(original.classificationSource, found.classificationSource)
+            assertEquals(original.classificationConfidence, found.classificationConfidence)
+            assertEquals(
+                original.classificationConfirmedAt?.toInstant(),
+                found.classificationConfirmedAt?.toInstant(),
+            )
+            assertEquals(original.updatedAt.toInstant(), found.updatedAt.toInstant())
+        }
+
+        val tagsByTransactionId = transactionTagRepository.findAllByTransactionIds(existingIds)
+        assertEquals(
+            setOf(TransactionTag.SUBSCRIPTION, TransactionTag.RECURRING_PAYMENT),
+            tagsByTransactionId[migrated.id],
+        )
+        preserved.forEach { transaction ->
+            assertEquals(setOf(TransactionTag.UTILITY), tagsByTransactionId[transaction.id])
+        }
+    }
+
+    @Test
+    fun `updates an unconfirmed merchant rule backfill when the rule changes`() {
+        val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
+        val migrated = saveExistingTransaction(
+            householdId = currentUser.householdId,
+            payerId = currentUser.id,
+            merchant = "김밥천국",
+            source = ClassificationSource.MIGRATION,
+            legacyCategory = "분식",
+        )
+
+        mockMvc
+            .post("/transactions") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content = transactionJson(
+                    payerId = currentUser.id,
+                    merchant = "김밥천국",
+                    saveMerchantRule = true,
+                )
+            }.andExpect {
+                status { isCreated() }
+            }
+
+        mockMvc
+            .post("/transactions") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content = transactionJson(
+                    payerId = currentUser.id,
+                    merchant = "김밥천국",
+                    category = "LIVING",
+                    tags = """["UTILITY"]""",
+                    saveMerchantRule = true,
+                )
+            }.andExpect {
+                status { isCreated() }
+            }
+
+        val updated = requireNotNull(
+            transactionRepository.findByIdAndHouseholdId(
+                requireNotNull(migrated.id),
+                currentUser.householdId,
+            ),
+        )
+        assertEquals(TransactionCategory.LIVING, updated.category)
+        assertEquals(ClassificationSource.MERCHANT_RULE, updated.classificationSource)
+        assertNull(updated.classificationConfirmedAt)
+        assertEquals(
+            setOf(TransactionTag.UTILITY),
+            transactionTagRepository.findAllByTransactionIds(listOf(requireNotNull(migrated.id)))[migrated.id],
+        )
+    }
+
+    @Test
     fun `does not expose or apply another household merchant rule`() {
         val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
         val otherHouseholdId = createHousehold("다른 집")
@@ -553,6 +732,8 @@ class TransactionControllerTests(
         classificationSource: String = "USER",
         classificationRuleId: Long? = null,
         saveMerchantRule: Boolean = false,
+        category: String = "FOOD",
+        tags: String = """["SUBSCRIPTION", "RECURRING_PAYMENT"]""",
     ) =
         """
         {
@@ -560,8 +741,8 @@ class TransactionControllerTests(
           "merchant": "$merchant",
           "description": ${description?.let { "\"$it\"" } ?: "null"},
           "amount": 8000,
-          "category": "FOOD",
-          "tags": ["SUBSCRIPTION", "RECURRING_PAYMENT"],
+          "category": "$category",
+          "tags": $tags,
           "classificationSource": "$classificationSource",
           "classificationRuleId": ${classificationRuleId ?: "null"},
           "saveMerchantRule": $saveMerchantRule,
@@ -576,6 +757,42 @@ class TransactionControllerTests(
             householdRepository.save(
                 Household(name = name, createdAt = now),
             ).id,
+        )
+
+    private fun saveExistingTransaction(
+        householdId: Long,
+        payerId: Long,
+        merchant: String,
+        source: ClassificationSource,
+        legacyCategory: String? = null,
+        category: TransactionCategory = TransactionCategory.OTHER,
+    ): Transaction =
+        transactionRepository.save(
+            Transaction(
+                householdId = householdId,
+                payerId = payerId,
+                merchant = merchant,
+                description = null,
+                amount = 5_000,
+                legacyCategory = legacyCategory,
+                category = category,
+                classificationSource = source,
+                classificationConfidence = when (source) {
+                    ClassificationSource.USER,
+                    ClassificationSource.MERCHANT_RULE,
+                    -> ClassificationConfidence.HIGH
+                    ClassificationSource.HISTORY -> ClassificationConfidence.MEDIUM
+                    ClassificationSource.AI,
+                    ClassificationSource.MIGRATION,
+                    -> ClassificationConfidence.LOW
+                },
+                classificationConfirmedAt = now,
+                paymentMethod = PaymentMethod.UNKNOWN,
+                cardIssuer = null,
+                occurredAt = now,
+                createdAt = now,
+                updatedAt = now,
+            ),
         )
 
     private fun createMember(

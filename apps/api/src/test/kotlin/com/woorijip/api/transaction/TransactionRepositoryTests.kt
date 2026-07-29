@@ -95,6 +95,35 @@ class TransactionRepositoryTests(
         )
     }
 
+    @Test
+    fun `does not backfill a migration transaction changed after candidate lookup`() {
+        val (householdId, payerId) = createHouseholdMember()
+        val saved = transactionRepository.save(
+            transaction(householdId, payerId, "김밥천국", "2026-07-15T12:00:00+09:00")
+                .copy(
+                    legacyCategory = "분식",
+                    category = TransactionCategory.OTHER,
+                    classificationSource = ClassificationSource.MIGRATION,
+                    classificationConfidence = ClassificationConfidence.LOW,
+                ),
+        )
+        val transactionId = assertNotNull(saved.id)
+
+        val updated = transactionRepository.updateMerchantRuleClassificationIfUnchanged(
+            id = transactionId,
+            householdId = householdId,
+            expectedUpdatedAt = saved.updatedAt.minusSeconds(1),
+            category = TransactionCategory.FOOD.name,
+            updatedAt = saved.updatedAt.plusSeconds(1),
+        )
+
+        assertEquals(0, updated)
+        val unchanged = assertNotNull(transactionRepository.findById(transactionId).orElse(null))
+        assertEquals(TransactionCategory.OTHER, unchanged.category)
+        assertEquals(ClassificationSource.MIGRATION, unchanged.classificationSource)
+        assertEquals(ClassificationConfidence.LOW, unchanged.classificationConfidence)
+    }
+
     private fun transaction(
         householdId: Long,
         payerId: Long,
