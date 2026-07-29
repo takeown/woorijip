@@ -45,6 +45,18 @@ Spring API ──▶ PostgreSQL
 읽는 순서를 하나만 고르라면 **Controller → Service → Repository**다. 이 세 개만
 따라가면 대부분의 기능을 이해할 수 있다.
 
+수동 입력의 가맹점 분류 추천은 다음 경로를 추가로 지난다.
+
+| 순서 | 파일 | 하는 일 |
+| --- | --- | --- |
+| 1 | `transaction/MerchantClassificationRuleController.kt` | 가맹점 문자열을 추천 조회 요청으로 받는다 |
+| 2 | `transaction/MerchantClassificationRuleService.kt` | 가맹점을 정규화하고 현재 household 규칙만 찾는다 |
+| 3 | `transaction/MerchantClassificationRuleRepository.kt` | 규칙과 태그를 조회하거나 거래 저장과 함께 갱신한다 |
+
+거래 생성 요청에 추천 규칙 ID가 있으면 `TransactionService`가 household, 정규화
+가맹점, 카테고리와 태그가 현재 규칙과 모두 같은지 다시 검사한다. 일치할 때만 분류
+출처를 `MERCHANT_RULE`로 기록하므로 다른 household 규칙 ID를 보내도 적용되지 않는다.
+
 ## 3. 각 계층이 맡는 일
 
 ### Controller — HTTP 담당
@@ -142,6 +154,7 @@ fun create(currentUser: CurrentUser, @Valid @RequestBody request: CreateTransact
 | --- | --- |
 | 거래에 필드 추가 | 새 Flyway 파일 → `transaction/Transaction.kt` → `TransactionController.kt`의 요청·응답 클래스 |
 | 카테고리 목록 변경 | `transaction/TransactionClassification.kt` + 새 Flyway 파일(CHECK 제약도 함께) |
+| 가맹점 분류 추천 변경 | `transaction/MerchantClassificationRuleController.kt` → `MerchantClassificationRuleService.kt` → `MerchantClassificationRuleRepository.kt` |
 | 새 API 주소 추가 | 해당 도메인 폴더에 Controller 함수 추가 |
 | 검증 규칙 변경 | 단순 형식이면 요청 클래스의 `@field:` 표시, 판단이 필요하면 Service |
 | 오류 메시지·코드 변경 | `error/ErrorCode.kt`와 예외를 던지는 곳 |

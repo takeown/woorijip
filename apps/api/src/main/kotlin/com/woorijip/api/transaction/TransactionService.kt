@@ -32,15 +32,23 @@ class TransactionService(
     private val transactionRepository: TransactionRepository,
     private val transactionTagRepository: TransactionTagRepository,
     private val householdMembershipRepository: HouseholdMembershipRepository,
+    private val merchantClassificationRuleService: MerchantClassificationRuleService,
 ) {
     @Transactional
     fun create(
         currentUser: CurrentUser,
         draft: TransactionDraft,
+        classificationRuleId: Long? = null,
+        saveMerchantRule: Boolean = false,
     ): Transaction {
         requireHouseholdMember(currentUser.householdId, draft.payerId)
         requirePaymentDetails(draft.paymentMethod, draft.cardIssuer)
         val now = OffsetDateTime.now()
+        val classificationSource = resolveClassificationSource(
+            currentUser,
+            draft,
+            classificationRuleId,
+        )
 
         val saved = transactionRepository.save(
             Transaction(
@@ -50,8 +58,8 @@ class TransactionService(
                 description = draft.description,
                 amount = draft.amount,
                 category = draft.category,
-                classificationSource = draft.classificationSource,
-                classificationConfidence = confidenceFor(draft.classificationSource),
+                classificationSource = classificationSource,
+                classificationConfidence = confidenceFor(classificationSource),
                 classificationConfirmedAt = now,
                 paymentMethod = draft.paymentMethod,
                 cardIssuer = draft.cardIssuer,
@@ -62,6 +70,15 @@ class TransactionService(
         )
         val transactionId = requireNotNull(saved.id)
         transactionTagRepository.replaceAll(transactionId, draft.tags)
+        if (saveMerchantRule) {
+            merchantClassificationRuleService.save(
+                currentUser = currentUser,
+                merchant = draft.merchant,
+                category = draft.category,
+                tags = draft.tags,
+                now = now,
+            )
+        }
         return saved.copy(tags = draft.tags)
     }
 
@@ -154,6 +171,42 @@ class TransactionService(
             ClassificationSource.AI -> ClassificationConfidence.LOW
             ClassificationSource.MIGRATION -> ClassificationConfidence.LOW
         }
+
+    private fun resolveClassificationSource(
+        currentUser: CurrentUser,
+        draft: TransactionDraft,
+        classificationRuleId: Long?,
+    ): ClassificationSource {
+        if (classificationRuleId != null) {
+            val matches = merchantClassificationRuleService.matches(
+                currentUser = currentUser,
+                ruleId = classificationRuleId,
+                merchant = draft.merchant,
+                category = draft.category,
+                tags = draft.tags,
+            )
+            if (!matches) {
+                throw ApiException(
+                    ErrorCode.INVALID_CLASSIFICATION_RULE,
+                    "가맹점 분류 규칙이 현재 거래와 일치하지 않습니다.",
+                )
+            }
+            return ClassificationSource.MERCHANT_RULE
+        }
+
+        return when (draft.classificationSource) {
+            ClassificationSource.USER,
+            ClassificationSource.AI,
+            -> draft.classificationSource
+            ClassificationSource.MERCHANT_RULE,
+            ClassificationSource.HISTORY,
+            ClassificationSource.MIGRATION,
+            -> throw ApiException(
+                ErrorCode.INVALID_CLASSIFICATION_SOURCE,
+                "자동 분류 출처는 서버에서 확인된 경우에만 사용할 수 있습니다.",
+            )
+        }
+    }
 
     private fun throwNotFoundOrConflict(
         currentUser: CurrentUser,

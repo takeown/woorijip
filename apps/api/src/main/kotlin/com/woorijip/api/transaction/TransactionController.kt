@@ -37,6 +37,9 @@ data class CreateTransactionRequest(
     @field:Size(max = 3)
     val tags: Set<TransactionTag> = emptySet(),
     val classificationSource: ClassificationSource = ClassificationSource.USER,
+    @field:Positive
+    val classificationRuleId: Long? = null,
+    val saveMerchantRule: Boolean = false,
     @field:NotNull
     val paymentMethod: PaymentMethod?,
     val cardIssuer: CardIssuer?,
@@ -117,6 +120,8 @@ class TransactionController(
                     cardIssuer = request.cardIssuer,
                     occurredAt = requireNotNull(request.occurredAt),
                 ),
+                classificationRuleId = request.classificationRuleId,
+                saveMerchantRule = request.saveMerchantRule,
             ).toResponse()
     }
 
