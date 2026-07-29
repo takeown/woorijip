@@ -8,6 +8,8 @@ import java.time.OffsetDateTime
 @Service
 class MerchantClassificationRuleService(
     private val repository: MerchantClassificationRuleRepository,
+    private val transactionRepository: TransactionRepository,
+    private val transactionTagRepository: TransactionTagRepository,
 ) {
     @Transactional(readOnly = true)
     fun findRecommendation(
@@ -21,6 +23,7 @@ class MerchantClassificationRuleService(
         return repository.find(currentUser.householdId, normalizedMerchant)
     }
 
+    @Transactional
     fun save(
         currentUser: CurrentUser,
         merchant: String,
@@ -41,6 +44,22 @@ class MerchantClassificationRuleService(
             confirmedByUserId = currentUser.id,
             now = now,
         )
+        transactionRepository
+            .findAllMerchantRuleBackfillCandidatesByHouseholdId(currentUser.householdId)
+            .filter { transaction -> normalizeMerchant(transaction.merchant) == normalizedMerchant }
+            .forEach { transaction ->
+                val transactionId = requireNotNull(transaction.id)
+                val updated = transactionRepository.updateMerchantRuleClassificationIfUnchanged(
+                    id = transactionId,
+                    householdId = currentUser.householdId,
+                    expectedUpdatedAt = transaction.updatedAt,
+                    category = category.name,
+                    updatedAt = now,
+                )
+                if (updated == 1) {
+                    transactionTagRepository.replaceAll(transactionId, tags)
+                }
+            }
     }
 
     @Transactional(readOnly = true)

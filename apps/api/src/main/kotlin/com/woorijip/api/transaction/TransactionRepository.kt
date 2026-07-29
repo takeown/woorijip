@@ -28,6 +28,40 @@ interface TransactionRepository : CrudRepository<Transaction, Long> {
         SELECT *
         FROM transactions
         WHERE household_id = :householdId
+          AND (
+              (
+                  classification_source = 'MIGRATION'
+                  AND category = 'OTHER'
+                  AND legacy_category IS NOT NULL
+                  AND btrim(legacy_category) NOT IN (
+                      '식비',
+                      '주거',
+                      '교통',
+                      '생활',
+                      '건강',
+                      '여가',
+                      '교육',
+                      '금융·보험',
+                      '금융/보험',
+                      '경조사',
+                      '기타'
+                  )
+              )
+              OR (
+                  classification_source = 'MERCHANT_RULE'
+                  AND classification_confirmed_at IS NULL
+              )
+          )
+        ORDER BY id ASC
+        """,
+    )
+    fun findAllMerchantRuleBackfillCandidatesByHouseholdId(householdId: Long): List<Transaction>
+
+    @Query(
+        """
+        SELECT *
+        FROM transactions
+        WHERE household_id = :householdId
           AND payer_id = :payerId
           AND card_issuer = :cardIssuer
           AND occurred_at >= :occurredAtFrom
@@ -105,6 +139,52 @@ interface TransactionRepository : CrudRepository<Transaction, Long> {
         paymentMethod: String,
         cardIssuer: String?,
         occurredAt: OffsetDateTime,
+        updatedAt: OffsetDateTime,
+    ): Int
+
+    @Modifying
+    @Query(
+        """
+        UPDATE transactions
+        SET category = :category,
+            classification_source = 'MERCHANT_RULE',
+            classification_confidence = 'HIGH',
+            classification_confirmed_at = NULL,
+            updated_at = :updatedAt
+        WHERE id = :id
+          AND household_id = :householdId
+          AND (
+              (
+                  classification_source = 'MIGRATION'
+                  AND category = 'OTHER'
+                  AND legacy_category IS NOT NULL
+                  AND btrim(legacy_category) NOT IN (
+                      '식비',
+                      '주거',
+                      '교통',
+                      '생활',
+                      '건강',
+                      '여가',
+                      '교육',
+                      '금융·보험',
+                      '금융/보험',
+                      '경조사',
+                      '기타'
+                  )
+              )
+              OR (
+                  classification_source = 'MERCHANT_RULE'
+                  AND classification_confirmed_at IS NULL
+              )
+          )
+          AND updated_at = :expectedUpdatedAt
+        """,
+    )
+    fun updateMerchantRuleClassificationIfUnchanged(
+        id: Long,
+        householdId: Long,
+        expectedUpdatedAt: OffsetDateTime,
+        category: String,
         updatedAt: OffsetDateTime,
     ): Int
 

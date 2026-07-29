@@ -57,6 +57,13 @@ Spring API ──▶ PostgreSQL
 가맹점, 카테고리와 태그가 현재 규칙과 모두 같은지 다시 검사한다. 일치할 때만 분류
 출처를 `MERCHANT_RULE`로 기록하므로 다른 household 규칙 ID를 보내도 적용되지 않는다.
 
+사용자가 새 가맹점 규칙을 저장하면 `MerchantClassificationRuleService`가 같은
+transaction 안에서 현재 household의 재확정 대상 `MIGRATION` 거래와 이전 규칙으로
+자동 보완된 미확정 거래를 조회한다. 정규화 가맹점이 정확히 같고 후보 조회 이후
+`updated_at`이 바뀌지 않은 거래만 `MERCHANT_RULE/HIGH`로 보완한 뒤 규칙 태그로
+교체한다. 표준 카테고리로 정상 변환된 과거 사용자 입력, 사용자가 확정한 거래,
+다른 자동 분류가 적용된 거래와 동시에 수정된 거래는 변경하지 않는다.
+
 ## 3. 각 계층이 맡는 일
 
 ### Controller — HTTP 담당
