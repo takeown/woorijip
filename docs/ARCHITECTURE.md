@@ -57,6 +57,29 @@ Spring API ──▶ PostgreSQL
 가맹점, 카테고리와 태그가 현재 규칙과 모두 같은지 다시 검사한다. 일치할 때만 분류
 출처를 `MERCHANT_RULE`로 기록하므로 다른 household 규칙 ID를 보내도 적용되지 않는다.
 
+AI 자연어 거래 입력은 다음 경로를 지난다.
+
+| 순서 | 파일 | 하는 일 |
+| --- | --- | --- |
+| 1 | `ai/AiTransactionDraftController.kt` | 최대 세 개의 사용자 메시지 형식과 길이를 검증한다 |
+| 2 | `ai/AiSensitiveInputGuard.kt` | 외부 전송 금지 데이터가 있으면 요청을 400으로 거부한다 |
+| 3 | `ai/AiTransactionDraftService.kt` | 메시지를 한 거래 문맥으로 합치고 현재 시각과 내부 사용자 ID를 생성 문맥에 넣는다 |
+| 4 | `ai/OpenAiTransactionDraftGenerator.kt` | 프롬프트와 응답 스키마를 만들고 Responses API를 호출한다 |
+| 5 | `ai/AiTransactionDraftService.kt` | 모델 출력을 서버 규칙으로 검증하고 household 구성원 결제자로 변환한다 |
+
+OpenAI는 데이터 공유 설정과 관계없이 외부 보안 경계로 취급한다. 사용자 메시지에는
+카드번호나 계좌번호 같은 민감정보가 들어올 수 있으므로 외부 요청 직전에 서버가 이를
+검사해야 한다. 금지 데이터가 발견되면 원문을 보내지 않고 사용자가 제거한 뒤 다시
+입력하도록 안내한다. 모델이 이해해야 하는 가맹점, 금액, 발생 시각, 결제자 역할,
+결제수단, 카드사와 선택 내역만 최소한으로 전달한다.
+
+모델이 평문을 처리해야 하므로 요청 값을 애플리케이션에서 암호화한 뒤 보내는 방식은
+사용하지 않는다. 통신 구간은 HTTPS로 보호하고, 외부 서비스에 필요한 안정적인 사용자
+식별자는 `OpenAiSafetyIdentifier.kt`가 원본 내부 ID와 별도 비밀키로 만든 HMAC을
+사용한다. 전체 카드번호나
+계좌번호를 저장할 요구가 생기면 AI 요청과 분리해 암호화 저장하고 키도 데이터와
+분리한다.
+
 사용자가 새 가맹점 규칙을 저장하면 `MerchantClassificationRuleService`가 같은
 transaction 안에서 현재 household의 재확정 대상 `MIGRATION` 거래와 이전 규칙으로
 자동 보완된 미확정 거래를 조회한다. 정규화 가맹점이 정확히 같고 후보 조회 이후
@@ -168,6 +191,8 @@ fun create(currentUser: CurrentUser, @Valid @RequestBody request: CreateTransact
 | 로그인 허용 계정 변경 | 코드가 아니라 환경변수 `GOOGLE_ALLOWED_EMAILS` |
 | CORS 허용 주소·메서드 | `config/WebConfig.kt` |
 | AI 프롬프트·모델 | `ai/OpenAiTransactionDraftGenerator.kt`, 모델은 환경변수 `OPENAI_MODEL` |
+| AI 외부 전송 금지 데이터 | `ai/AiSensitiveInputGuard.kt` |
+| AI 가명 식별자 | `ai/OpenAiSafetyIdentifier.kt`, 비밀값은 환경변수 `OPENAI_SAFETY_IDENTIFIER_SECRET` |
 
 ## 6. 고장났을 때
 

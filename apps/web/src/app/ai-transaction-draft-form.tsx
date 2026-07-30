@@ -42,6 +42,10 @@ type CsrfToken = {
   headerName: string;
 };
 
+type ApiProblem = {
+  detail?: unknown;
+};
+
 type AiTransactionDraftFormProps = {
   onCreated: () => Promise<void> | void;
   householdMembers: HouseholdMember[];
@@ -91,7 +95,14 @@ export function AiTransactionDraftForm({
         body: JSON.stringify({ messages: nextMessages }),
       });
       if (!response.ok) {
-        throw new Error("AI 거래 초안을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.");
+        let message = "AI 거래 초안을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.";
+        if (response.status === 400) {
+          const problem: ApiProblem | null = await response.json().catch(() => null);
+          if (typeof problem?.detail === "string") {
+            message = problem.detail;
+          }
+        }
+        throw new Error(message);
       }
 
       const nextDraft: AiDraft = await response.json();

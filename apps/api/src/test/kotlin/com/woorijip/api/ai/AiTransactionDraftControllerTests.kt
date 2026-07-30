@@ -189,6 +189,23 @@ class AiTransactionDraftControllerTests(
             }
     }
 
+    @Test
+    fun `rejects sensitive data before generating a draft`() {
+        googleAccountService.provision(TestOidcUsers.allowed())
+
+        mockMvc
+            .post("/ai/transaction-drafts") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"messages":["카드번호 4111-1111-1111-1111로 결제했어"]}"""
+            }.andExpect {
+                status { isBadRequest() }
+                jsonPath("$.code") { value("SENSITIVE_AI_INPUT") }
+                jsonPath("$.detail") { value(containsString("카드번호")) }
+            }
+    }
+
     private fun createMember(
         householdId: Long,
         displayName: String,
