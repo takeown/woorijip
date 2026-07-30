@@ -18,7 +18,9 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
+import java.nio.charset.StandardCharsets
 import java.time.OffsetDateTime
+import java.util.Base64
 
 data class CreateTransactionRequest(
     @field:NotNull
@@ -63,6 +65,11 @@ data class TransactionResponse(
     val occurredAt: OffsetDateTime,
     val createdAt: OffsetDateTime,
     val updatedAt: OffsetDateTime,
+)
+
+data class TransactionPageResponse(
+    val items: List<TransactionResponse>,
+    val nextCursor: String?,
 )
 
 data class UpdateTransactionRequest(
@@ -126,18 +133,30 @@ class TransactionController(
     }
 
     @GetMapping("/transactions")
-    fun findAll(
+    fun findPage(
         currentUser: CurrentUser,
         @RequestParam(defaultValue = "all") payer: String,
-    ): List<TransactionResponse> {
+        @RequestParam(required = false) cursor: String?,
+        @RequestParam(defaultValue = "20") size: Int,
+    ): TransactionPageResponse {
+        if (size !in 1..100) {
+            throw ApiException(ErrorCode.INVALID_REQUEST, "페이지 크기는 1건부터 100건까지 지정할 수 있습니다.")
+        }
         val payerFilter = try {
             PayerFilter.valueOf(payer.uppercase())
         } catch (_: IllegalArgumentException) {
             throw ApiException(ErrorCode.UNSUPPORTED_FILTER, "지원하지 않는 결제자 필터입니다.")
         }
-        return transactionService
-            .findAll(currentUser, payerFilter)
-            .map(Transaction::toResponse)
+        val page = transactionService.findPage(
+            currentUser = currentUser,
+            payerFilter = payerFilter,
+            cursor = decodeCursor(cursor),
+            size = size,
+        )
+        return TransactionPageResponse(
+            items = page.items.map(Transaction::toResponse),
+            nextCursor = page.nextCursor?.encode(),
+        )
     }
 
     @PutMapping("/transactions/{transactionId}")
@@ -180,6 +199,29 @@ class TransactionController(
         )
     }
 }
+
+private fun decodeCursor(value: String?): TransactionCursor? {
+    if (value == null) return null
+    return runCatching {
+        val decoded = String(
+            Base64.getUrlDecoder().decode(value),
+            StandardCharsets.UTF_8,
+        )
+        val parts = decoded.split('|', limit = 2)
+        require(parts.size == 2)
+        TransactionCursor(
+            occurredAt = OffsetDateTime.parse(parts[0]),
+            id = parts[1].toLong().also { require(it > 0) },
+        )
+    }.getOrElse {
+        throw ApiException(ErrorCode.INVALID_REQUEST, "올바르지 않은 거래 조회 커서입니다.")
+    }
+}
+
+private fun TransactionCursor.encode(): String =
+    Base64.getUrlEncoder()
+        .withoutPadding()
+        .encodeToString("$occurredAt|$id".toByteArray(StandardCharsets.UTF_8))
 
 private fun Transaction.toResponse(): TransactionResponse =
     TransactionResponse(

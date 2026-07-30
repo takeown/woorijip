@@ -11,16 +11,68 @@ interface TransactionRepository : CrudRepository<Transaction, Long> {
         householdId: Long,
     ): Transaction?
 
-    fun findAllByHouseholdIdOrderByOccurredAtDescIdDesc(householdId: Long): List<Transaction>
-
-    fun findAllByHouseholdIdAndPayerIdOrderByOccurredAtDescIdDesc(
+    @Query(
+        """
+        SELECT *
+        FROM transactions
+        WHERE household_id = :householdId
+          AND (occurred_at, id) < (
+              COALESCE(:cursorOccurredAt, 'infinity'::timestamptz),
+              COALESCE(:cursorId, 9223372036854775807)
+          )
+        ORDER BY occurred_at DESC, id DESC
+        LIMIT :limit
+        """,
+    )
+    fun findPageByHouseholdId(
         householdId: Long,
-        payerId: Long,
+        cursorOccurredAt: OffsetDateTime?,
+        cursorId: Long?,
+        limit: Int,
     ): List<Transaction>
 
-    fun findAllByHouseholdIdAndPayerIdNotOrderByOccurredAtDescIdDesc(
+    @Query(
+        """
+        SELECT *
+        FROM transactions
+        WHERE household_id = :householdId
+          AND payer_id = :payerId
+          AND (occurred_at, id) < (
+              COALESCE(:cursorOccurredAt, 'infinity'::timestamptz),
+              COALESCE(:cursorId, 9223372036854775807)
+          )
+        ORDER BY occurred_at DESC, id DESC
+        LIMIT :limit
+        """,
+    )
+    fun findPageByHouseholdIdAndPayerId(
         householdId: Long,
         payerId: Long,
+        cursorOccurredAt: OffsetDateTime?,
+        cursorId: Long?,
+        limit: Int,
+    ): List<Transaction>
+
+    @Query(
+        """
+        SELECT *
+        FROM transactions
+        WHERE household_id = :householdId
+          AND payer_id != :payerId
+          AND (occurred_at, id) < (
+              COALESCE(:cursorOccurredAt, 'infinity'::timestamptz),
+              COALESCE(:cursorId, 9223372036854775807)
+          )
+        ORDER BY occurred_at DESC, id DESC
+        LIMIT :limit
+        """,
+    )
+    fun findPageByHouseholdIdAndPayerIdNot(
+        householdId: Long,
+        payerId: Long,
+        cursorOccurredAt: OffsetDateTime?,
+        cursorId: Long?,
+        limit: Int,
     ): List<Transaction>
 
     @Query(

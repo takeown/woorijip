@@ -104,6 +104,11 @@ transaction 안에서 현재 household의 재확정 대상 `MIGRATION` 거래와
 모델(`Transaction`)을 그대로 내보내지 않는다. 그래야 내부 구조를 바꿔도 API 약속이
 안 깨진다.
 
+거래 목록은 배열을 바로 반환하지 않고 `TransactionPageResponse`의 `items`와
+`nextCursor`를 반환한다. 첫 요청은 최근 20건을 조회하고, 다음 요청은 `nextCursor`를
+그대로 전달해 이전 기록을 이어서 조회한다. 커서는 정렬 기준인 발생 시각과 ID를
+클라이언트가 수정하지 않도록 불투명한 문자열로 표현한다.
+
 ### Service — 규칙 담당
 
 `transaction/TransactionService.kt`
@@ -120,16 +125,21 @@ transaction 안에서 현재 household의 재확정 대상 `MIGRATION` 거래와
 
 이 프로젝트는 두 가지 방식을 섞어 쓴다.
 
-**함수 이름으로 쿼리 만들기** — 몸통이 없는데 동작한다. Spring이 이름을 읽어서 SQL을
-자동으로 만든다.
+**함수 이름으로 쿼리 만들기** — 몸통이 없는데 동작한다. 단순한 조회는 Spring이
+이름을 읽어서 SQL을 자동으로 만든다.
 
 ```kotlin
-fun findAllByHouseholdIdOrderByOccurredAtDescIdDesc(householdId: Long): List<Transaction>
-// → household_id로 걸러서 occurred_at 내림차순, id 내림차순 정렬
+fun findByIdAndHouseholdId(id: Long, householdId: Long): Transaction?
+// → id와 household_id가 모두 일치하는 거래 한 건 조회
 ```
 
 **SQL 직접 쓰기** — 조건이 복잡하면 `@Query`에 SQL을 적는다. `:householdId`처럼 콜론이
 붙은 자리에 함수 인자가 들어간다.
+
+거래 목록은 `(occurred_at, id)` 내림차순 커서 다음의 행만 `LIMIT`으로 조회한다.
+household와 결제자 조건은 SQL에 함께 들어가며, Service는 실제 페이지에 포함된 거래
+ID의 태그만 추가로 조회한다. 새 거래가 앞에 추가돼도 offset 페이지처럼 다음 조회의
+행이 밀리지 않는다.
 
 집계처럼 더 복잡한 건 `statistics/SpendingStatisticsRepository.kt`처럼 `JdbcTemplate`으로
 직접 쓴다.
