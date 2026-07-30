@@ -50,6 +50,23 @@
 - 비즈니스 규칙은 Spring context 없이 단위 테스트할 수 있게 작성한다.
 - 테스트 이름은 동작과 기대 결과가 드러나게 작성한다.
 
+## 관련 문서
+
+변경 경로에 따라 필요한 문서만 추가로 읽는다.
+
+| 변경 범위 | 기준 문서 |
+| --- | --- |
+| API 요청 흐름, 계층 또는 변경 지점 | `docs/ARCHITECTURE.md` |
+| `ai/**` 또는 외부 서비스 연동 | `docs/SECURITY.md`의 외부 서비스와 AI |
+| `auth/**` 또는 `config/SecurityConfig.kt` | `docs/SECURITY.md`의 인증과 세션 |
+| household 소유 데이터 | `docs/SECURITY.md`의 Household 권한 경계 |
+| `statement/**` 또는 파일 업로드 | `docs/SECURITY.md`의 파일 업로드 |
+| 로그, 오류 응답 또는 비밀값 | `docs/SECURITY.md`의 로그와 오류, 비밀값과 배포 |
+| `deploy/**` 또는 `.github/workflows/**` | `docs/DEPLOYMENT.md`와 `docs/SECURITY.md` |
+
+보안 경계를 변경하면 성공 경로뿐 아니라 비인증 요청, 다른 household 접근, 금지 데이터,
+실패 후 데이터 잔존 여부 중 해당하는 음성 테스트를 추가한다.
+
 저장소 루트에서 실행한다.
 
 ```bash
