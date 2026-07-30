@@ -28,6 +28,16 @@ type ComparisonBreakdownItem = {
   changeRatePercent: number | null;
 };
 
+type RecurringSpendingChange = {
+  tag: "SUBSCRIPTION" | "UTILITY" | "RECURRING_PAYMENT";
+  label: string;
+  direction: "NEW" | "INCREASED" | "DECREASED" | "ENDED";
+  currentAmount: number;
+  previousAmount: number;
+  amountChange: number;
+  message: string;
+};
+
 type SpendingStatistics = {
   period: SpendingPeriod;
   payer: SpendingPayer;
@@ -43,6 +53,7 @@ type SpendingStatistics = {
   byCategory: BreakdownItem[];
   categoryComparisons: ComparisonBreakdownItem[];
   tagComparisons: ComparisonBreakdownItem[];
+  recurringSpendingChanges?: RecurringSpendingChange[];
 };
 
 type SpendingStatisticsPanelProps = {
@@ -266,6 +277,8 @@ export function SpendingStatisticsPanel({ refreshKey }: SpendingStatisticsPanelP
             </div>
           )}
 
+          <RecurringSpendingChanges changes={statistics.recurringSpendingChanges ?? []} />
+
           {statistics.categoryComparisons.length > 0 ||
           statistics.tagComparisons.length > 0 ? (
             <div className="mt-4 grid gap-4 lg:grid-cols-2">
@@ -284,6 +297,37 @@ export function SpendingStatisticsPanel({ refreshKey }: SpendingStatisticsPanelP
         </>
       ) : null}
     </section>
+  );
+}
+
+function RecurringSpendingChanges({
+  changes,
+}: {
+  changes: RecurringSpendingChange[];
+}) {
+  return (
+    <div className="mt-4 rounded-2xl bg-emerald-50 p-5">
+      <h3 className="font-semibold text-emerald-950">반복 지출 변화</h3>
+      <p className="mt-1 text-xs text-emerald-800">
+        확정된 구독·공과금·정기결제 태그를 이전 기간과 비교했습니다.
+      </p>
+      {changes.length === 0 ? (
+        <p className="mt-4 text-sm text-emerald-900">
+          이전 기간과 달라진 반복 지출이 없습니다.
+        </p>
+      ) : (
+        <ul className="mt-4 space-y-2">
+          {changes.map((change) => (
+            <li
+              className="rounded-xl bg-white/80 px-4 py-3 text-sm text-stone-700"
+              key={change.tag}
+            >
+              {change.message}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

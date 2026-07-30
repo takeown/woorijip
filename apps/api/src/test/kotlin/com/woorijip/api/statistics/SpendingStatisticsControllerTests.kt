@@ -208,6 +208,14 @@ class SpendingStatisticsControllerTests(
                 jsonPath("$.tagComparisons[2].key") { value("UTILITY") }
                 jsonPath("$.tagComparisons[2].currentAmount") { value(8_000) }
                 jsonPath("$.tagComparisons[2].previousAmount") { value(5_000) }
+                jsonPath("$.recurringSpendingChanges", hasSize<Any>(3))
+                jsonPath("$.recurringSpendingChanges[0].tag") { value("SUBSCRIPTION") }
+                jsonPath("$.recurringSpendingChanges[0].direction") { value("INCREASED") }
+                jsonPath("$.recurringSpendingChanges[0].message") {
+                    value("선택한 기간 구독 지출이 이전 기간보다 5,000원 증가했어요.")
+                }
+                jsonPath("$.recurringSpendingChanges[1].tag") { value("RECURRING_PAYMENT") }
+                jsonPath("$.recurringSpendingChanges[2].tag") { value("UTILITY") }
             }
     }
 
@@ -263,6 +271,8 @@ class SpendingStatisticsControllerTests(
                 jsonPath("$.categoryComparisons[0].key") { value("FOOD") }
                 jsonPath("$.tagComparisons", hasSize<Any>(1))
                 jsonPath("$.tagComparisons[0].key") { value("SUBSCRIPTION") }
+                jsonPath("$.recurringSpendingChanges", hasSize<Any>(1))
+                jsonPath("$.recurringSpendingChanges[0].tag") { value("SUBSCRIPTION") }
             }
 
         mockMvc
@@ -284,6 +294,8 @@ class SpendingStatisticsControllerTests(
                 jsonPath("$.categoryComparisons[0].key") { value("LIVING") }
                 jsonPath("$.tagComparisons", hasSize<Any>(1))
                 jsonPath("$.tagComparisons[0].key") { value("UTILITY") }
+                jsonPath("$.recurringSpendingChanges", hasSize<Any>(1))
+                jsonPath("$.recurringSpendingChanges[0].tag") { value("UTILITY") }
             }
     }
 
@@ -303,6 +315,7 @@ class SpendingStatisticsControllerTests(
                 jsonPath("$.previous.totalAmount") { value(0) }
                 jsonPath("$.changeRatePercent") { doesNotExist() }
                 jsonPath("$.byPayer", hasSize<Any>(0))
+                jsonPath("$.recurringSpendingChanges", hasSize<Any>(0))
             }
 
         mockMvc

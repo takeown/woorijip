@@ -56,12 +56,14 @@ data class SpendingStatistics(
     val byCategory: List<SpendingBreakdown>,
     val categoryComparisons: List<SpendingComparisonBreakdown>,
     val tagComparisons: List<SpendingComparisonBreakdown>,
+    val recurringSpendingChanges: List<RecurringSpendingChange>,
 )
 
 @Service
 class SpendingStatisticsService(
     private val spendingStatisticsRepository: SpendingStatisticsRepository,
     private val householdMembershipRepository: HouseholdMembershipRepository,
+    private val recurringSpendingChangeExplainer: RecurringSpendingChangeExplainer,
 ) {
     @Transactional(readOnly = true)
     fun find(
@@ -109,6 +111,10 @@ class SpendingStatisticsService(
             previousRange.endExclusiveAt,
             payerId,
         )
+        val tagComparisons = compareBreakdowns(
+            currentTags,
+            previousTags,
+        ) { key -> tagLabel(TransactionTag.valueOf(key)) }
 
         return SpendingStatistics(
             period = period,
@@ -141,10 +147,8 @@ class SpendingStatisticsService(
                 currentCategories,
                 previousCategories,
             ) { key -> TransactionCategory.valueOf(key).label },
-            tagComparisons = compareBreakdowns(
-                currentTags,
-                previousTags,
-            ) { key -> tagLabel(TransactionTag.valueOf(key)) },
+            tagComparisons = tagComparisons,
+            recurringSpendingChanges = recurringSpendingChangeExplainer.explain(tagComparisons),
         )
     }
 

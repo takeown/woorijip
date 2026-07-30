@@ -42,6 +42,17 @@ const monthlyStatistics = {
       changeRatePercent: 33.3,
     },
   ],
+  recurringSpendingChanges: [
+    {
+      tag: "SUBSCRIPTION",
+      label: "구독",
+      direction: "INCREASED",
+      currentAmount: 20_000,
+      previousAmount: 15_000,
+      amountChange: 5_000,
+      message: "선택한 기간 구독 지출이 이전 기간보다 5,000원 증가했어요.",
+    },
+  ],
 };
 
 afterEach(() => {
@@ -80,6 +91,10 @@ describe("SpendingStatisticsPanel", () => {
     expect(
       screen.getByText("태그는 서로 겹칠 수 있어 합계가 총지출과 다를 수 있습니다."),
     ).toBeDefined();
+    expect(screen.getByRole("heading", { name: "반복 지출 변화" })).toBeDefined();
+    expect(
+      screen.getByText("선택한 기간 구독 지출이 이전 기간보다 5,000원 증가했어요."),
+    ).toBeDefined();
 
     await user.click(screen.getByRole("button", { name: "일간" }));
 
@@ -103,6 +118,7 @@ describe("SpendingStatisticsPanel", () => {
           byCategory: [],
           categoryComparisons: [],
           tagComparisons: [],
+          recurringSpendingChanges: [],
         }),
       ),
     );
@@ -113,6 +129,24 @@ describe("SpendingStatisticsPanel", () => {
       await screen.findByText("이 기간에는 기록된 지출이 없습니다."),
     ).toBeDefined();
     expect(screen.getByText("변화 없음")).toBeDefined();
+    expect(screen.getByText("이전 기간과 달라진 반복 지출이 없습니다.")).toBeDefined();
+  });
+
+  test("loads with an older api response that has no recurring changes field", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>().mockResolvedValueOnce(
+        jsonResponse({
+          ...monthlyStatistics,
+          recurringSpendingChanges: undefined,
+        }),
+      ),
+    );
+
+    render(<SpendingStatisticsPanel refreshKey={0} />);
+
+    expect(await screen.findByRole("heading", { name: "반복 지출 변화" })).toBeDefined();
+    expect(screen.getByText("이전 기간과 달라진 반복 지출이 없습니다.")).toBeDefined();
   });
 
   test("shows classification decreases when only the previous period has spending", async () => {
@@ -141,6 +175,7 @@ describe("SpendingStatisticsPanel", () => {
             },
           ],
           tagComparisons: [],
+          recurringSpendingChanges: [],
         }),
       ),
     );
