@@ -18,6 +18,11 @@ type Transaction = EditableTransaction;
 
 type PayerFilter = "all" | "me" | "partner";
 
+type TransactionPage = {
+  items: Transaction[];
+  nextCursor: string | null;
+};
+
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 const amountFormatter = new Intl.NumberFormat("ko-KR");
 const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
@@ -34,23 +39,31 @@ export default function Home() {
   );
 }
 
-function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) {
+export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) {
   const [householdMembers, setHouseholdMembers] = useState<HouseholdMember[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [payerFilter, setPayerFilter] = useState<PayerFilter>("all");
   const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isChangingFilter, setIsChangingFilter] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchTransactions = useCallback(async (filter: PayerFilter = "all") => {
-    const response = await fetch(`${apiUrl}/transactions?payer=${filter}`, {
+  const fetchTransactions = useCallback(async (
+    filter: PayerFilter = "all",
+    cursor?: string,
+  ) => {
+    const searchParams = new URLSearchParams({ payer: filter });
+    if (cursor) searchParams.set("cursor", cursor);
+    const response = await fetch(`${apiUrl}/transactions?${searchParams}`, {
       credentials: "include",
       cache: "no-store",
     });
     if (!response.ok) {
       throw new Error("거래 내역을 불러오지 못했습니다.");
     }
-    return response.json() as Promise<Transaction[]>;
+    return response.json() as Promise<TransactionPage>;
   }, []);
 
   const fetchHouseholdMembers = useCallback(async () => {
@@ -67,9 +80,10 @@ function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) {
   useEffect(() => {
     let active = true;
     Promise.all([fetchTransactions(), fetchHouseholdMembers()])
-      .then(([nextTransactions, nextHouseholdMembers]) => {
+      .then(([transactionPage, nextHouseholdMembers]) => {
         if (!active) return;
-        setTransactions(nextTransactions);
+        setTransactions(transactionPage.items);
+        setNextCursor(transactionPage.nextCursor);
         setHouseholdMembers(nextHouseholdMembers);
       })
       .catch((caughtError: unknown) => {
@@ -89,26 +103,51 @@ function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) {
   }, [fetchHouseholdMembers, fetchTransactions]);
 
   async function changePayerFilter(filter: PayerFilter) {
-    setPayerFilter(filter);
     setError(null);
+    setIsChangingFilter(true);
     try {
-      setTransactions(await fetchTransactions(filter));
+      const page = await fetchTransactions(filter);
+      setPayerFilter(filter);
+      setTransactions(page.items);
+      setNextCursor(page.nextCursor);
+      setEditingTransactionId(null);
     } catch (caughtError) {
       setError(
         caughtError instanceof Error
           ? caughtError.message
           : "거래 내역을 불러오지 못했습니다.",
       );
+    } finally {
+      setIsChangingFilter(false);
     }
   }
 
   async function handleTransactionCreated() {
-    setTransactions(await fetchTransactions(payerFilter));
+    const page = await fetchTransactions(payerFilter);
+    setTransactions(page.items);
+    setNextCursor(page.nextCursor);
   }
 
   async function handleTransactionChanged() {
-    setTransactions(await fetchTransactions(payerFilter));
+    const page = await fetchTransactions(payerFilter);
+    setTransactions(page.items);
+    setNextCursor(page.nextCursor);
     setEditingTransactionId(null);
+  }
+
+  async function loadMoreTransactions() {
+    if (!nextCursor || isLoadingMore || isChangingFilter) return;
+    setError(null);
+    setIsLoadingMore(true);
+    try {
+      const page = await fetchTransactions(payerFilter, nextCursor);
+      setTransactions((current) => [...current, ...page.items]);
+      setNextCursor(page.nextCursor);
+    } catch {
+      setError("거래 내역을 더 불러오지 못했습니다.");
+    } finally {
+      setIsLoadingMore(false);
+    }
   }
 
   if (isLoading) {
@@ -151,7 +190,7 @@ function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) {
             <p className="text-sm font-medium text-emerald-700">최근 기록</p>
             <h2 className="mt-2 text-3xl font-semibold tracking-tight">거래 내역</h2>
           </div>
-          <p className="text-sm text-stone-500">{transactions.length}건</p>
+          <p className="text-sm text-stone-500">{transactions.length}건 표시</p>
         </div>
 
         <div className="mt-6 flex gap-2" aria-label="결제자 필터">
@@ -168,6 +207,7 @@ function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) {
               }`}
               key={filter}
               onClick={() => changePayerFilter(filter)}
+              disabled={isChangingFilter || isLoadingMore}
               type="button"
             >
               {label}
@@ -179,15 +219,18 @@ function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) {
           <p className="mt-8 rounded-2xl bg-amber-50 px-5 py-4 text-sm text-amber-800" role="alert">
             {error}
           </p>
-        ) : transactions.length === 0 ? (
+        ) : null}
+
+        {transactions.length === 0 && !error ? (
           <div className="mt-8 rounded-2xl border border-dashed border-stone-300 px-6 py-16 text-center">
             <p className="font-medium text-stone-700">아직 기록한 거래가 없습니다.</p>
             <p className="mt-2 text-sm text-stone-500">첫 거래를 왼쪽 폼에서 추가해 보세요.</p>
           </div>
-        ) : (
-          <ul className="mt-8 divide-y divide-stone-200">
-            {transactions.map((transaction) => (
-              <li className="flex items-center justify-between gap-5 py-5" key={transaction.id}>
+        ) : transactions.length > 0 ? (
+          <>
+            <ul className="mt-8 divide-y divide-stone-200">
+              {transactions.map((transaction) => (
+                <li className="flex items-center justify-between gap-5 py-5" key={transaction.id}>
                 {editingTransactionId === transaction.id ? (
                   <TransactionEditForm
                     householdMembers={householdMembers}
@@ -244,10 +287,21 @@ function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) {
                     </div>
                   </>
                 )}
-              </li>
-            ))}
-          </ul>
-        )}
+                </li>
+              ))}
+            </ul>
+            {nextCursor ? (
+              <button
+                className="mt-6 w-full rounded-xl border border-stone-300 px-4 py-3 text-sm font-medium text-stone-700 transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isLoadingMore || isChangingFilter}
+                onClick={loadMoreTransactions}
+                type="button"
+              >
+                {isLoadingMore ? "불러오는 중..." : "더 보기"}
+              </button>
+            ) : null}
+          </>
+        ) : null}
       </section>
     </div>
   );

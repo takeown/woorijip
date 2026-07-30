@@ -47,9 +47,45 @@ class TransactionRepositoryTests(
         assertEquals(
             listOf("동네마트", "김밥천국"),
             transactionRepository
-                .findAllByHouseholdIdOrderByOccurredAtDescIdDesc(householdId)
+                .findPageByHouseholdId(
+                    householdId = householdId,
+                    cursorOccurredAt = null,
+                    cursorId = null,
+                    limit = 20,
+                )
                 .map(Transaction::merchant),
         )
+    }
+
+    @Test
+    fun `continues a transaction page after occurred time and id cursor`() {
+        val (householdId, payerId) = createHouseholdMember()
+        val occurredAt = "2026-07-15T12:00:00+09:00"
+        val first = transactionRepository.save(
+            transaction(householdId, payerId, "첫 번째", occurredAt),
+        )
+        val second = transactionRepository.save(
+            transaction(householdId, payerId, "두 번째", occurredAt),
+        )
+        val third = transactionRepository.save(
+            transaction(householdId, payerId, "세 번째", occurredAt),
+        )
+
+        val firstPage = transactionRepository.findPageByHouseholdId(
+            householdId = householdId,
+            cursorOccurredAt = null,
+            cursorId = null,
+            limit = 2,
+        )
+        val secondPage = transactionRepository.findPageByHouseholdId(
+            householdId = householdId,
+            cursorOccurredAt = second.occurredAt,
+            cursorId = second.id,
+            limit = 2,
+        )
+
+        assertEquals(listOf(third.id, second.id), firstPage.map(Transaction::id))
+        assertEquals(listOf(first.id), secondPage.map(Transaction::id))
     }
 
     @Test

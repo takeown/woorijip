@@ -25,6 +25,7 @@ import org.springframework.test.web.servlet.options
 import org.springframework.test.web.servlet.post
 import org.springframework.test.web.servlet.put
 import org.springframework.transaction.annotation.Transactional
+import tools.jackson.databind.ObjectMapper
 import java.time.OffsetDateTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -50,6 +51,7 @@ class TransactionControllerTests(
     @Autowired private val transactionRepository: TransactionRepository,
     @Autowired private val transactionTagRepository: TransactionTagRepository,
     @Autowired private val merchantClassificationRuleRepository: MerchantClassificationRuleRepository,
+    @Autowired private val objectMapper: ObjectMapper,
 ) {
     @Test
     fun `creates household transactions and filters them by payer`() {
@@ -64,7 +66,8 @@ class TransactionControllerTests(
                 with(allowedOidcLogin())
             }.andExpect {
                 status { isOk() }
-                jsonPath("$", hasSize<Any>(2))
+                jsonPath("$.items", hasSize<Any>(2))
+                jsonPath("$.nextCursor") { doesNotExist() }
             }
 
         mockMvc
@@ -73,15 +76,15 @@ class TransactionControllerTests(
                 with(allowedOidcLogin())
             }.andExpect {
                 status { isOk() }
-                jsonPath("$", hasSize<Any>(1))
-                jsonPath("$[0].merchant") { value("김밥천국") }
-                jsonPath("$[0].description") { value("점심 식사") }
-                jsonPath("$[0].payerId") { value(currentUser.id) }
-                jsonPath("$[0].category") { value("FOOD") }
-                jsonPath("$[0].tags", hasSize<Any>(2))
-                jsonPath("$[0].classificationSource") { value("USER") }
-                jsonPath("$[0].classificationConfidence") { value("HIGH") }
-                jsonPath("$[0].classificationConfirmedAt") { exists() }
+                jsonPath("$.items", hasSize<Any>(1))
+                jsonPath("$.items[0].merchant") { value("김밥천국") }
+                jsonPath("$.items[0].description") { value("점심 식사") }
+                jsonPath("$.items[0].payerId") { value(currentUser.id) }
+                jsonPath("$.items[0].category") { value("FOOD") }
+                jsonPath("$.items[0].tags", hasSize<Any>(2))
+                jsonPath("$.items[0].classificationSource") { value("USER") }
+                jsonPath("$.items[0].classificationConfidence") { value("HIGH") }
+                jsonPath("$.items[0].classificationConfirmedAt") { exists() }
             }
 
         mockMvc
@@ -90,10 +93,73 @@ class TransactionControllerTests(
                 with(allowedOidcLogin())
             }.andExpect {
                 status { isOk() }
-                jsonPath("$", hasSize<Any>(1))
-                jsonPath("$[0].merchant") { value("동네마트") }
-                jsonPath("$[0].payerId") { value(partnerId) }
+                jsonPath("$.items", hasSize<Any>(1))
+                jsonPath("$.items[0].merchant") { value("동네마트") }
+                jsonPath("$.items[0].payerId") { value(partnerId) }
             }
+    }
+
+    @Test
+    fun `paginates transactions with a stable cursor when occurred times are equal`() {
+        val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
+        createTransaction(currentUser.id, "첫 번째")
+        createTransaction(currentUser.id, "두 번째")
+        createTransaction(currentUser.id, "세 번째")
+
+        val firstPage = mockMvc
+            .get("/transactions") {
+                param("size", "2")
+                with(allowedOidcLogin())
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.items", hasSize<Any>(2))
+                jsonPath("$.items[0].merchant") { value("세 번째") }
+                jsonPath("$.items[1].merchant") { value("두 번째") }
+                jsonPath("$.nextCursor") { isNotEmpty() }
+            }.andReturn()
+
+        val nextCursor = objectMapper
+            .readTree(firstPage.response.contentAsString)
+            .path("nextCursor")
+            .asString()
+
+        mockMvc
+            .get("/transactions") {
+                param("size", "2")
+                param("cursor", nextCursor)
+                with(allowedOidcLogin())
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.items", hasSize<Any>(1))
+                jsonPath("$.items[0].merchant") { value("첫 번째") }
+                jsonPath("$.nextCursor") { doesNotExist() }
+            }
+    }
+
+    @Test
+    fun `rejects invalid transaction cursors and page sizes`() {
+        googleAccountService.provision(TestOidcUsers.allowed())
+
+        mockMvc
+            .get("/transactions") {
+                param("cursor", "invalid")
+                with(allowedOidcLogin())
+            }.andExpect {
+                status { isBadRequest() }
+                jsonPath("$.code") { value("INVALID_REQUEST") }
+                jsonPath("$.detail") { value("올바르지 않은 거래 조회 커서입니다.") }
+            }
+
+        listOf("0", "101").forEach { size ->
+            mockMvc
+                .get("/transactions") {
+                    param("size", size)
+                    with(allowedOidcLogin())
+                }.andExpect {
+                    status { isBadRequest() }
+                    jsonPath("$.code") { value("INVALID_REQUEST") }
+                }
+        }
     }
 
     @Test
@@ -149,8 +215,8 @@ class TransactionControllerTests(
                 with(allowedOidcLogin())
             }.andExpect {
                 status { isOk() }
-                jsonPath("$", hasSize<Any>(1))
-                jsonPath("$[0].merchant") { value("우리 집 거래") }
+                jsonPath("$.items", hasSize<Any>(1))
+                jsonPath("$.items[0].merchant") { value("우리 집 거래") }
             }
     }
 

@@ -27,6 +27,16 @@ data class TransactionDraft(
     val occurredAt: OffsetDateTime,
 )
 
+data class TransactionCursor(
+    val occurredAt: OffsetDateTime,
+    val id: Long,
+)
+
+data class TransactionPage(
+    val items: List<Transaction>,
+    val nextCursor: TransactionCursor?,
+)
+
 @Service
 class TransactionService(
     private val transactionRepository: TransactionRepository,
@@ -83,25 +93,45 @@ class TransactionService(
     }
 
     @Transactional(readOnly = true)
-    fun findAll(
+    fun findPage(
         currentUser: CurrentUser,
         payerFilter: PayerFilter,
-    ): List<Transaction> {
+        cursor: TransactionCursor?,
+        size: Int,
+    ): TransactionPage {
         val transactions = when (payerFilter) {
             PayerFilter.ALL ->
-                transactionRepository.findAllByHouseholdIdOrderByOccurredAtDescIdDesc(currentUser.householdId)
+                transactionRepository.findPageByHouseholdId(
+                    householdId = currentUser.householdId,
+                    cursorOccurredAt = cursor?.occurredAt,
+                    cursorId = cursor?.id,
+                    limit = size + 1,
+                )
             PayerFilter.ME ->
-                transactionRepository.findAllByHouseholdIdAndPayerIdOrderByOccurredAtDescIdDesc(
-                    currentUser.householdId,
-                    currentUser.id,
+                transactionRepository.findPageByHouseholdIdAndPayerId(
+                    householdId = currentUser.householdId,
+                    payerId = currentUser.id,
+                    cursorOccurredAt = cursor?.occurredAt,
+                    cursorId = cursor?.id,
+                    limit = size + 1,
                 )
             PayerFilter.PARTNER ->
-                transactionRepository.findAllByHouseholdIdAndPayerIdNotOrderByOccurredAtDescIdDesc(
-                    currentUser.householdId,
-                    currentUser.id,
+                transactionRepository.findPageByHouseholdIdAndPayerIdNot(
+                    householdId = currentUser.householdId,
+                    payerId = currentUser.id,
+                    cursorOccurredAt = cursor?.occurredAt,
+                    cursorId = cursor?.id,
+                    limit = size + 1,
                 )
         }
-        return withTags(transactions)
+        val items = withTags(transactions.take(size))
+        val nextCursor = if (transactions.size > size) {
+            val last = items.last()
+            TransactionCursor(last.occurredAt, requireNotNull(last.id))
+        } else {
+            null
+        }
+        return TransactionPage(items, nextCursor)
     }
 
     @Transactional
