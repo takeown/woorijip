@@ -3,6 +3,7 @@ package com.woorijip.api.statistics
 import com.woorijip.api.auth.CurrentUser
 import com.woorijip.api.household.HouseholdMembershipRepository
 import com.woorijip.api.transaction.TransactionCategory
+import com.woorijip.api.transaction.TransactionTag
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -29,6 +30,17 @@ data class SpendingPeriodSummary(
     val transactionCount: Long,
 )
 
+data class SpendingComparisonBreakdown(
+    val key: String,
+    val label: String,
+    val currentAmount: Long,
+    val currentTransactionCount: Long,
+    val previousAmount: Long,
+    val previousTransactionCount: Long,
+    val amountChange: Long,
+    val changeRatePercent: BigDecimal?,
+)
+
 data class SpendingStatistics(
     val period: SpendingPeriod,
     val payer: SpendingPayer,
@@ -42,6 +54,8 @@ data class SpendingStatistics(
     val byPayer: List<SpendingBreakdown>,
     val byPaymentMethod: List<SpendingBreakdown>,
     val byCategory: List<SpendingBreakdown>,
+    val categoryComparisons: List<SpendingComparisonBreakdown>,
+    val tagComparisons: List<SpendingComparisonBreakdown>,
 )
 
 @Service
@@ -71,6 +85,30 @@ class SpendingStatisticsService(
             previousRange.endExclusiveAt,
             payerId,
         )
+        val currentCategories = spendingStatisticsRepository.byCategory(
+            currentUser.householdId,
+            currentRange.startAt,
+            currentRange.endExclusiveAt,
+            payerId,
+        )
+        val previousCategories = spendingStatisticsRepository.byCategory(
+            currentUser.householdId,
+            previousRange.startAt,
+            previousRange.endExclusiveAt,
+            payerId,
+        )
+        val currentTags = spendingStatisticsRepository.byTag(
+            currentUser.householdId,
+            currentRange.startAt,
+            currentRange.endExclusiveAt,
+            payerId,
+        )
+        val previousTags = spendingStatisticsRepository.byTag(
+            currentUser.householdId,
+            previousRange.startAt,
+            previousRange.endExclusiveAt,
+            payerId,
+        )
 
         return SpendingStatistics(
             period = period,
@@ -95,15 +133,18 @@ class SpendingStatisticsService(
                     currentRange.endExclusiveAt,
                     payerId,
                 ).map { item -> item.copy(label = paymentMethodLabel(item.key)) },
-            byCategory = spendingStatisticsRepository
-                .byCategory(
-                    currentUser.householdId,
-                    currentRange.startAt,
-                    currentRange.endExclusiveAt,
-                    payerId,
-                ).map { item ->
+            byCategory =
+                currentCategories.map { item ->
                     item.copy(label = TransactionCategory.valueOf(item.key).label)
                 },
+            categoryComparisons = compareBreakdowns(
+                currentCategories,
+                previousCategories,
+            ) { key -> TransactionCategory.valueOf(key).label },
+            tagComparisons = compareBreakdowns(
+                currentTags,
+                previousTags,
+            ) { key -> tagLabel(TransactionTag.valueOf(key)) },
         )
     }
 
@@ -168,6 +209,44 @@ class SpendingStatisticsService(
             "CASH" -> "현금"
             else -> "결제수단 미지정"
         }
+
+    private fun tagLabel(tag: TransactionTag): String =
+        when (tag) {
+            TransactionTag.SUBSCRIPTION -> "구독"
+            TransactionTag.UTILITY -> "공과금"
+            TransactionTag.RECURRING_PAYMENT -> "정기결제"
+        }
+
+    private fun compareBreakdowns(
+        current: List<SpendingBreakdown>,
+        previous: List<SpendingBreakdown>,
+        label: (String) -> String,
+    ): List<SpendingComparisonBreakdown> {
+        val currentByKey = current.associateBy(SpendingBreakdown::key)
+        val previousByKey = previous.associateBy(SpendingBreakdown::key)
+
+        return (currentByKey.keys + previousByKey.keys)
+            .map { key ->
+                val currentItem = currentByKey[key]
+                val previousItem = previousByKey[key]
+                val currentAmount = currentItem?.amount ?: 0
+                val previousAmount = previousItem?.amount ?: 0
+                SpendingComparisonBreakdown(
+                    key = key,
+                    label = label(key),
+                    currentAmount = currentAmount,
+                    currentTransactionCount = currentItem?.transactionCount ?: 0,
+                    previousAmount = previousAmount,
+                    previousTransactionCount = previousItem?.transactionCount ?: 0,
+                    amountChange = currentAmount - previousAmount,
+                    changeRatePercent = changeRate(currentAmount, previousAmount),
+                )
+            }.sortedWith(
+                compareByDescending<SpendingComparisonBreakdown> { it.currentAmount }
+                    .thenByDescending { it.previousAmount }
+                    .thenBy { it.label },
+            )
+    }
 
     private fun SpendingAggregate.toSummary(): SpendingPeriodSummary =
         SpendingPeriodSummary(totalAmount, transactionCount)
