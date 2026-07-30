@@ -67,6 +67,20 @@ AI 자연어 거래 입력은 다음 경로를 지난다.
 | 4 | `ai/OpenAiTransactionDraftGenerator.kt` | 프롬프트와 응답 스키마를 만들고 Responses API를 호출한다 |
 | 5 | `ai/AiTransactionDraftService.kt` | 모델 출력을 서버 규칙으로 검증하고 household 구성원 결제자로 변환한다 |
 
+기간별 지출 통계와 반복 지출 설명은 다음 경로를 지난다.
+
+| 순서 | 파일 | 하는 일 |
+| --- | --- | --- |
+| 1 | `statistics/SpendingStatisticsController.kt` | 기간, 기준 날짜와 결제자 필터를 받는다 |
+| 2 | `statistics/SpendingStatisticsService.kt` | 서울 시간 범위와 이전 비교 기간을 정하고 집계를 조합한다 |
+| 3 | `statistics/SpendingStatisticsRepository.kt` | household와 결제자 범위 안에서 합계, 카테고리와 태그를 집계한다 |
+| 4 | `statistics/RecurringSpendingChangeExplainer.kt` | 확정 태그의 신규·증가·감소·종료를 결정적인 문장으로 만든다 |
+
+반복 지출 설명은 외부 AI를 호출하지 않는다. 사용자가 확정한 `구독`, `공과금`,
+`정기결제` 태그만 비교하고, 반복성이 보장되지 않는 `생활` 카테고리나 가맹점 패턴은
+자동으로 반복 지출이라 판단하지 않는다. 태그는 서로 겹칠 수 있으므로 설명별 금액을
+더해 반복 지출 총액으로 사용하지 않는다.
+
 OpenAI는 데이터 공유 설정과 관계없이 외부 보안 경계로 취급한다. 사용자 메시지에는
 카드번호나 계좌번호 같은 민감정보가 들어올 수 있으므로 외부 요청 직전에 서버가 이를
 검사해야 한다. 금지 데이터가 발견되면 원문을 보내지 않고 사용자가 제거한 뒤 다시

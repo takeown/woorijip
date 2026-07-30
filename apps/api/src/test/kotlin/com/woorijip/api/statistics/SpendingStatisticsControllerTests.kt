@@ -14,6 +14,8 @@ import com.woorijip.api.transaction.PaymentMethod
 import com.woorijip.api.transaction.Transaction
 import com.woorijip.api.transaction.TransactionCategory
 import com.woorijip.api.transaction.TransactionRepository
+import com.woorijip.api.transaction.TransactionTag
+import com.woorijip.api.transaction.TransactionTagRepository
 import org.hamcrest.Matchers.hasSize
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -43,6 +45,7 @@ class SpendingStatisticsControllerTests(
     @Autowired private val householdRepository: HouseholdRepository,
     @Autowired private val householdMembershipRepository: HouseholdMembershipRepository,
     @Autowired private val transactionRepository: TransactionRepository,
+    @Autowired private val transactionTagRepository: TransactionTagRepository,
 ) {
     @Test
     fun `summarizes a month and compares it with the previous month`() {
@@ -128,11 +131,114 @@ class SpendingStatisticsControllerTests(
     }
 
     @Test
+    fun `compares standard categories and overlapping tags with the previous period`() {
+        val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
+        saveTransaction(
+            currentUser.householdId,
+            currentUser.id,
+            10_000,
+            "식비",
+            "2026-06-10T12:00:00+09:00",
+            tags = setOf(TransactionTag.SUBSCRIPTION, TransactionTag.RECURRING_PAYMENT),
+        )
+        saveTransaction(
+            currentUser.householdId,
+            currentUser.id,
+            5_000,
+            "주거",
+            "2026-06-11T12:00:00+09:00",
+            tags = setOf(TransactionTag.UTILITY),
+        )
+        saveTransaction(
+            currentUser.householdId,
+            currentUser.id,
+            15_000,
+            "식비",
+            "2026-07-10T12:00:00+09:00",
+            tags = setOf(TransactionTag.SUBSCRIPTION, TransactionTag.RECURRING_PAYMENT),
+        )
+        saveTransaction(
+            currentUser.householdId,
+            currentUser.id,
+            8_000,
+            "생활",
+            "2026-07-11T12:00:00+09:00",
+            tags = setOf(TransactionTag.UTILITY),
+        )
+
+        val otherHouseholdId = createHousehold("다른 집")
+        val otherUserId = createMember(otherHouseholdId, "다른 사용자")
+        saveTransaction(
+            otherHouseholdId,
+            otherUserId,
+            999_000,
+            "식비",
+            "2026-07-10T12:00:00+09:00",
+            tags = setOf(TransactionTag.SUBSCRIPTION),
+        )
+
+        mockMvc
+            .get("/statistics/spending") {
+                param("period", "month")
+                param("date", "2026-07-26")
+                with(allowedOidcLogin())
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.categoryComparisons", hasSize<Any>(3))
+                jsonPath("$.categoryComparisons[0].key") { value("FOOD") }
+                jsonPath("$.categoryComparisons[0].label") { value("식비") }
+                jsonPath("$.categoryComparisons[0].currentAmount") { value(15_000) }
+                jsonPath("$.categoryComparisons[0].previousAmount") { value(10_000) }
+                jsonPath("$.categoryComparisons[0].amountChange") { value(5_000) }
+                jsonPath("$.categoryComparisons[0].changeRatePercent") { value(50.0) }
+                jsonPath("$.categoryComparisons[1].key") { value("LIVING") }
+                jsonPath("$.categoryComparisons[1].previousAmount") { value(0) }
+                jsonPath("$.categoryComparisons[1].changeRatePercent") { doesNotExist() }
+                jsonPath("$.categoryComparisons[2].key") { value("HOUSING") }
+                jsonPath("$.categoryComparisons[2].currentAmount") { value(0) }
+                jsonPath("$.categoryComparisons[2].amountChange") { value(-5_000) }
+                jsonPath("$.categoryComparisons[2].changeRatePercent") { value(-100.0) }
+                jsonPath("$.tagComparisons", hasSize<Any>(3))
+                jsonPath("$.tagComparisons[0].key") { value("SUBSCRIPTION") }
+                jsonPath("$.tagComparisons[0].label") { value("구독") }
+                jsonPath("$.tagComparisons[0].currentAmount") { value(15_000) }
+                jsonPath("$.tagComparisons[0].previousAmount") { value(10_000) }
+                jsonPath("$.tagComparisons[1].key") { value("RECURRING_PAYMENT") }
+                jsonPath("$.tagComparisons[1].currentAmount") { value(15_000) }
+                jsonPath("$.tagComparisons[2].key") { value("UTILITY") }
+                jsonPath("$.tagComparisons[2].currentAmount") { value(8_000) }
+                jsonPath("$.tagComparisons[2].previousAmount") { value(5_000) }
+                jsonPath("$.recurringSpendingChanges", hasSize<Any>(3))
+                jsonPath("$.recurringSpendingChanges[0].tag") { value("SUBSCRIPTION") }
+                jsonPath("$.recurringSpendingChanges[0].direction") { value("INCREASED") }
+                jsonPath("$.recurringSpendingChanges[0].message") {
+                    value("선택한 기간 구독 지출이 이전 기간보다 5,000원 증가했어요.")
+                }
+                jsonPath("$.recurringSpendingChanges[1].tag") { value("RECURRING_PAYMENT") }
+                jsonPath("$.recurringSpendingChanges[2].tag") { value("UTILITY") }
+            }
+    }
+
+    @Test
     fun `filters current and previous statistics by the selected household payer`() {
         val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
         val partnerId = createMember(currentUser.householdId, "배우자")
-        saveTransaction(currentUser.householdId, currentUser.id, 10_000, "식비", "2026-06-15T12:00:00+09:00")
-        saveTransaction(currentUser.householdId, currentUser.id, 12_000, "식비", "2026-07-10T12:00:00+09:00")
+        saveTransaction(
+            currentUser.householdId,
+            currentUser.id,
+            10_000,
+            "식비",
+            "2026-06-15T12:00:00+09:00",
+            tags = setOf(TransactionTag.SUBSCRIPTION),
+        )
+        saveTransaction(
+            currentUser.householdId,
+            currentUser.id,
+            12_000,
+            "식비",
+            "2026-07-10T12:00:00+09:00",
+            tags = setOf(TransactionTag.SUBSCRIPTION),
+        )
         saveTransaction(
             currentUser.householdId,
             partnerId,
@@ -140,6 +246,7 @@ class SpendingStatisticsControllerTests(
             "생활",
             "2026-07-15T12:00:00+09:00",
             PaymentMethod.CASH,
+            tags = setOf(TransactionTag.UTILITY),
         )
 
         mockMvc
@@ -160,6 +267,12 @@ class SpendingStatisticsControllerTests(
                 jsonPath("$.byPaymentMethod", hasSize<Any>(1))
                 jsonPath("$.byPaymentMethod[0].label") { value("카드") }
                 jsonPath("$.byCategory[0].label") { value("식비") }
+                jsonPath("$.categoryComparisons", hasSize<Any>(1))
+                jsonPath("$.categoryComparisons[0].key") { value("FOOD") }
+                jsonPath("$.tagComparisons", hasSize<Any>(1))
+                jsonPath("$.tagComparisons[0].key") { value("SUBSCRIPTION") }
+                jsonPath("$.recurringSpendingChanges", hasSize<Any>(1))
+                jsonPath("$.recurringSpendingChanges[0].tag") { value("SUBSCRIPTION") }
             }
 
         mockMvc
@@ -177,6 +290,12 @@ class SpendingStatisticsControllerTests(
                 jsonPath("$.byPayer[0].label") { value("배우자") }
                 jsonPath("$.byPaymentMethod[0].label") { value("현금") }
                 jsonPath("$.byCategory[0].label") { value("생활") }
+                jsonPath("$.categoryComparisons", hasSize<Any>(1))
+                jsonPath("$.categoryComparisons[0].key") { value("LIVING") }
+                jsonPath("$.tagComparisons", hasSize<Any>(1))
+                jsonPath("$.tagComparisons[0].key") { value("UTILITY") }
+                jsonPath("$.recurringSpendingChanges", hasSize<Any>(1))
+                jsonPath("$.recurringSpendingChanges[0].tag") { value("UTILITY") }
             }
     }
 
@@ -196,6 +315,7 @@ class SpendingStatisticsControllerTests(
                 jsonPath("$.previous.totalAmount") { value(0) }
                 jsonPath("$.changeRatePercent") { doesNotExist() }
                 jsonPath("$.byPayer", hasSize<Any>(0))
+                jsonPath("$.recurringSpendingChanges", hasSize<Any>(0))
             }
 
         mockMvc
@@ -228,21 +348,25 @@ class SpendingStatisticsControllerTests(
         category: String,
         occurredAt: String,
         paymentMethod: PaymentMethod = PaymentMethod.CARD,
+        tags: Set<TransactionTag> = emptySet(),
     ) {
-        transactionRepository.save(
-            Transaction(
-                householdId = householdId,
-                payerId = payerId,
-                merchant = "테스트 가맹점",
-                description = null,
-                amount = amount,
-                category = TransactionCategory.entries.single { it.label == category },
-                paymentMethod = paymentMethod,
-                cardIssuer = if (paymentMethod == PaymentMethod.CARD) CardIssuer.SHINHAN else null,
-                occurredAt = OffsetDateTime.parse(occurredAt),
-                createdAt = now,
-            ),
+        val transactionId = assertNotNull(
+            transactionRepository.save(
+                Transaction(
+                    householdId = householdId,
+                    payerId = payerId,
+                    merchant = "테스트 가맹점",
+                    description = null,
+                    amount = amount,
+                    category = TransactionCategory.entries.single { it.label == category },
+                    paymentMethod = paymentMethod,
+                    cardIssuer = if (paymentMethod == PaymentMethod.CARD) CardIssuer.SHINHAN else null,
+                    occurredAt = OffsetDateTime.parse(occurredAt),
+                    createdAt = now,
+                ),
+            ).id,
         )
+        transactionTagRepository.replaceAll(transactionId, tags)
     }
 
     private fun createHousehold(name: String): Long =

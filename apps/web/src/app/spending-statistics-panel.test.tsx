@@ -18,6 +18,41 @@ const monthlyStatistics = {
     { key: "CARD", label: "카드", amount: 125_000, transactionCount: 4 },
   ],
   byCategory: [{ key: "식비", label: "식비", amount: 125_000, transactionCount: 4 }],
+  categoryComparisons: [
+    {
+      key: "FOOD",
+      label: "식비",
+      currentAmount: 125_000,
+      currentTransactionCount: 4,
+      previousAmount: 100_000,
+      previousTransactionCount: 3,
+      amountChange: 25_000,
+      changeRatePercent: 25.0,
+    },
+  ],
+  tagComparisons: [
+    {
+      key: "SUBSCRIPTION",
+      label: "구독",
+      currentAmount: 20_000,
+      currentTransactionCount: 1,
+      previousAmount: 15_000,
+      previousTransactionCount: 1,
+      amountChange: 5_000,
+      changeRatePercent: 33.3,
+    },
+  ],
+  recurringSpendingChanges: [
+    {
+      tag: "SUBSCRIPTION",
+      label: "구독",
+      direction: "INCREASED",
+      currentAmount: 20_000,
+      previousAmount: 15_000,
+      amountChange: 5_000,
+      message: "선택한 기간 구독 지출이 이전 기간보다 5,000원 증가했어요.",
+    },
+  ],
 };
 
 afterEach(() => {
@@ -50,7 +85,16 @@ describe("SpendingStatisticsPanel", () => {
     expect(totalCard).not.toBeNull();
     expect(within(totalCard as HTMLElement).getByText("125,000원")).toBeDefined();
     expect(screen.getByText("25,000원 증가 (25%)")).toBeDefined();
-    expect(screen.getByRole("heading", { name: "카테고리" })).toBeDefined();
+    expect(screen.getByRole("heading", { name: "카테고리 비교" })).toBeDefined();
+    expect(screen.getByText("이전 100,000원 · 25,000원 증가 (25%)")).toBeDefined();
+    expect(screen.getByRole("heading", { name: "태그 비교" })).toBeDefined();
+    expect(
+      screen.getByText("태그는 서로 겹칠 수 있어 합계가 총지출과 다를 수 있습니다."),
+    ).toBeDefined();
+    expect(screen.getByRole("heading", { name: "반복 지출 변화" })).toBeDefined();
+    expect(
+      screen.getByText("선택한 기간 구독 지출이 이전 기간보다 5,000원 증가했어요."),
+    ).toBeDefined();
 
     await user.click(screen.getByRole("button", { name: "일간" }));
 
@@ -72,6 +116,9 @@ describe("SpendingStatisticsPanel", () => {
           byPayer: [],
           byPaymentMethod: [],
           byCategory: [],
+          categoryComparisons: [],
+          tagComparisons: [],
+          recurringSpendingChanges: [],
         }),
       ),
     );
@@ -82,6 +129,63 @@ describe("SpendingStatisticsPanel", () => {
       await screen.findByText("이 기간에는 기록된 지출이 없습니다."),
     ).toBeDefined();
     expect(screen.getByText("변화 없음")).toBeDefined();
+    expect(screen.getByText("이전 기간과 달라진 반복 지출이 없습니다.")).toBeDefined();
+  });
+
+  test("loads with an older api response that has no recurring changes field", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>().mockResolvedValueOnce(
+        jsonResponse({
+          ...monthlyStatistics,
+          recurringSpendingChanges: undefined,
+        }),
+      ),
+    );
+
+    render(<SpendingStatisticsPanel refreshKey={0} />);
+
+    expect(await screen.findByRole("heading", { name: "반복 지출 변화" })).toBeDefined();
+    expect(screen.getByText("이전 기간과 달라진 반복 지출이 없습니다.")).toBeDefined();
+  });
+
+  test("shows classification decreases when only the previous period has spending", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>().mockResolvedValueOnce(
+        jsonResponse({
+          ...monthlyStatistics,
+          current: { totalAmount: 0, transactionCount: 0 },
+          previous: { totalAmount: 50_000, transactionCount: 1 },
+          amountChange: -50_000,
+          changeRatePercent: -100,
+          byPayer: [],
+          byPaymentMethod: [],
+          byCategory: [],
+          categoryComparisons: [
+            {
+              key: "HOUSING",
+              label: "주거",
+              currentAmount: 0,
+              currentTransactionCount: 0,
+              previousAmount: 50_000,
+              previousTransactionCount: 1,
+              amountChange: -50_000,
+              changeRatePercent: -100,
+            },
+          ],
+          tagComparisons: [],
+          recurringSpendingChanges: [],
+        }),
+      ),
+    );
+
+    render(<SpendingStatisticsPanel refreshKey={0} />);
+
+    expect(await screen.findByText("이 기간에는 기록된 지출이 없습니다.")).toBeDefined();
+    expect(screen.getByRole("heading", { name: "카테고리 비교" })).toBeDefined();
+    expect(screen.getByText("이전 50,000원 · 50,000원 감소 (100%)")).toBeDefined();
+    expect(screen.getByText("비교할 태그 지출이 없습니다.")).toBeDefined();
   });
 
   test("reloads every summary for the selected payer", async () => {

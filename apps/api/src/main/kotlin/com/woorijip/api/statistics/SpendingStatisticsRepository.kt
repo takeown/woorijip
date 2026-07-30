@@ -120,6 +120,31 @@ class SpendingStatisticsRepository(
             ::breakdown,
         )
 
+    fun byTag(
+        householdId: Long,
+        start: OffsetDateTime,
+        endExclusive: OffsetDateTime,
+        payerId: Long?,
+    ): List<SpendingBreakdown> =
+        jdbcTemplate.query(
+            """
+            SELECT transaction_tags.tag AS item_key,
+                   transaction_tags.tag AS item_label,
+                   SUM(transactions.amount) AS total_amount,
+                   COUNT(*) AS transaction_count
+            FROM transaction_tags
+            JOIN transactions ON transactions.id = transaction_tags.transaction_id
+            WHERE transactions.household_id = :householdId
+              AND transactions.occurred_at >= :start
+              AND transactions.occurred_at < :endExclusive
+              ${payerCondition("transactions", payerId)}
+            GROUP BY transaction_tags.tag
+            ORDER BY total_amount DESC, item_label
+            """.trimIndent(),
+            parameters(householdId, start, endExclusive, payerId),
+            ::breakdown,
+        )
+
     private fun parameters(
         householdId: Long,
         start: OffsetDateTime,

@@ -17,6 +17,27 @@ type BreakdownItem = {
   transactionCount: number;
 };
 
+type ComparisonBreakdownItem = {
+  key: string;
+  label: string;
+  currentAmount: number;
+  currentTransactionCount: number;
+  previousAmount: number;
+  previousTransactionCount: number;
+  amountChange: number;
+  changeRatePercent: number | null;
+};
+
+type RecurringSpendingChange = {
+  tag: "SUBSCRIPTION" | "UTILITY" | "RECURRING_PAYMENT";
+  label: string;
+  direction: "NEW" | "INCREASED" | "DECREASED" | "ENDED";
+  currentAmount: number;
+  previousAmount: number;
+  amountChange: number;
+  message: string;
+};
+
 type SpendingStatistics = {
   period: SpendingPeriod;
   payer: SpendingPayer;
@@ -30,6 +51,9 @@ type SpendingStatistics = {
   byPayer: BreakdownItem[];
   byPaymentMethod: BreakdownItem[];
   byCategory: BreakdownItem[];
+  categoryComparisons: ComparisonBreakdownItem[];
+  tagComparisons: ComparisonBreakdownItem[];
+  recurringSpendingChanges?: RecurringSpendingChange[];
 };
 
 type SpendingStatisticsPanelProps = {
@@ -235,7 +259,7 @@ export function SpendingStatisticsPanel({ refreshKey }: SpendingStatisticsPanelP
           ) : (
             <div
               className={`mt-6 grid gap-4 ${
-                statistics.payer === "ALL" ? "lg:grid-cols-3" : "lg:grid-cols-2"
+                statistics.payer === "ALL" ? "lg:grid-cols-2" : ""
               }`}
             >
               {statistics.payer === "ALL" ? (
@@ -250,16 +274,101 @@ export function SpendingStatisticsPanel({ refreshKey }: SpendingStatisticsPanelP
                 items={statistics.byPaymentMethod}
                 total={statistics.current.totalAmount}
               />
-              <Breakdown
-                title="카테고리"
-                items={statistics.byCategory}
-                total={statistics.current.totalAmount}
-              />
             </div>
           )}
+
+          <RecurringSpendingChanges changes={statistics.recurringSpendingChanges ?? []} />
+
+          {statistics.categoryComparisons.length > 0 ||
+          statistics.tagComparisons.length > 0 ? (
+            <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              <ComparisonBreakdown
+                items={statistics.categoryComparisons}
+                title="카테고리 비교"
+              />
+              <ComparisonBreakdown
+                description="태그는 서로 겹칠 수 있어 합계가 총지출과 다를 수 있습니다."
+                emptyMessage="비교할 태그 지출이 없습니다."
+                items={statistics.tagComparisons}
+                title="태그 비교"
+              />
+            </div>
+          ) : null}
         </>
       ) : null}
     </section>
+  );
+}
+
+function RecurringSpendingChanges({
+  changes,
+}: {
+  changes: RecurringSpendingChange[];
+}) {
+  return (
+    <div className="mt-4 rounded-2xl bg-emerald-50 p-5">
+      <h3 className="font-semibold text-emerald-950">반복 지출 변화</h3>
+      <p className="mt-1 text-xs text-emerald-800">
+        확정된 구독·공과금·정기결제 태그를 이전 기간과 비교했습니다.
+      </p>
+      {changes.length === 0 ? (
+        <p className="mt-4 text-sm text-emerald-900">
+          이전 기간과 달라진 반복 지출이 없습니다.
+        </p>
+      ) : (
+        <ul className="mt-4 space-y-2">
+          {changes.map((change) => (
+            <li
+              className="rounded-xl bg-white/80 px-4 py-3 text-sm text-stone-700"
+              key={change.tag}
+            >
+              {change.message}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function ComparisonBreakdown({
+  title,
+  items,
+  description,
+  emptyMessage = "비교할 지출이 없습니다.",
+}: {
+  title: string;
+  items: ComparisonBreakdownItem[];
+  description?: string;
+  emptyMessage?: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-stone-200 p-5">
+      <h3 className="font-semibold text-stone-900">{title}</h3>
+      {description ? <p className="mt-1 text-xs text-stone-500">{description}</p> : null}
+      {items.length === 0 ? (
+        <p className="mt-4 text-sm text-stone-500">{emptyMessage}</p>
+      ) : (
+        <ul className="mt-4 divide-y divide-stone-100">
+          {items.map((item) => (
+            <li className="py-3 first:pt-0 last:pb-0" key={item.key}>
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="font-medium text-stone-700">{item.label}</span>
+                <span className="shrink-0 font-semibold text-stone-900">
+                  {amountFormatter.format(item.currentAmount)}원
+                </span>
+              </div>
+              <div className="mt-1 flex flex-wrap justify-between gap-x-3 gap-y-1 text-xs">
+                <span className="text-stone-400">{item.currentTransactionCount}건</span>
+                <span className={item.amountChange > 0 ? "text-amber-700" : "text-stone-500"}>
+                  {breakdownComparisonLabel(item)}
+                </span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -330,6 +439,21 @@ function comparisonLabel(statistics: SpendingStatistics): string {
   const direction = statistics.amountChange > 0 ? "증가" : "감소";
   const rate = Math.abs(statistics.changeRatePercent ?? 0);
   return `${amountFormatter.format(Math.abs(statistics.amountChange))}원 ${direction} (${rate}%)`;
+}
+
+function breakdownComparisonLabel(item: ComparisonBreakdownItem): string {
+  if (item.previousAmount === 0) {
+    return item.currentAmount === 0 ? "변화 없음" : "이전 지출 없음";
+  }
+  if (item.amountChange === 0) {
+    return `이전 ${amountFormatter.format(item.previousAmount)}원 · 변화 없음`;
+  }
+
+  const direction = item.amountChange > 0 ? "증가" : "감소";
+  const rate = Math.abs(item.changeRatePercent ?? 0);
+  return `이전 ${amountFormatter.format(item.previousAmount)}원 · ${amountFormatter.format(
+    Math.abs(item.amountChange),
+  )}원 ${direction} (${rate}%)`;
 }
 
 function periodLabel(statistics: SpendingStatistics): string {
