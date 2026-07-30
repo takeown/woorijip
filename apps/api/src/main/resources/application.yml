@@ -31,8 +31,8 @@ app:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3100}
   openai:
     api-key: ${OPENAI_API_KEY:}
-#    model: ${OPENAI_MODEL:gpt-5.6-luna}
-    model: ${OPENAI_MODEL:gpt-5.4}
+    model: ${OPENAI_MODEL:gpt-5.6-luna}
+    safety-identifier-secret: ${OPENAI_SAFETY_IDENTIFIER_SECRET:}
 
 management:
   endpoints:

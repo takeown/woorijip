@@ -94,11 +94,37 @@ describe("AiTransactionDraftForm", () => {
     expect(screen.queryByLabelText("가맹점")).toBeNull();
     expect(naturalLanguageInput.value).toBe("");
   });
+
+  test("shows the sensitive input message returned by the API", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ token: "csrf-token", headerName: "X-XSRF-TOKEN" }))
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            code: "SENSITIVE_AI_INPUT",
+            detail: "카드번호를 제거한 뒤 다시 입력해 주세요.",
+          },
+          400,
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AiTransactionDraftForm householdMembers={members} onCreated={vi.fn()} />);
+
+    await user.type(screen.getByLabelText("자연어로 입력"), "카드번호 포함 거래");
+    await user.click(screen.getByRole("button", { name: "AI로 거래 초안 만들기" }));
+
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "카드번호를 제거한 뒤 다시 입력해 주세요.",
+    );
+  });
 });
 
-function jsonResponse(body: unknown): Response {
+function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     headers: { "Content-Type": "application/json" },
-    status: 200,
+    status,
   });
 }

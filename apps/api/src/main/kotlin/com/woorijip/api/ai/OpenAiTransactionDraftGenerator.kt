@@ -14,6 +14,7 @@ import tools.jackson.databind.ObjectMapper
 @Component
 class OpenAiTransactionDraftGenerator(
     private val properties: OpenAiProperties,
+    private val safetyIdentifier: OpenAiSafetyIdentifier,
     restClientBuilder: RestClient.Builder,
     private val objectMapper: ObjectMapper,
 ) : TransactionDraftGenerator {
@@ -71,7 +72,7 @@ class OpenAiTransactionDraftGenerator(
             "input" to message,
             "store" to false,
             "max_output_tokens" to 400,
-            "safety_identifier" to "household-user-${context.currentUserId}",
+            "safety_identifier" to safetyIdentifier.forUser(context.currentUserId),
             "reasoning" to mapOf("effort" to "low"),
             "text" to mapOf(
                 "format" to mapOf(

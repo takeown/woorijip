@@ -33,11 +33,13 @@ data class AiTransactionDraft(
 class AiTransactionDraftService(
     private val transactionDraftGenerator: TransactionDraftGenerator,
     private val householdMembershipRepository: HouseholdMembershipRepository,
+    private val sensitiveInputGuard: AiSensitiveInputGuard,
 ) {
     fun create(
         currentUser: CurrentUser,
         messages: List<String>,
     ): AiTransactionDraft {
+        sensitiveInputGuard.requireSafe(messages)
         val members = householdMembershipRepository.findMembersByHouseholdId(currentUser.householdId)
         val generated = try {
             transactionDraftGenerator.generate(
