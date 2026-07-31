@@ -5,6 +5,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 @ConfigurationProperties("app.openai")
 data class OpenAiProperties(
     val apiKey: String = "",
-    val model: String = "gpt-5.4-mini",
+    val model: String = "gpt-5.6-luna",
     val safetyIdentifierSecret: String = "",
 )
