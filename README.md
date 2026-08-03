@@ -39,3 +39,12 @@ pnpm build:web
 pnpm test:api
 pnpm build:api
 ```
+
+## 문서
+
+- 현재 작업 범위와 백로그: `docs/PLAN.md`
+- 완료한 마일스톤: `docs/MILESTONES_ARCHIVE.md`
+- 제품·기술 결정: `docs/DECISIONS.md`
+- API 구조와 변경 지점: `docs/ARCHITECTURE.md`
+- 보안 기준: `docs/SECURITY.md`
+- 운영과 배포: `docs/DEPLOYMENT.md`
