@@ -113,7 +113,7 @@ transaction 안에서 현재 household의 재확정 대상 `MIGRATION` 거래와
 거래 목록은 배열을 바로 반환하지 않고 `TransactionPageResponse`의 `items`와
 `nextCursor`를 반환한다. 첫 요청은 최근 20건을 조회하고, 다음 요청은 `nextCursor`를
 그대로 전달해 이전 기록을 이어서 조회한다. 커서는 정렬 기준인 발생 시각과 ID를
-클라이언트가 수정하지 않도록 불투명한 문자열로 표현한다.
+Base64 URL 형식의 불투명한 문자열로 표현하지만, 무결성을 보장하는 서명 값은 아니다.
 
 ### Service — 규칙 담당
 

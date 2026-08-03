@@ -35,6 +35,7 @@
 
 ```bash
 pnpm lint:web
+pnpm test:web
 pnpm build:web
 ```
 

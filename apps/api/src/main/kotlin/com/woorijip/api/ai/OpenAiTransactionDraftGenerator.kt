@@ -38,11 +38,10 @@ class OpenAiTransactionDraftGenerator(
                 .body(OpenAiResponse::class.java)
         } catch (exception: RestClientResponseException) {
             throw DraftGenerationException(
-                "OpenAI가 ${exception.statusCode.value()} 응답을 반환했습니다. ${exception.errorSummary()}",
-                exception,
+                "OpenAI가 ${exception.statusCode.value()} 응답을 반환했습니다.",
             )
         } catch (exception: RestClientException) {
-            throw DraftGenerationException("OpenAI 응답을 받지 못했습니다. ${exception.javaClass.simpleName}", exception)
+            throw DraftGenerationException("OpenAI 응답을 받지 못했습니다. ${exception.javaClass.simpleName}")
         } ?: throw DraftGenerationException("OpenAI 응답이 비어 있습니다.")
 
         val outputText = response.output
@@ -178,17 +177,6 @@ class OpenAiTransactionDraftGenerator(
         )
     }
 }
-
-/**
- * OpenAI 오류 응답에서 진단에 필요한 부분만 짧게 뽑는다.
- * 우리가 보낸 요청 내용은 포함하지 않는다.
- */
-private fun RestClientResponseException.errorSummary(): String =
-    responseBodyAsString
-        .replace(Regex("""\s+"""), " ")
-        .trim()
-        .take(300)
-        .ifEmpty { "(응답 본문 없음)" }
 
 class DraftGenerationException(
     message: String,

@@ -17,6 +17,15 @@ class AiSensitiveInputGuardTests {
         assertTrue(guard.containsSensitiveData("메일은 user@example.com"))
         assertTrue(guard.containsSensitiveData("전화번호 010-1234-5678"))
         assertTrue(guard.containsSensitiveData("Bearer abcdefghijklmnopqrstuvwxyz"))
+        assertTrue(guard.containsSensitiveData("access_token: ya29.example-token-value"))
+        assertTrue(guard.containsSensitiveData("refresh_token=refresh-token-value"))
+        assertTrue(guard.containsSensitiveData("password: secret-password"))
+        assertTrue(guard.containsSensitiveData("인증번호 123456"))
+        assertTrue(
+            guard.containsSensitiveData(
+                "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature-value",
+            ),
+        )
     }
 
     @Test
