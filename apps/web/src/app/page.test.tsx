@@ -32,6 +32,7 @@ describe("TransactionsPage", () => {
           { userId: 2, displayName: "배우자" },
         ]);
       }
+      if (url.endsWith("/stored-value-accounts")) return jsonResponse([]);
       if (url.includes("cursor=next-page")) {
         return jsonResponse({
           items: [transaction(2, "이전 거래")],
@@ -90,6 +91,7 @@ describe("TransactionsPage", () => {
       if (url.endsWith("/households/current/members")) {
         return jsonResponse([{ userId: 1, displayName: "나" }]);
       }
+      if (url.endsWith("/stored-value-accounts")) return jsonResponse([]);
       if (url.includes("cursor=next-page")) {
         return new Response(null, { status: 500 });
       }
@@ -128,6 +130,7 @@ function transaction(id: number, merchant: string) {
     tags: [],
     paymentMethod: "CARD",
     cardIssuer: "SHINHAN",
+    storedValueAccountId: null,
     occurredAt: "2026-07-30T12:00:00+09:00",
     createdAt: "2026-07-30T12:00:00+09:00",
     updatedAt: "2026-07-30T12:00:00+09:00",

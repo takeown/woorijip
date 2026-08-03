@@ -15,12 +15,28 @@ const readyDraft = {
   payerDisplayName: "나",
   paymentMethod: "CARD",
   cardIssuer: "SHINHAN",
+  storedValueAccountType: null,
   message: "아래 거래 내용을 확인해 주세요.",
 };
 
 const members = [
   { userId: 1, displayName: "나" },
   { userId: 2, displayName: "배우자" },
+];
+
+const storedValueAccounts = [
+  {
+    id: 11,
+    type: "ONNURI_GIFT_CERTIFICATE" as const,
+    name: "온누리상품권",
+    balance: 100_000,
+  },
+  {
+    id: 12,
+    type: "PREGNANCY_VOUCHER" as const,
+    name: "임산부 바우처",
+    balance: 500_000,
+  },
 ];
 
 afterEach(() => {
@@ -53,7 +69,7 @@ describe("AiTransactionDraftForm", () => {
     await user.clear(screen.getByLabelText("금액"));
     await user.type(screen.getByLabelText("금액"), "12000");
     await user.selectOptions(screen.getByLabelText("결제자"), "2");
-    await user.selectOptions(screen.getByLabelText("결제수단"), "CASH");
+    await user.selectOptions(screen.getByLabelText("결제 경로"), "CASH");
     await user.click(screen.getByRole("button", { name: "확인하고 저장" }));
 
     expect(fetchMock).toHaveBeenCalledTimes(4);
@@ -72,6 +88,48 @@ describe("AiTransactionDraftForm", () => {
     });
     expect(onCreated).toHaveBeenCalledOnce();
     expect(screen.queryByLabelText("가맹점")).toBeNull();
+  });
+
+  test("selects the Onnuri balance for a generated QR draft", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ token: "csrf-token", headerName: "X-XSRF-TOKEN" }))
+      .mockResolvedValueOnce(jsonResponse({
+        ...readyDraft,
+        merchant: "GS25",
+        description: "기저귀",
+        amount: 24_000,
+        category: "CHILDCARE",
+        paymentMethod: "QR",
+        cardIssuer: null,
+        storedValueAccountType: "ONNURI_GIFT_CERTIFICATE",
+      }))
+      .mockResolvedValueOnce(jsonResponse({ token: "csrf-token", headerName: "X-XSRF-TOKEN" }))
+      .mockResolvedValueOnce(new Response(null, { status: 201 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <AiTransactionDraftForm
+        householdMembers={members}
+        onCreated={vi.fn()}
+        storedValueAccounts={storedValueAccounts}
+      />,
+    );
+
+    await user.type(screen.getByLabelText("자연어로 입력"), "GS25에서 온누리상품권 QR로 기저귀 24000원 결제했어");
+    await user.click(screen.getByRole("button", { name: "AI로 거래 초안 만들기" }));
+
+    expect((await screen.findByLabelText("결제 경로") as HTMLSelectElement).value).toBe("QR");
+    expect((screen.getByLabelText(/사용 잔액/) as HTMLSelectElement).value).toBe("11");
+    await user.click(screen.getByRole("button", { name: "확인하고 저장" }));
+
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[3][1]?.body));
+    expect(requestBody).toMatchObject({
+      paymentMethod: "QR",
+      cardIssuer: null,
+      storedValueAccountId: 11,
+    });
   });
 
   test("cancels a generated draft without saving it", async () => {

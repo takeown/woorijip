@@ -7,6 +7,7 @@ import type {
   TransactionCategory,
   TransactionTag,
 } from "./transaction-classification";
+import type { StoredValueAccount } from "./stored-value-account-panel";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
@@ -19,6 +20,7 @@ type TransactionFormProps = {
   onCreated: () => Promise<void> | void;
   currentUserId: number;
   householdMembers: HouseholdMember[];
+  storedValueAccounts?: StoredValueAccount[];
 };
 
 type CsrfToken = {
@@ -37,10 +39,12 @@ export function TransactionForm({
   onCreated,
   currentUserId,
   householdMembers,
+  storedValueAccounts = [],
 }: TransactionFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CARD");
+  const [storedValueAccountId, setStoredValueAccountId] = useState("");
   const [classificationKey, setClassificationKey] = useState(0);
   const [recommendedCategory, setRecommendedCategory] =
     useState<TransactionCategory>();
@@ -157,6 +161,7 @@ export function TransactionForm({
           saveMerchantRule: formData.get("saveMerchantRule") === "on",
           paymentMethod,
           cardIssuer: paymentMethod === "CARD" ? formData.get("cardIssuer") : null,
+          storedValueAccountId: storedValueAccountId ? Number(storedValueAccountId) : null,
           occurredAt: occurredAt
             ? new Date(occurredAt).toISOString()
             : new Date().toISOString(),
@@ -172,6 +177,7 @@ export function TransactionForm({
       setRecommendedTags([]);
       setAppliedRuleId(null);
       setRecommendationMessage(null);
+      setStoredValueAccountId("");
       setClassificationKey((current) => current + 1);
       await onCreated();
     } catch (caughtError) {
@@ -288,17 +294,22 @@ export function TransactionForm({
 
       <div>
         <label className="mb-2 block text-sm font-medium text-stone-700" htmlFor="paymentMethod">
-          결제수단
+          결제 경로
         </label>
         <select
           className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
           id="paymentMethod"
           name="paymentMethod"
-          onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}
+          onChange={(event) => {
+            const method = event.target.value as PaymentMethod;
+            setPaymentMethod(method);
+            if (method === "CASH") setStoredValueAccountId("");
+          }}
           value={paymentMethod}
         >
           <option value="CARD">카드</option>
           <option value="CASH">현금</option>
+          <option value="QR">QR</option>
         </select>
       </div>
 
@@ -323,6 +334,27 @@ export function TransactionForm({
           </select>
         </div>
       ) : null}
+
+      <div>
+        <label className="mb-2 block text-sm font-medium text-stone-700" htmlFor="storedValueAccountId">
+          지출 계정 <span className="font-normal text-stone-500">(선택)</span>
+        </label>
+        <select
+          className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+          disabled={paymentMethod === "CASH"}
+          id="storedValueAccountId"
+          onChange={(event) => setStoredValueAccountId(event.target.value)}
+          value={storedValueAccountId}
+        >
+          <option value="">일반 결제</option>
+          {storedValueAccounts.map((account) => (
+            <option key={account.id} value={account.id}>
+              {account.name} · 잔액 {account.balance.toLocaleString("ko-KR")}원
+            </option>
+          ))}
+        </select>
+        <p className="mt-2 text-xs text-stone-500">카드는 연결 카드, QR은 스캔 결제 경로를 뜻합니다.</p>
+      </div>
 
       <div>
         <label className="mb-2 block text-sm font-medium text-stone-700" htmlFor="occurredAt">

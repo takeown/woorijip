@@ -1,6 +1,7 @@
 package com.woorijip.api.statement
 
 import com.woorijip.api.auth.CurrentUser
+import com.woorijip.api.storedvalue.StoredValueAccountType
 import com.woorijip.api.transaction.CardIssuer
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
@@ -89,6 +90,7 @@ class CardStatementImportRepository(
                 .addValue("installmentSequence", candidate.installmentSequence)
                 .addValue("remainingInstallments", candidate.remainingInstallments)
                 .addValue("remainingPrincipal", candidate.remainingPrincipal)
+                .addValue("storedValueAccountType", candidate.storedValueAccountType?.name)
         }.toTypedArray()
 
         if (parameters.isNotEmpty()) {
@@ -107,7 +109,8 @@ class CardStatementImportRepository(
                     installment_months,
                     installment_sequence,
                     remaining_installments,
-                    remaining_principal
+                    remaining_principal,
+                    stored_value_account_type
                 )
                 VALUES (
                     :importId,
@@ -122,7 +125,8 @@ class CardStatementImportRepository(
                     :installmentMonths,
                     :installmentSequence,
                     :remainingInstallments,
-                    :remainingPrincipal
+                    :remainingPrincipal,
+                    :storedValueAccountType
                 )
                 ON CONFLICT (import_id, source_row) DO NOTHING
                 """.trimIndent(),
@@ -169,6 +173,7 @@ class CardStatementImportRepository(
                    installment_sequence,
                    remaining_installments,
                    remaining_principal,
+                   stored_value_account_type,
                    applied_transaction_id
             FROM card_statement_candidates
             WHERE import_id = :importId
@@ -235,6 +240,9 @@ class CardStatementImportRepository(
                 installmentSequence = resultSet.nullableInt("installment_sequence"),
                 remainingInstallments = resultSet.nullableInt("remaining_installments"),
                 remainingPrincipal = resultSet.nullableLong("remaining_principal"),
+                storedValueAccountType = resultSet.getString("stored_value_account_type")?.let(
+                    StoredValueAccountType::valueOf,
+                ),
             ),
             appliedTransactionId = resultSet.nullableLong("applied_transaction_id"),
         )

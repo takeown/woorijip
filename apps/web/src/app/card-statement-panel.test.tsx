@@ -16,7 +16,10 @@ const preview = {
   mismatchCount: 1,
   candidates: [
     candidate(10, "기존 일치점", "MATCHED", 2_300, [101]),
-    candidate(11, "누락 가맹점", "MISSING", 8_000),
+    {
+      ...candidate(11, "누락 가맹점", "MISSING", 8_000),
+      storedValueAccountType: "ONNURI_GIFT_CERTIFICATE",
+    },
     candidate(12, "중복 후보점", "DUPLICATE_SUSPECTED", 20_000, [102, 103]),
     candidate(13, "불일치 후보점", "MISMATCH", 102_000, [104]),
   ],
@@ -49,12 +52,13 @@ describe("CardStatementPanel", () => {
     const file = new File(["xlsx"], "kb-statement.xlsx", {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
-    await user.upload(screen.getByLabelText("KB국민카드 명세서"), file);
+    await user.upload(screen.getByLabelText("카드 명세서"), file);
     await user.click(screen.getByRole("button", { name: "업로드하고 대조" }));
 
     expect(await screen.findByRole("heading", { name: "대조 결과" })).toBeDefined();
     expect(screen.getByText("KB국민카드 · 2026년 7월 명세서")).toBeDefined();
     expect(screen.getByText("누락 가맹점")).toBeDefined();
+    expect(screen.getByText("온누리상품권 잔액 사용 · 반영 시 잔액에서 차감")).toBeDefined();
     expect(screen.getByText("중복 후보점")).toBeDefined();
     expect(screen.getAllByText("불일치 후보점")).toHaveLength(2);
     expect(screen.queryByText("기존 일치점")).toBeNull();
@@ -114,7 +118,7 @@ describe("CardStatementPanel", () => {
 
     render(<CardStatementPanel />);
     await user.upload(
-      screen.getByLabelText("KB국민카드 명세서"),
+      screen.getByLabelText("카드 명세서"),
       new File(["xlsx"], "kb-statement.xlsx"),
     );
     await user.click(screen.getByRole("button", { name: "업로드하고 대조" }));
@@ -164,7 +168,7 @@ describe("CardStatementPanel", () => {
     render(<CardStatementPanel />);
 
     await user.upload(
-      screen.getByLabelText("KB국민카드 명세서"),
+      screen.getByLabelText("카드 명세서"),
       new File(["invalid"], "invalid.xlsx"),
     );
     await user.click(screen.getByRole("button", { name: "업로드하고 대조" }));
@@ -195,6 +199,7 @@ function candidate(
     installmentSequence: null,
     remainingInstallments: null,
     remainingPrincipal: null,
+    storedValueAccountType: null,
     matchStatus,
     transactionIds,
     relatedTransactions: transactionIds.map((transactionId, index) => ({

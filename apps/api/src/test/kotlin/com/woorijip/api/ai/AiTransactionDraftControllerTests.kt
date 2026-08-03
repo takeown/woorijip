@@ -7,6 +7,7 @@ import com.woorijip.api.household.HouseholdMembership
 import com.woorijip.api.household.HouseholdMembershipRepository
 import com.woorijip.api.identity.AppUser
 import com.woorijip.api.identity.AppUserRepository
+import com.woorijip.api.storedvalue.StoredValueAccountType
 import com.woorijip.api.transaction.TransactionRepository
 import com.woorijip.api.transaction.CardIssuer
 import com.woorijip.api.transaction.PaymentMethod
@@ -69,6 +70,46 @@ class AiTransactionDraftControllerTests(
             }
 
         assertEquals(0, transactionRepository.count())
+    }
+
+    @Test
+    fun `creates an Onnuri QR draft without asking whether it is card or cash`() {
+        googleAccountService.provision(TestOidcUsers.allowed())
+
+        mockMvc
+            .post("/ai/transaction-drafts") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"messages":["GS25에서 온누리상품권 QR로 기저귀 24000원 결제했어"]}"""
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.status") { value("READY") }
+                jsonPath("$.paymentMethod") { value("QR") }
+                jsonPath("$.cardIssuer") { doesNotExist() }
+                jsonPath("$.storedValueAccountType") { value("ONNURI_GIFT_CERTIFICATE") }
+            }
+
+        assertEquals(0, transactionRepository.count())
+    }
+
+    @Test
+    fun `keeps the card issuer and Onnuri balance separate for a linked card draft`() {
+        googleAccountService.provision(TestOidcUsers.allowed())
+
+        mockMvc
+            .post("/ai/transaction-drafts") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"messages":["현대카드에 연결한 온누리상품권으로 24000원 결제했어"]}"""
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.status") { value("READY") }
+                jsonPath("$.paymentMethod") { value("CARD") }
+                jsonPath("$.cardIssuer") { value("HYUNDAI") }
+                jsonPath("$.storedValueAccountType") { value("ONNURI_GIFT_CERTIFICATE") }
+            }
     }
 
     @Test
@@ -262,6 +303,28 @@ class AiTransactionDraftTestConfiguration {
                     occurredAt = "2026-07-21T12:30:00+09:00",
                     payer = GeneratedPayer.PARTNER,
                     paymentMethod = PaymentMethod.CASH,
+                )
+                message.contains("온누리상품권 QR") -> GeneratedTransactionDraft(
+                    status = GeneratedDraftStatus.READY,
+                    merchant = "GS25",
+                    description = "기저귀",
+                    amount = 24_000,
+                    category = TransactionCategory.CHILDCARE,
+                    occurredAt = "2026-07-21T12:30:00+09:00",
+                    payer = GeneratedPayer.ME,
+                    paymentMethod = PaymentMethod.QR,
+                    storedValueAccountType = StoredValueAccountType.ONNURI_GIFT_CERTIFICATE,
+                )
+                message.contains("현대카드에 연결한 온누리상품권") -> GeneratedTransactionDraft(
+                    status = GeneratedDraftStatus.READY,
+                    merchant = "테스트 가맹점",
+                    amount = 24_000,
+                    category = TransactionCategory.LIVING,
+                    occurredAt = "2026-07-21T12:30:00+09:00",
+                    payer = GeneratedPayer.ME,
+                    paymentMethod = PaymentMethod.CARD,
+                    cardIssuer = CardIssuer.HYUNDAI,
+                    storedValueAccountType = StoredValueAccountType.ONNURI_GIFT_CERTIFICATE,
                 )
                 else -> GeneratedTransactionDraft(
                     status = GeneratedDraftStatus.READY,

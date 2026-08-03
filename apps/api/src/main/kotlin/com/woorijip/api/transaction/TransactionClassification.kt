@@ -7,6 +7,7 @@ enum class TransactionCategory(
     HOUSING("주거"),
     TRANSPORT("교통"),
     LIVING("생활"),
+    CHILDCARE("육아"),
     HEALTH("건강"),
     LEISURE("여가"),
     EDUCATION("교육"),

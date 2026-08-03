@@ -28,6 +28,7 @@ class CardStatementFingerprint {
                         candidate.installmentSequence,
                         candidate.remainingInstallments,
                         candidate.remainingPrincipal,
+                        candidate.storedValueAccountType,
                     ).joinToString(FIELD_SEPARATOR),
                 )
             }

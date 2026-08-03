@@ -45,6 +45,8 @@ data class CreateTransactionRequest(
     @field:NotNull
     val paymentMethod: PaymentMethod?,
     val cardIssuer: CardIssuer?,
+    @field:Positive
+    val storedValueAccountId: Long? = null,
     @field:NotNull
     val occurredAt: OffsetDateTime?,
 )
@@ -62,6 +64,7 @@ data class TransactionResponse(
     val classificationConfirmedAt: OffsetDateTime?,
     val paymentMethod: PaymentMethod,
     val cardIssuer: CardIssuer?,
+    val storedValueAccountId: Long?,
     val occurredAt: OffsetDateTime,
     val createdAt: OffsetDateTime,
     val updatedAt: OffsetDateTime,
@@ -93,6 +96,8 @@ data class UpdateTransactionRequest(
     @field:NotNull
     val paymentMethod: PaymentMethod?,
     val cardIssuer: CardIssuer?,
+    @field:Positive
+    val storedValueAccountId: Long? = null,
     @field:NotNull
     val occurredAt: OffsetDateTime?,
 )
@@ -125,6 +130,7 @@ class TransactionController(
                     classificationSource = request.classificationSource,
                     paymentMethod = requireNotNull(request.paymentMethod),
                     cardIssuer = request.cardIssuer,
+                    storedValueAccountId = request.storedValueAccountId,
                     occurredAt = requireNotNull(request.occurredAt),
                 ),
                 classificationRuleId = request.classificationRuleId,
@@ -180,6 +186,7 @@ class TransactionController(
                     classificationSource = ClassificationSource.USER,
                     paymentMethod = requireNotNull(request.paymentMethod),
                     cardIssuer = request.cardIssuer,
+                    storedValueAccountId = request.storedValueAccountId,
                     occurredAt = requireNotNull(request.occurredAt),
                 ),
             ).toResponse()
@@ -237,6 +244,7 @@ private fun Transaction.toResponse(): TransactionResponse =
         classificationConfirmedAt = classificationConfirmedAt,
         paymentMethod = paymentMethod,
         cardIssuer = cardIssuer,
+        storedValueAccountId = storedValueAccountId,
         occurredAt = occurredAt,
         createdAt = createdAt,
         updatedAt = updatedAt,

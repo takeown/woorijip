@@ -21,6 +21,7 @@ data class Transaction(
     val classificationConfirmedAt: OffsetDateTime? = null,
     val paymentMethod: PaymentMethod,
     val cardIssuer: CardIssuer?,
+    val storedValueAccountId: Long? = null,
     val occurredAt: OffsetDateTime,
     val createdAt: OffsetDateTime,
     val updatedAt: OffsetDateTime = createdAt,

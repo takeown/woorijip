@@ -12,6 +12,7 @@ import type {
   TransactionCategory,
   TransactionTag,
 } from "./transaction-classification";
+import type { StoredValueAccount } from "./stored-value-account-panel";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
@@ -27,6 +28,7 @@ type ReadyDraft = {
   payerDisplayName: string;
   paymentMethod: PaymentMethod;
   cardIssuer: CardIssuer | null;
+  storedValueAccountType: StoredValueAccount["type"] | null;
   message: string;
 };
 
@@ -49,6 +51,7 @@ type ApiProblem = {
 type AiTransactionDraftFormProps = {
   onCreated: () => Promise<void> | void;
   householdMembers: HouseholdMember[];
+  storedValueAccounts?: StoredValueAccount[];
 };
 
 const maxAiRequests = 3;
@@ -56,6 +59,7 @@ const maxAiRequests = 3;
 export function AiTransactionDraftForm({
   onCreated,
   householdMembers,
+  storedValueAccounts = [],
 }: AiTransactionDraftFormProps) {
   const [message, setMessage] = useState("");
   const [clarification, setClarification] = useState("");
@@ -67,6 +71,7 @@ export function AiTransactionDraftForm({
   const [error, setError] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CARD");
   const [cardIssuer, setCardIssuer] = useState<CardIssuer | "">("");
+  const [storedValueAccountId, setStoredValueAccountId] = useState("");
 
   async function csrfToken(): Promise<CsrfToken> {
     const response = await fetch(`${apiUrl}/auth/csrf`, {
@@ -111,6 +116,10 @@ export function AiTransactionDraftForm({
       if (nextDraft.status === "READY") {
         setPaymentMethod(nextDraft.paymentMethod);
         setCardIssuer(nextDraft.cardIssuer ?? "");
+        const storedValueAccount = storedValueAccounts.find(
+          (account) => account.type === nextDraft.storedValueAccountType,
+        );
+        setStoredValueAccountId(storedValueAccount ? String(storedValueAccount.id) : "");
       }
       return true;
     } catch (caughtError) {
@@ -154,6 +163,7 @@ export function AiTransactionDraftForm({
     setError(null);
     setPaymentMethod("CARD");
     setCardIssuer("");
+    setStoredValueAccountId("");
   }
 
   async function saveDraft(event: FormEvent<HTMLFormElement>) {
@@ -182,6 +192,7 @@ export function AiTransactionDraftForm({
           classificationSource: "AI",
           paymentMethod,
           cardIssuer: paymentMethod === "CARD" ? cardIssuer : null,
+          storedValueAccountId: storedValueAccountId ? Number(storedValueAccountId) : null,
           occurredAt: new Date(String(formData.get("occurredAt"))).toISOString(),
         }),
       });
@@ -299,17 +310,22 @@ export function AiTransactionDraftForm({
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium text-stone-700" htmlFor="draft-paymentMethod">
-                결제수단
+                결제 경로
               </label>
               <select
                 className="w-full rounded-xl border border-emerald-200 bg-white px-3 py-2.5 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
                 id="draft-paymentMethod"
                 name="paymentMethod"
-                onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}
+                onChange={(event) => {
+                  const method = event.target.value as PaymentMethod;
+                  setPaymentMethod(method);
+                  if (method === "CASH") setStoredValueAccountId("");
+                }}
                 value={paymentMethod}
               >
                 <option value="CARD">카드</option>
                 <option value="CASH">현금</option>
+                <option value="QR">QR</option>
               </select>
             </div>
             {paymentMethod === "CARD" ? (
@@ -334,6 +350,26 @@ export function AiTransactionDraftForm({
                 </select>
               </div>
             ) : null}
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-stone-700" htmlFor="draft-storedValueAccountId">
+                사용 잔액 <span className="font-normal text-stone-500">(선택)</span>
+              </label>
+              <select
+                className="w-full rounded-xl border border-emerald-200 bg-white px-3 py-2.5 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                disabled={paymentMethod === "CASH"}
+                id="draft-storedValueAccountId"
+                onChange={(event) => setStoredValueAccountId(event.target.value)}
+                required={paymentMethod === "QR"}
+                value={storedValueAccountId}
+              >
+                <option value="">일반 결제</option>
+                {storedValueAccounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.name} · 잔액 {account.balance.toLocaleString("ko-KR")}원
+                  </option>
+                ))}
+              </select>
+            </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium text-stone-700" htmlFor="draft-occurredAt">
                 결제 시각

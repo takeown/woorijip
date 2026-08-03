@@ -7,6 +7,8 @@ type SpendingPayer = "ALL" | "ME" | "PARTNER";
 
 type PeriodSummary = {
   totalAmount: number;
+  coupleLivingAmount: number;
+  childcareAmount: number;
   transactionCount: number;
 };
 
@@ -246,6 +248,17 @@ export function SpendingStatisticsPanel({ refreshKey }: SpendingStatisticsPanelP
               label="이전 기간 대비"
               tone={statistics.amountChange > 0 ? "warning" : "normal"}
               value={comparisonLabel(statistics)}
+            />
+          </div>
+
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <SummaryCard
+              label="부부 생활비"
+              value={`${amountFormatter.format(statistics.current.coupleLivingAmount)}원`}
+            />
+            <SummaryCard
+              label="육아비"
+              value={`${amountFormatter.format(statistics.current.childcareAmount)}원`}
             />
           </div>
 

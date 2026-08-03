@@ -4,6 +4,7 @@ import com.woorijip.api.auth.CurrentUser
 import com.woorijip.api.error.ApiException
 import com.woorijip.api.error.ErrorCode
 import com.woorijip.api.household.HouseholdMembershipRepository
+import com.woorijip.api.storedvalue.StoredValueAccountService
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
@@ -24,6 +25,7 @@ data class TransactionDraft(
     val classificationSource: ClassificationSource = ClassificationSource.USER,
     val paymentMethod: PaymentMethod,
     val cardIssuer: CardIssuer?,
+    val storedValueAccountId: Long? = null,
     val occurredAt: OffsetDateTime,
 )
 
@@ -43,6 +45,7 @@ class TransactionService(
     private val transactionTagRepository: TransactionTagRepository,
     private val householdMembershipRepository: HouseholdMembershipRepository,
     private val merchantClassificationRuleService: MerchantClassificationRuleService,
+    private val storedValueAccountService: StoredValueAccountService,
 ) {
     @Transactional
     fun create(
@@ -53,6 +56,7 @@ class TransactionService(
     ): Transaction {
         requireHouseholdMember(currentUser.householdId, draft.payerId)
         requirePaymentDetails(draft.paymentMethod, draft.cardIssuer)
+        requireStoredValuePayment(draft.paymentMethod, draft.storedValueAccountId)
         val now = OffsetDateTime.now()
         val classificationSource = resolveClassificationSource(
             currentUser,
@@ -73,12 +77,22 @@ class TransactionService(
                 classificationConfirmedAt = now,
                 paymentMethod = draft.paymentMethod,
                 cardIssuer = draft.cardIssuer,
+                storedValueAccountId = draft.storedValueAccountId,
                 occurredAt = draft.occurredAt,
                 createdAt = now,
                 updatedAt = now,
             ),
         )
         val transactionId = requireNotNull(saved.id)
+        storedValueAccountService.replaceSpend(
+            householdId = currentUser.householdId,
+            transactionId = transactionId,
+            previousAccountId = null,
+            accountId = draft.storedValueAccountId,
+            amount = draft.amount,
+            occurredAt = draft.occurredAt,
+            now = now,
+        )
         transactionTagRepository.replaceAll(transactionId, draft.tags)
         if (saveMerchantRule) {
             merchantClassificationRuleService.save(
@@ -143,6 +157,9 @@ class TransactionService(
     ): Transaction {
         requireHouseholdMember(currentUser.householdId, draft.payerId)
         requirePaymentDetails(draft.paymentMethod, draft.cardIssuer)
+        requireStoredValuePayment(draft.paymentMethod, draft.storedValueAccountId)
+        val previous = transactionRepository.findByIdAndHouseholdId(transactionId, currentUser.householdId)
+            ?: throw ApiException(ErrorCode.TRANSACTION_NOT_FOUND, "거래를 찾을 수 없습니다.")
         val updatedAt = OffsetDateTime.now()
         val updated = transactionRepository.updateIfUnchanged(
             id = transactionId,
@@ -155,12 +172,22 @@ class TransactionService(
             category = draft.category.name,
             paymentMethod = draft.paymentMethod.name,
             cardIssuer = draft.cardIssuer?.name,
+            storedValueAccountId = draft.storedValueAccountId,
             occurredAt = draft.occurredAt,
             updatedAt = updatedAt,
         )
         if (updated != 1) {
             throwNotFoundOrConflict(currentUser, transactionId)
         }
+        storedValueAccountService.replaceSpend(
+            householdId = currentUser.householdId,
+            transactionId = transactionId,
+            previousAccountId = previous.storedValueAccountId,
+            accountId = draft.storedValueAccountId,
+            amount = draft.amount,
+            occurredAt = draft.occurredAt,
+            now = updatedAt,
+        )
         transactionTagRepository.replaceAll(transactionId, draft.tags)
         val transaction = requireNotNull(
             transactionRepository.findByIdAndHouseholdId(transactionId, currentUser.householdId),
@@ -264,11 +291,27 @@ class TransactionService(
     ) {
         val isValid = when (paymentMethod) {
             PaymentMethod.CARD -> cardIssuer != null
-            PaymentMethod.CASH -> cardIssuer == null
+            PaymentMethod.CASH,
+            PaymentMethod.QR,
+            -> cardIssuer == null
             PaymentMethod.UNKNOWN -> false
         }
         if (!isValid) {
             throw ApiException(ErrorCode.INVALID_PAYMENT_DETAILS, "결제수단과 카드사를 확인해 주세요.")
+        }
+    }
+
+    private fun requireStoredValuePayment(
+        paymentMethod: PaymentMethod,
+        storedValueAccountId: Long?,
+    ) {
+        val isValid = when {
+            paymentMethod == PaymentMethod.QR -> storedValueAccountId != null
+            storedValueAccountId != null -> paymentMethod == PaymentMethod.CARD
+            else -> true
+        }
+        if (!isValid) {
+            throw ApiException(ErrorCode.INVALID_STORED_VALUE_ACCOUNT, "잔액 계정은 카드 또는 QR 사용에만 연결할 수 있습니다.")
         }
     }
 }

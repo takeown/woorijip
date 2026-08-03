@@ -131,6 +131,25 @@ class SpendingStatisticsControllerTests(
     }
 
     @Test
+    fun `separates childcare spending from couple living expenses`() {
+        val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
+        saveTransaction(currentUser.householdId, currentUser.id, 20_000, "식비", "2026-07-10T12:00:00+09:00")
+        saveTransaction(currentUser.householdId, currentUser.id, 35_000, "육아", "2026-07-11T12:00:00+09:00")
+
+        mockMvc
+            .get("/statistics/spending") {
+                param("period", "month")
+                param("date", "2026-07-26")
+                with(allowedOidcLogin())
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.current.totalAmount") { value(55_000) }
+                jsonPath("$.current.coupleLivingAmount") { value(20_000) }
+                jsonPath("$.current.childcareAmount") { value(35_000) }
+            }
+    }
+
+    @Test
     fun `compares standard categories and overlapping tags with the previous period`() {
         val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
         saveTransaction(

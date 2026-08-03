@@ -8,6 +8,8 @@ import com.woorijip.api.transaction.PaymentMethod
 import com.woorijip.api.transaction.Transaction
 import com.woorijip.api.transaction.TransactionCategory
 import com.woorijip.api.transaction.TransactionRepository
+import com.woorijip.api.storedvalue.StoredValueAccountRepository
+import com.woorijip.api.storedvalue.StoredValueAccountType
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
@@ -42,6 +44,7 @@ class CardStatementControllerTests(
     @Autowired private val transactionRepository: TransactionRepository,
     @Autowired private val jdbcTemplate: JdbcTemplate,
     @Autowired private val objectMapper: ObjectMapper,
+    @Autowired private val storedValueAccountRepository: StoredValueAccountRepository,
 ) {
     @Test
     fun `previews a valid KB statement without saving the source file`() {
@@ -93,6 +96,64 @@ class CardStatementControllerTests(
         assertEquals(1, transactionRepository.count())
         assertEquals(1, countRows("card_statement_imports"))
         assertEquals(3, countRows("card_statement_candidates"))
+    }
+
+    @Test
+    fun `previews Hyundai html xls and applies an Onnuri purchase against its balance`() {
+        val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
+        storedValueAccountRepository.ensureDefaults(currentUser.householdId)
+        val onnuriAccount = storedValueAccountRepository.findAllByHouseholdId(currentUser.householdId)
+            .single { it.type == StoredValueAccountType.ONNURI_GIFT_CERTIFICATE }
+        storedValueAccountRepository.addCredit(
+            accountId = onnuriAccount.id,
+            balanceAmount = 2_400,
+            paidAmount = 2_232,
+            sourceName = "테스트 계좌",
+            occurredAt = OffsetDateTime.parse("2026-06-01T12:00:00+09:00"),
+            createdAt = OffsetDateTime.parse("2026-06-01T12:00:00+09:00"),
+        )
+
+        val previewResult = mockMvc
+            .multipart("/card-statements/preview") {
+                file(validHyundaiStatement())
+                with(allowedOidcLogin())
+                with(csrf())
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.cardIssuer") { value("HYUNDAI") }
+                jsonPath("$.statementMonth") { value("2026-07") }
+                jsonPath("$.totalCount") { value(2) }
+                jsonPath("$.totalBilledAmount") { value(1_000) }
+                jsonPath("$.adjustmentCount") { value(1) }
+                jsonPath("$.candidates[0].merchant") { value("GS25 테스트점") }
+                jsonPath("$.candidates[0].storedValueAccountType") { value("ONNURI_GIFT_CERTIFICATE") }
+            }.andReturn()
+
+        val previewJson = objectMapper.readTree(previewResult.response.contentAsString)
+        val importId = previewJson.path("importId").longValue()
+        val sourceRow = previewJson.path("candidates").first().path("sourceRow").intValue()
+        mockMvc
+            .post("/card-statements/$importId/apply") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content =
+                    """
+                    {
+                      "candidates": [
+                        {"sourceRow": $sourceRow, "category": "FOOD"}
+                      ]
+                    }
+                    """.trimIndent()
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.transactions[0].created") { value(true) }
+            }
+
+        val saved = transactionRepository.findAll().single()
+        assertEquals(CardIssuer.HYUNDAI, saved.cardIssuer)
+        assertEquals(onnuriAccount.id, saved.storedValueAccountId)
+        assertEquals(0, storedValueAccountRepository.findAllByHouseholdId(currentUser.householdId).first().balance)
     }
 
     @Test
@@ -381,6 +442,24 @@ class CardStatementControllerTests(
         "kb-statement.xlsx",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         KbStatementTestWorkbook.create(),
+    )
+
+    private fun validHyundaiStatement() = MockMultipartFile(
+        "file",
+        "hyundaicard.xls",
+        "application/vnd.ms-excel",
+        """
+        <html><body><table>
+          <tr><th colspan="10">2026년 07월 이용대금명세서</th></tr>
+          <tr><th>이용일</th><th>이용카드</th><th>이용가맹점</th><th>이용금액</th><th>할부/회차</th><th>적립/할인율(%)</th><th>예상적립/할인</th><th>결제원금</th><th>결제후잔액</th><th>수수료(이자)</th></tr>
+          <tr><td>2026년 06월 05일</td><td>본인 테스트 현대카드</td><td>GS25 테스트점</td><td>2,400</td><td></td><td>1.0%</td><td>24</td><td>0</td><td>0</td><td>0</td></tr>
+          <tr><td>2026년 06월 05일</td><td>본인 테스트 현대카드</td><td>온누리상품권사용(청구할인)</td><td>0</td><td></td><td>0%</td><td>-2,400</td><td>0</td><td>0</td><td>0</td></tr>
+          <tr><td>2026년 06월 07일</td><td>본인 테스트 현대카드</td><td>일반 가맹점</td><td>1,000</td><td></td><td>1.0%</td><td>10</td><td>1,000</td><td>0</td><td>0</td></tr>
+          <tr><td>2026년 06월 08일</td><td>본인 테스트 현대카드</td><td>취소 가맹점</td><td>-500</td><td></td><td>0%</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+          <tr><td>-</td><td></td><td>청 구 할 인 소계 1 건</td><td>0</td><td></td><td></td><td>-2,400</td><td>0</td><td>0</td><td>0</td></tr>
+          <tr><td>-</td><td></td><td>총 합계 2 건</td><td>0</td><td></td><td></td><td>0</td><td>1,000</td><td>0</td><td>0</td></tr>
+        </table></body></html>
+        """.trimIndent().toByteArray(),
     )
 
     private fun previewStatement() =
