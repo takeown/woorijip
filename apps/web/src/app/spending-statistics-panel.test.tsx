@@ -9,8 +9,8 @@ const monthlyStatistics = {
   referenceDate: "2026-07-26",
   startDate: "2026-07-01",
   endDateExclusive: "2026-08-01",
-  current: { totalAmount: 125_000, transactionCount: 4 },
-  previous: { totalAmount: 100_000, transactionCount: 3 },
+  current: { totalAmount: 125_000, coupleLivingAmount: 90_000, childcareAmount: 35_000, transactionCount: 4 },
+  previous: { totalAmount: 100_000, coupleLivingAmount: 80_000, childcareAmount: 20_000, transactionCount: 3 },
   amountChange: 25_000,
   changeRatePercent: 25.0,
   byPayer: [{ key: "1", label: "나", amount: 125_000, transactionCount: 4 }],
@@ -84,6 +84,8 @@ describe("SpendingStatisticsPanel", () => {
     const totalCard = (await screen.findByText("총지출")).parentElement;
     expect(totalCard).not.toBeNull();
     expect(within(totalCard as HTMLElement).getByText("125,000원")).toBeDefined();
+    expect(within(screen.getByText("부부 생활비").parentElement as HTMLElement).getByText("90,000원")).toBeDefined();
+    expect(within(screen.getByText("육아비").parentElement as HTMLElement).getByText("35,000원")).toBeDefined();
     expect(screen.getByText("25,000원 증가 (25%)")).toBeDefined();
     expect(screen.getByRole("heading", { name: "카테고리 비교" })).toBeDefined();
     expect(screen.getByText("이전 100,000원 · 25,000원 증가 (25%)")).toBeDefined();

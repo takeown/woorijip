@@ -1,5 +1,6 @@
 package com.woorijip.api.ai
 
+import com.woorijip.api.storedvalue.StoredValueAccountType
 import com.woorijip.api.transaction.CardIssuer
 import com.woorijip.api.transaction.PaymentMethod
 import com.woorijip.api.transaction.TransactionCategory
@@ -28,6 +29,7 @@ data class GeneratedTransactionDraft(
     val payer: GeneratedPayer? = null,
     val paymentMethod: PaymentMethod? = null,
     val cardIssuer: CardIssuer? = null,
+    val storedValueAccountType: StoredValueAccountType? = null,
     val message: String? = null,
 )
 

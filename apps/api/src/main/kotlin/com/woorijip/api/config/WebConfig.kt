@@ -26,6 +26,7 @@ class WebConfig(
             "/statistics/**",
             "/card-statements/**",
             "/merchant-classification-rules/**",
+            "/stored-value-accounts/**",
         ).forEach { path ->
             registry
                 .addMapping(path)

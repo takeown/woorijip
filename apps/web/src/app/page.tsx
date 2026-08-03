@@ -13,6 +13,10 @@ import {
   type EditableTransaction,
 } from "./transaction-edit-form";
 import { categoryLabel, tagLabel } from "./transaction-classification";
+import {
+  StoredValueAccountPanel,
+  type StoredValueAccount,
+} from "./stored-value-account-panel";
 
 type Transaction = EditableTransaction;
 
@@ -42,6 +46,7 @@ export default function Home() {
 export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) {
   const [householdMembers, setHouseholdMembers] = useState<HouseholdMember[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [storedValueAccounts, setStoredValueAccounts] = useState<StoredValueAccount[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [payerFilter, setPayerFilter] = useState<PayerFilter>("all");
   const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
@@ -77,14 +82,24 @@ export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) 
     return response.json() as Promise<HouseholdMember[]>;
   }, []);
 
+  const fetchStoredValueAccounts = useCallback(async () => {
+    const response = await fetch(`${apiUrl}/stored-value-accounts`, {
+      credentials: "include",
+      cache: "no-store",
+    });
+    if (!response.ok) throw new Error("상품권·바우처 잔액을 불러오지 못했습니다.");
+    return response.json() as Promise<StoredValueAccount[]>;
+  }, []);
+
   useEffect(() => {
     let active = true;
-    Promise.all([fetchTransactions(), fetchHouseholdMembers()])
-      .then(([transactionPage, nextHouseholdMembers]) => {
+    Promise.all([fetchTransactions(), fetchHouseholdMembers(), fetchStoredValueAccounts()])
+      .then(([transactionPage, nextHouseholdMembers, nextStoredValueAccounts]) => {
         if (!active) return;
         setTransactions(transactionPage.items);
         setNextCursor(transactionPage.nextCursor);
         setHouseholdMembers(nextHouseholdMembers);
+        setStoredValueAccounts(nextStoredValueAccounts);
       })
       .catch((caughtError: unknown) => {
         if (!active) return;
@@ -100,7 +115,7 @@ export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) 
     return () => {
       active = false;
     };
-  }, [fetchHouseholdMembers, fetchTransactions]);
+  }, [fetchHouseholdMembers, fetchStoredValueAccounts, fetchTransactions]);
 
   async function changePayerFilter(filter: PayerFilter) {
     setError(null);
@@ -123,15 +138,23 @@ export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) 
   }
 
   async function handleTransactionCreated() {
-    const page = await fetchTransactions(payerFilter);
+    const [page, accounts] = await Promise.all([
+      fetchTransactions(payerFilter),
+      fetchStoredValueAccounts(),
+    ]);
     setTransactions(page.items);
     setNextCursor(page.nextCursor);
+    setStoredValueAccounts(accounts);
   }
 
   async function handleTransactionChanged() {
-    const page = await fetchTransactions(payerFilter);
+    const [page, accounts] = await Promise.all([
+      fetchTransactions(payerFilter),
+      fetchStoredValueAccounts(),
+    ]);
     setTransactions(page.items);
     setNextCursor(page.nextCursor);
+    setStoredValueAccounts(accounts);
     setEditingTransactionId(null);
   }
 
@@ -170,8 +193,13 @@ export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) 
           <AiTransactionDraftForm
             householdMembers={householdMembers}
             onCreated={handleTransactionCreated}
+            storedValueAccounts={storedValueAccounts}
           />
         </div>
+        <StoredValueAccountPanel
+          accounts={storedValueAccounts}
+          onChanged={async () => setStoredValueAccounts(await fetchStoredValueAccounts())}
+        />
         <div className="my-7 flex items-center gap-3 text-xs text-stone-400">
           <span className="h-px flex-1 bg-stone-200" />
           직접 입력
@@ -180,6 +208,7 @@ export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) 
         <TransactionForm
           currentUserId={currentUser.id}
           householdMembers={householdMembers}
+          storedValueAccounts={storedValueAccounts}
           onCreated={handleTransactionCreated}
         />
       </section>
@@ -234,6 +263,7 @@ export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) 
                 {editingTransactionId === transaction.id ? (
                   <TransactionEditForm
                     householdMembers={householdMembers}
+                    storedValueAccounts={storedValueAccounts}
                     onCancel={() => setEditingTransactionId(null)}
                     onChanged={handleTransactionChanged}
                     transaction={transaction}
@@ -270,6 +300,11 @@ export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) 
                               {tagLabel(tag)}
                             </span>
                           ))}
+                        </p>
+                      ) : null}
+                      {transaction.storedValueAccountId ? (
+                        <p className="mt-2 text-sm text-emerald-700">
+                          {storedValueAccounts.find((account) => account.id === transaction.storedValueAccountId)?.name ?? "별도 잔액"} 사용
                         </p>
                       ) : null}
                     </div>

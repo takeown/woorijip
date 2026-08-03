@@ -3,6 +3,7 @@ package com.woorijip.api.transaction
 enum class PaymentMethod {
     CARD,
     CASH,
+    QR,
     UNKNOWN,
 }
 

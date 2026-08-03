@@ -1,5 +1,6 @@
 package com.woorijip.api.ai
 
+import com.woorijip.api.storedvalue.StoredValueAccountType
 import com.woorijip.api.transaction.CardIssuer
 import com.woorijip.api.transaction.PaymentMethod
 import com.woorijip.api.transaction.TransactionCategory
@@ -89,13 +90,18 @@ class OpenAiTransactionDraftGenerator(
         현재 시각은 ${context.currentTime}입니다.
         날짜나 시각이 없으면 현재 시각을 사용하세요.
         결제자 언급이 없으면 ME, 배우자나 아내나 남편이 결제했다면 PARTNER를 사용하세요.
-        결제수단은 CARD 또는 CASH만 사용하세요. 카드 결제면 국내 카드사를 cardIssuer로 반환하세요.
+        결제 경로는 CARD, CASH, QR 중 하나를 사용하세요. 카드 결제면 국내 카드사를 cardIssuer로 반환하세요.
         카드사가 언급되지 않은 카드 결제는 NEEDS_CLARIFICATION으로 카드사를 질문하세요.
-        현금 결제면 cardIssuer는 null입니다.
+        현금이나 QR 결제면 cardIssuer는 null입니다.
+        온누리상품권을 사용하면 storedValueAccountType은 ONNURI_GIFT_CERTIFICATE입니다.
+        임산부 바우처를 사용하면 storedValueAccountType은 PREGNANCY_VOUCHER입니다.
+        별도 잔액을 사용하지 않으면 storedValueAccountType은 null입니다.
+        QR 결제는 반드시 별도 잔액을 사용하며, 사용자가 QR이라고 말했다면 카드나 현금인지 다시 질문하지 마세요.
+        상품권이나 바우처 사용만 언급하고 QR인지 연결 카드인지 알 수 없으면 결제 경로를 질문하세요.
         카테고리는 제공된 영문 코드 중 하나만 사용하세요.
         FOOD는 식비, HOUSING은 주거, TRANSPORT는 교통, LIVING은 생활, HEALTH는 건강,
         LEISURE는 여가, EDUCATION은 교육, FINANCE_INSURANCE는 금융·보험,
-        FAMILY_EVENT는 경조사, OTHER는 기타입니다.
+        FAMILY_EVENT는 경조사, CHILDCARE는 육아, OTHER는 기타입니다.
         태그는 SUBSCRIPTION, UTILITY, RECURRING_PAYMENT 중 해당하는 값을 모두 사용하세요.
         내역은 구매 품목이나 사용 목적을 사용자가 말한 경우에만 짧게 정리하고, 알 수 없으면 null로 반환하세요.
         내역이 없다는 이유로 추가 질문하지 마세요.
@@ -153,11 +159,20 @@ class OpenAiTransactionDraftGenerator(
                 ),
                 "paymentMethod" to mapOf(
                     "type" to listOf("string", "null"),
-                    "enum" to listOf(PaymentMethod.CARD.name, PaymentMethod.CASH.name, null),
+                    "enum" to listOf(
+                        PaymentMethod.CARD.name,
+                        PaymentMethod.CASH.name,
+                        PaymentMethod.QR.name,
+                        null,
+                    ),
                 ),
                 "cardIssuer" to mapOf(
                     "type" to listOf("string", "null"),
                     "enum" to CardIssuer.entries.map(CardIssuer::name) + null,
+                ),
+                "storedValueAccountType" to mapOf(
+                    "type" to listOf("string", "null"),
+                    "enum" to StoredValueAccountType.entries.map(StoredValueAccountType::name) + null,
                 ),
                 "message" to nullableString,
             ),
@@ -172,6 +187,7 @@ class OpenAiTransactionDraftGenerator(
                 "payer",
                 "paymentMethod",
                 "cardIssuer",
+                "storedValueAccountType",
                 "message",
             ),
         )

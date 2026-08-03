@@ -13,6 +13,7 @@ import type {
   TransactionTag,
 } from "./transaction-classification";
 import type { HouseholdMember } from "./transaction-form";
+import type { StoredValueAccount } from "./stored-value-account-panel";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
@@ -26,6 +27,7 @@ export type EditableTransaction = {
   tags: TransactionTag[];
   paymentMethod: StoredPaymentMethod;
   cardIssuer: CardIssuer | null;
+  storedValueAccountId: number | null;
   occurredAt: string;
   createdAt: string;
   updatedAt: string;
@@ -39,6 +41,7 @@ type CsrfToken = {
 type TransactionEditFormProps = {
   transaction: EditableTransaction;
   householdMembers: HouseholdMember[];
+  storedValueAccounts?: StoredValueAccount[];
   onCancel: () => void;
   onChanged: () => Promise<void> | void;
 };
@@ -46,6 +49,7 @@ type TransactionEditFormProps = {
 export function TransactionEditForm({
   transaction,
   householdMembers,
+  storedValueAccounts = [],
   onCancel,
   onChanged,
 }: TransactionEditFormProps) {
@@ -53,6 +57,9 @@ export function TransactionEditForm({
     transaction.paymentMethod === "UNKNOWN" ? "CARD" : transaction.paymentMethod;
   const [paymentMethod, setPaymentMethod] =
     useState<PaymentMethod>(initialPaymentMethod);
+  const [storedValueAccountId, setStoredValueAccountId] = useState(
+    transaction.storedValueAccountId?.toString() ?? "",
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -92,6 +99,7 @@ export function TransactionEditForm({
           tags: formData.getAll("tags"),
           paymentMethod,
           cardIssuer: paymentMethod === "CARD" ? formData.get("cardIssuer") : null,
+          storedValueAccountId: storedValueAccountId ? Number(storedValueAccountId) : null,
           occurredAt: new Date(String(formData.get("occurredAt"))).toISOString(),
         }),
       });
@@ -205,14 +213,19 @@ export function TransactionEditForm({
           </select>
         </label>
         <label className="text-sm font-medium text-stone-700">
-          결제수단
+          결제 경로
           <select
             className="mt-2 w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5"
-            onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}
+            onChange={(event) => {
+              const method = event.target.value as PaymentMethod;
+              setPaymentMethod(method);
+              if (method === "CASH") setStoredValueAccountId("");
+            }}
             value={paymentMethod}
           >
             <option value="CARD">카드</option>
             <option value="CASH">현금</option>
+            <option value="QR">QR</option>
           </select>
         </label>
       </div>
@@ -235,6 +248,23 @@ export function TransactionEditForm({
           </select>
         </label>
       ) : null}
+
+      <label className="block text-sm font-medium text-stone-700">
+        지출 계정 <span className="font-normal text-stone-500">(선택)</span>
+        <select
+          className="mt-2 w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5"
+          disabled={paymentMethod === "CASH"}
+          onChange={(event) => setStoredValueAccountId(event.target.value)}
+          value={storedValueAccountId}
+        >
+          <option value="">일반 결제</option>
+          {storedValueAccounts.map((account) => (
+            <option key={account.id} value={account.id}>
+              {account.ownerDisplayName} · {account.name} · 잔액 {account.balance.toLocaleString("ko-KR")}원
+            </option>
+          ))}
+        </select>
+      </label>
 
       <label className="block text-sm font-medium text-stone-700">
         결제 시각

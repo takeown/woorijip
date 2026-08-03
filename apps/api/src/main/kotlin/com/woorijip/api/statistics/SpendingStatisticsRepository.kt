@@ -7,6 +7,8 @@ import java.time.OffsetDateTime
 
 data class SpendingAggregate(
     val totalAmount: Long,
+    val coupleLivingAmount: Long,
+    val childcareAmount: Long,
     val transactionCount: Long,
 )
 
@@ -31,6 +33,8 @@ class SpendingStatisticsRepository(
             jdbcTemplate.queryForObject(
                 """
                 SELECT COALESCE(SUM(amount), 0) AS total_amount,
+                       COALESCE(SUM(amount) FILTER (WHERE category != 'CHILDCARE'), 0) AS couple_living_amount,
+                       COALESCE(SUM(amount) FILTER (WHERE category = 'CHILDCARE'), 0) AS childcare_amount,
                        COUNT(*) AS transaction_count
                 FROM transactions AS t
                 WHERE t.household_id = :householdId
@@ -42,6 +46,8 @@ class SpendingStatisticsRepository(
             ) { resultSet, _ ->
                 SpendingAggregate(
                     totalAmount = resultSet.getLong("total_amount"),
+                    coupleLivingAmount = resultSet.getLong("couple_living_amount"),
+                    childcareAmount = resultSet.getLong("childcare_amount"),
                     transactionCount = resultSet.getLong("transaction_count"),
                 )
             },

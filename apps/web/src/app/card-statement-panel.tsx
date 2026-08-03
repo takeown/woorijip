@@ -30,6 +30,7 @@ type StatementCandidate = {
   installmentSequence: number | null;
   remainingInstallments: number | null;
   remainingPrincipal: number | null;
+  storedValueAccountType: "ONNURI_GIFT_CERTIFICATE" | "PREGNANCY_VOUCHER" | null;
   matchStatus: StatementMatchStatus;
   transactionIds: number[];
   relatedTransactions: RelatedTransaction[];
@@ -298,7 +299,7 @@ export function CardStatementPanel() {
         <p className="text-sm font-medium text-emerald-700">월말 지출 점검</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight">카드 명세서 대조</h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-stone-600">
-          KB국민카드 XLSX 명세서를 기존 거래와 비교합니다. 원본 파일은 저장하지 않으며,
+          KB국민카드 XLSX 또는 현대카드 XLS 명세서를 기존 거래와 비교합니다. 원본 파일은 저장하지 않으며,
           선택한 누락과 불일치 보정만 확인 후 거래 내역에 반영합니다.
         </p>
 
@@ -309,10 +310,10 @@ export function CardStatementPanel() {
                 className="mb-2 block text-sm font-medium text-stone-700"
                 htmlFor="statementFile"
               >
-                KB국민카드 명세서
+                카드 명세서
               </label>
               <input
-                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 className="block w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-sm file:mr-4 file:rounded-lg file:border-0 file:bg-stone-100 file:px-3 file:py-2 file:font-medium file:text-stone-700"
                 id="statementFile"
                 name="statementFile"
@@ -327,7 +328,7 @@ export function CardStatementPanel() {
               {isUploading ? "대조 중..." : "업로드하고 대조"}
             </button>
           </div>
-          <p className="mt-2 text-xs text-stone-500">XLSX 형식, 최대 2MB</p>
+          <p className="mt-2 text-xs text-stone-500">KB국민카드 XLSX·현대카드 XLS, 최대 2MB</p>
         </form>
 
         {error ? (
@@ -501,6 +502,11 @@ function CandidateCard({
                 {displayDate(candidate.occurredOn)} · {entryTypeLabel(candidate)} ·{" "}
                 {candidate.cardLabel}
               </p>
+              {candidate.storedValueAccountType === "ONNURI_GIFT_CERTIFICATE" ? (
+                <p className="mt-2 text-xs font-medium text-emerald-700">
+                  온누리상품권 잔액 사용 · 반영 시 잔액에서 차감
+                </p>
+              ) : null}
             </div>
             <div className="text-right">
               <p className="font-semibold text-stone-900">
@@ -705,7 +711,9 @@ function entryTypeLabel(candidate: StatementCandidate): string {
 }
 
 function cardIssuerLabel(cardIssuer: string): string {
-  return cardIssuer === "KB_KOOKMIN" ? "KB국민카드" : cardIssuer;
+  if (cardIssuer === "KB_KOOKMIN") return "KB국민카드";
+  if (cardIssuer === "HYUNDAI") return "현대카드";
+  return cardIssuer;
 }
 
 function statementMonthLabel(statementMonth: string): string {

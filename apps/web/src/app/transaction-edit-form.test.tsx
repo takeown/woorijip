@@ -16,6 +16,7 @@ const transaction: EditableTransaction = {
   tags: ["RECURRING_PAYMENT"],
   paymentMethod: "CARD",
   cardIssuer: "SHINHAN",
+  storedValueAccountId: null,
   occurredAt: "2026-07-21T03:30:00Z",
   createdAt: "2026-07-21T03:30:00Z",
   updatedAt: "2026-07-21T03:30:00Z",

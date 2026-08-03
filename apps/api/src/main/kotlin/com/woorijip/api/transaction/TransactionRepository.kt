@@ -172,6 +172,7 @@ interface TransactionRepository : CrudRepository<Transaction, Long> {
             classification_confirmed_at = :updatedAt,
             payment_method = :paymentMethod,
             card_issuer = :cardIssuer,
+            stored_value_account_id = :storedValueAccountId,
             occurred_at = :occurredAt,
             updated_at = :updatedAt
         WHERE id = :id
@@ -190,6 +191,7 @@ interface TransactionRepository : CrudRepository<Transaction, Long> {
         category: String,
         paymentMethod: String,
         cardIssuer: String?,
+        storedValueAccountId: Long?,
         occurredAt: OffsetDateTime,
         updatedAt: OffsetDateTime,
     ): Int

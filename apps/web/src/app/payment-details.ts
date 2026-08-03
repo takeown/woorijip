@@ -1,4 +1,4 @@
-export type PaymentMethod = "CARD" | "CASH";
+export type PaymentMethod = "CARD" | "CASH" | "QR";
 export type StoredPaymentMethod = PaymentMethod | "UNKNOWN";
 
 export type CardIssuer =
@@ -29,6 +29,7 @@ export function paymentDetailsLabel(
   cardIssuer: CardIssuer | null,
 ) {
   if (paymentMethod === "CASH") return "현금";
+  if (paymentMethod === "QR") return "QR";
   if (paymentMethod === "UNKNOWN") return "결제수단 미지정";
   return cardIssuers.find((issuer) => issuer.value === cardIssuer)?.label ?? "카드";
 }

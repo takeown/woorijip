@@ -27,6 +27,8 @@ enum class SpendingPayer {
 
 data class SpendingPeriodSummary(
     val totalAmount: Long,
+    val coupleLivingAmount: Long,
+    val childcareAmount: Long,
     val transactionCount: Long,
 )
 
@@ -211,6 +213,7 @@ class SpendingStatisticsService(
         when (key) {
             "CARD" -> "카드"
             "CASH" -> "현금"
+            "QR" -> "QR"
             else -> "결제수단 미지정"
         }
 
@@ -253,7 +256,7 @@ class SpendingStatisticsService(
     }
 
     private fun SpendingAggregate.toSummary(): SpendingPeriodSummary =
-        SpendingPeriodSummary(totalAmount, transactionCount)
+        SpendingPeriodSummary(totalAmount, coupleLivingAmount, childcareAmount, transactionCount)
 
     private data class DateRange(
         val start: LocalDate,

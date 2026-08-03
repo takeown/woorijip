@@ -47,5 +47,6 @@ pnpm build:api
 - 완료한 마일스톤: `docs/MILESTONES_ARCHIVE.md`
 - 제품·기술 결정: `docs/DECISIONS.md`
 - API 구조와 변경 지점: `docs/ARCHITECTURE.md`
+- 데이터 관계, 소유권과 금액 의미: `docs/DATA_MODEL.md`
 - 보안 기준: `docs/SECURITY.md`
 - 운영과 배포: `docs/DEPLOYMENT.md`

@@ -31,6 +31,19 @@ class OpenAiTransactionDraftSchemaTests {
         assertEquals(false, schema["additionalProperties"])
     }
 
+    @Test
+    fun `allows QR and stored value account types`() {
+        val properties = OpenAiTransactionDraftGenerator.responseSchema["properties"] as Map<*, *>
+        val paymentMethod = properties["paymentMethod"] as Map<*, *>
+        val storedValueAccountType = properties["storedValueAccountType"] as Map<*, *>
+
+        assertTrue((paymentMethod["enum"] as List<*>).contains("QR"))
+        assertEquals(
+            setOf("ONNURI_GIFT_CERTIFICATE", "PREGNANCY_VOUCHER", null),
+            (storedValueAccountType["enum"] as List<*>).toSet(),
+        )
+    }
+
     private fun keywordsIn(value: Any?): Set<String> =
         when (value) {
             is Map<*, *> ->

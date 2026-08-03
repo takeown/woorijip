@@ -3,6 +3,7 @@ package com.woorijip.api.statement
 import com.woorijip.api.auth.CurrentUser
 import com.woorijip.api.error.ApiException
 import com.woorijip.api.error.ErrorCode
+import com.woorijip.api.storedvalue.StoredValueAccountRepository
 import com.woorijip.api.transaction.PaymentMethod
 import com.woorijip.api.transaction.Transaction
 import com.woorijip.api.transaction.TransactionCategory
@@ -42,6 +43,7 @@ class CardStatementApplyService(
     private val transactionRepository: TransactionRepository,
     private val transactionService: TransactionService,
     private val matcher: CardStatementMatcher,
+    private val storedValueAccountRepository: StoredValueAccountRepository,
 ) {
     @Transactional
     fun apply(
@@ -135,6 +137,17 @@ class CardStatementApplyService(
                     tags = selection.tags,
                     paymentMethod = PaymentMethod.CARD,
                     cardIssuer = statementImport.cardIssuer,
+                    storedValueAccountId = candidate.storedValueAccountType?.let { accountType ->
+                        storedValueAccountRepository.ensureDefaults(currentUser.householdId)
+                        requireNotNull(
+                            storedValueAccountRepository.findByHouseholdIdAndOwnerUserIdAndType(
+                                householdId = currentUser.householdId,
+                                ownerUserId = currentUser.id,
+                                type = accountType,
+                            ),
+                        )
+                            .id
+                    },
                     occurredAt = candidate.occurredOn
                         .atTime(12, 0)
                         .atZone(SEOUL_ZONE_ID)

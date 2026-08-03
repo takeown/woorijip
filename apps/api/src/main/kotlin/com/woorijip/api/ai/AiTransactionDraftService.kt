@@ -5,6 +5,7 @@ import com.woorijip.api.error.ApiException
 import com.woorijip.api.error.ErrorCode
 import com.woorijip.api.household.HouseholdMember
 import com.woorijip.api.household.HouseholdMembershipRepository
+import com.woorijip.api.storedvalue.StoredValueAccountType
 import com.woorijip.api.transaction.CardIssuer
 import com.woorijip.api.transaction.PaymentMethod
 import com.woorijip.api.transaction.TransactionCategory
@@ -26,6 +27,7 @@ data class AiTransactionDraft(
     val payerDisplayName: String? = null,
     val paymentMethod: PaymentMethod? = null,
     val cardIssuer: CardIssuer? = null,
+    val storedValueAccountType: StoredValueAccountType? = null,
     val message: String,
 )
 
@@ -87,7 +89,13 @@ class AiTransactionDraftService(
         val hasValidPaymentDetails = when (generated.paymentMethod) {
             PaymentMethod.CARD -> generated.cardIssuer != null
             PaymentMethod.CASH -> generated.cardIssuer == null
+            PaymentMethod.QR -> generated.cardIssuer == null
             PaymentMethod.UNKNOWN, null -> false
+        }
+        val hasValidStoredValueDetails = when {
+            generated.paymentMethod == PaymentMethod.QR -> generated.storedValueAccountType != null
+            generated.storedValueAccountType != null -> generated.paymentMethod == PaymentMethod.CARD
+            else -> true
         }
 
         if (
@@ -96,7 +104,8 @@ class AiTransactionDraftService(
             category == null ||
             occurredAt == null ||
             payer == null ||
-            !hasValidPaymentDetails
+            !hasValidPaymentDetails ||
+            !hasValidStoredValueDetails
         ) {
             return AiTransactionDraft(
                 status = GeneratedDraftStatus.NEEDS_CLARIFICATION,
@@ -116,6 +125,7 @@ class AiTransactionDraftService(
             payerDisplayName = payer.displayName,
             paymentMethod = generated.paymentMethod,
             cardIssuer = generated.cardIssuer,
+            storedValueAccountType = generated.storedValueAccountType,
             message = "아래 거래 내용을 확인해 주세요.",
         )
     }

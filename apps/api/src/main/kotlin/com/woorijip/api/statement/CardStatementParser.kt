@@ -1,6 +1,7 @@
 package com.woorijip.api.statement
 
 import com.woorijip.api.transaction.CardIssuer
+import com.woorijip.api.storedvalue.StoredValueAccountType
 import java.time.LocalDate
 import java.time.YearMonth
 
@@ -30,6 +31,7 @@ data class StatementCandidate(
     val installmentSequence: Int?,
     val remainingInstallments: Int?,
     val remainingPrincipal: Long?,
+    val storedValueAccountType: StoredValueAccountType? = null,
 )
 
 data class StatementAdjustment(

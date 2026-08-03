@@ -3,8 +3,8 @@
 Kotlin과 Spring을 처음 보는 상태에서 이 저장소의 API를 읽고 고칠 수 있도록 정리한
 문서다. 일반적인 Spring 설명이 아니라 이 프로젝트에 실제로 있는 파일만 다룬다.
 
-제품 방향은 `docs/PLAN.md`, 결정 배경은 `docs/DECISIONS.md`, 보안 기준은
-`docs/SECURITY.md`, 작업 규칙은 `AGENTS.md`를 본다.
+제품 방향은 `docs/PLAN.md`, 결정 배경은 `docs/DECISIONS.md`, 데이터 관계와 금액 의미는
+`docs/DATA_MODEL.md`, 보안 기준은 `docs/SECURITY.md`, 작업 규칙은 `AGENTS.md`를 본다.
 
 ## 1. 전체 그림
 
@@ -86,6 +86,11 @@ AI 요청에서 `AiSensitiveInputGuard`는 금지 데이터를 외부 전송 직
 `OpenAiSafetyIdentifier`는 내부 사용자 ID를 HMAC 가명 식별자로 바꾼다. 허용 전송
 필드, 저장 금지 데이터와 검증 기준은 `docs/SECURITY.md`를 따른다.
 
+AI 거래 초안은 카드·현금·QR 결제 경로와 온누리상품권·임산부 바우처 잔액 유형을
+서로 다른 필드로 반환한다. 외부 AI에는 household의 실제 잔액 계정 ID를 전달하지 않는다.
+웹은 AI가 반환한 잔액 유형과 결제자를 현재 household에서 조회한 사용자별 계정 ID와
+연결하고, 사용자가 초안을 확인한 뒤 기존 `POST /transactions` 요청으로 저장한다.
+
 사용자가 새 가맹점 규칙을 저장하면 `MerchantClassificationRuleService`가 같은
 transaction 안에서 현재 household의 재확정 대상 `MIGRATION` 거래와 이전 규칙으로
 자동 보완된 미확정 거래를 조회한다. 정규화 가맹점이 정확히 같고 후보 조회 이후
@@ -120,7 +125,9 @@ Base64 URL 형식의 불투명한 문자열로 표현하지만, 무결성을 보
 `transaction/TransactionService.kt`
 
 "이 거래를 저장해도 되는가"를 판단한다. 예를 들어 결제자가 우리 household 구성원인지,
-카드 결제인데 카드사가 비어 있지는 않은지 확인한다.
+카드 결제인데 카드사가 비어 있지는 않은지 확인한다. 별도 잔액을 사용하는 거래는
+`StoredValueAccountService`와 함께 계정을 잠그고 잔액 부족 여부를 확인한 뒤 사용 변동을
+저장한다. 카드와 QR은 결제 경로이며 온누리상품권과 임산부 바우처는 잔액 계정이다.
 
 `@Transactional`이 붙은 함수는 **중간에 실패하면 그때까지 한 일이 전부 취소된다.**
 거래를 저장하고 태그를 저장하는 두 단계 중 뒤가 실패하면 앞도 없던 일이 된다.
@@ -148,7 +155,25 @@ ID의 태그만 추가로 조회한다. 새 거래가 앞에 추가돼도 offset
 행이 밀리지 않는다.
 
 집계처럼 더 복잡한 건 `statistics/SpendingStatisticsRepository.kt`처럼 `JdbcTemplate`으로
-직접 쓴다.
+직접 쓴다. `storedvalue/StoredValueAccountRepository.kt`도 계정별 변동 합계로 현재 잔액을
+계산하고 동시 사용 전에 계정 행을 잠그기 위해 명시적인 SQL을 사용한다.
+
+카드 명세서는 `CardStatementParser` 인터페이스 뒤에서 카드사별로 해석한다.
+`KbCardStatementParser`는 XLSX를, `HyundaiCardStatementParser`는 HTML 기반 XLS를 읽어 같은
+`StatementCandidate`로 변환한다. 현대카드 온누리 청구할인 행은 거래 후보로 만들지 않고
+바로 앞 구매 후보에 `ONNURI_GIFT_CERTIFICATE` 잔액 힌트를 기록한다.
+
+### 별도 잔액 — 상품권과 바우처
+
+`storedvalue/StoredValueAccountController.kt`는 household 구성원별 온누리상품권·임산부
+바우처 잔액 조회와 충전·지급 입력을 받는다. `stored_value_accounts`는 잔액의 종류와
+`owner_user_id` 소유자를,
+`stored_value_movements`는 충전·지급과 거래 사용을 보존한다. 잔액은 별도 숫자를 갱신하지
+않고 변동의 `balance_delta` 합계로 계산한다.
+
+거래가 잔액 계정을 사용하면 `transactions.stored_value_account_id`와 `SPEND` 변동이
+연결된다. 거래 수정에서는 기존 사용 변동을 제거한 뒤 새 금액과 계정으로 다시 검증하고,
+거래 삭제에서는 외래 키의 `ON DELETE CASCADE`가 사용 변동을 함께 제거해 잔액을 복원한다.
 
 ### Flyway — 데이터베이스 구조 변경
 
@@ -200,6 +225,8 @@ fun create(currentUser: CurrentUser, @Valid @RequestBody request: CreateTransact
 | --- | --- |
 | 거래에 필드 추가 | 새 Flyway 파일 → `transaction/Transaction.kt` → `TransactionController.kt`의 요청·응답 클래스 |
 | 카테고리 목록 변경 | `transaction/TransactionClassification.kt` + 새 Flyway 파일(CHECK 제약도 함께) |
+| 상품권·바우처 잔액 변경 | `storedvalue/StoredValueAccountController.kt` → `StoredValueAccountService.kt` → `StoredValueAccountRepository.kt` |
+| 카드사 명세서 형식 추가 | `statement/CardStatementParser.kt` 구현 → parser 테스트 → 공통 대조·반영 테스트 |
 | 가맹점 분류 추천 변경 | `transaction/MerchantClassificationRuleController.kt` → `MerchantClassificationRuleService.kt` → `MerchantClassificationRuleRepository.kt` |
 | 새 API 주소 추가 | 해당 도메인 폴더에 Controller 함수 추가 |
 | 검증 규칙 변경 | 단순 형식이면 요청 클래스의 `@field:` 표시, 판단이 필요하면 Service |

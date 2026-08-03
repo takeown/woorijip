@@ -3,6 +3,7 @@ export type TransactionCategory =
   | "HOUSING"
   | "TRANSPORT"
   | "LIVING"
+  | "CHILDCARE"
   | "HEALTH"
   | "LEISURE"
   | "EDUCATION"
@@ -24,6 +25,7 @@ export const transactionCategories: {
   { value: "HOUSING", label: "주거", examples: ["월세", "대출 이자", "관리비", "전기요금", "수도요금", "가스요금", "주택 수리", "가구", "이사", "청소 서비스"] },
   { value: "TRANSPORT", label: "교통", examples: ["지하철", "버스", "택시", "주유", "주차", "통행료", "자동차 정비", "기차", "렌터카", "교통카드"] },
   { value: "LIVING", label: "생활", examples: ["세제", "휴지", "주방용품", "의류", "신발", "미용실", "화장품", "세탁", "택배", "생활가전"] },
+  { value: "CHILDCARE", label: "육아", examples: ["기저귀", "분유", "아기옷", "유모차", "카시트", "아기용품", "이유식", "장난감", "산후용품", "돌봄"] },
   { value: "HEALTH", label: "건강", examples: ["병원", "치과", "약국", "건강검진", "영양제", "안경", "물리치료", "심리상담", "운동 치료", "의료기기"] },
   { value: "LEISURE", label: "여가", examples: ["영화", "공연", "여행", "게임", "취미용품", "도서", "음원", "OTT", "스포츠 관람", "놀이공원"] },
   { value: "EDUCATION", label: "교육", examples: ["학원", "온라인 강의", "자격증", "교재", "외국어 수업", "직무 교육", "세미나", "독서 모임", "과외", "교육 소프트웨어"] },
