@@ -21,7 +21,14 @@ describe("StoredValueAccountPanel", () => {
 
     render(
       <StoredValueAccountPanel
-        accounts={[{ id: 3, type: "ONNURI_GIFT_CERTIFICATE", name: "온누리상품권", balance: 0 }]}
+        accounts={[{
+          id: 3,
+          ownerUserId: 1,
+          ownerDisplayName: "나",
+          type: "ONNURI_GIFT_CERTIFICATE",
+          name: "온누리상품권",
+          balance: 0,
+        }]}
         onChanged={onChanged}
       />,
     );

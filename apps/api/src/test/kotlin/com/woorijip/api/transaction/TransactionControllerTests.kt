@@ -10,6 +10,7 @@ import com.woorijip.api.household.HouseholdRepository
 import com.woorijip.api.identity.AppUser
 import com.woorijip.api.identity.AppUserRepository
 import com.woorijip.api.storedvalue.StoredValueAccountRepository
+import com.woorijip.api.storedvalue.StoredValueAccountType
 import org.hamcrest.Matchers.containsString
 import org.hamcrest.Matchers.hasSize
 import org.springframework.beans.factory.annotation.Autowired
@@ -380,6 +381,55 @@ class TransactionControllerTests(
             }
 
         assertEquals(10_000, storedValueAccountRepository.findAllByHouseholdId(currentUser.householdId)[0].balance)
+    }
+
+    @Test
+    fun `creates separate stored value accounts for each household member`() {
+        val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
+        val partnerId = createMember(currentUser.householdId, "배우자")
+
+        mockMvc
+            .get("/stored-value-accounts") {
+                with(allowedOidcLogin())
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$", hasSize<Any>(4))
+                jsonPath("$[0].ownerUserId") { value(currentUser.id) }
+                jsonPath("$[0].ownerDisplayName") { value("첫 번째 사용자") }
+                jsonPath("$[0].type") { value("ONNURI_GIFT_CERTIFICATE") }
+                jsonPath("$[2].ownerUserId") { value(partnerId) }
+                jsonPath("$[2].ownerDisplayName") { value("배우자") }
+                jsonPath("$[2].type") { value("ONNURI_GIFT_CERTIFICATE") }
+            }
+
+        val otherHouseholdId = createHousehold("다른 집")
+        val otherUserId = createMember(otherHouseholdId, "다른 사용자")
+        storedValueAccountRepository.ensureDefaults(otherHouseholdId)
+        val otherAccount = requireNotNull(
+            storedValueAccountRepository.findByHouseholdIdAndOwnerUserIdAndType(
+                householdId = otherHouseholdId,
+                ownerUserId = otherUserId,
+                type = StoredValueAccountType.ONNURI_GIFT_CERTIFICATE,
+            ),
+        )
+
+        mockMvc
+            .post("/stored-value-accounts/${otherAccount.id}/credits") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content =
+                    """
+                    {
+                      "balanceAmount": 10000,
+                      "paidAmount": 9300,
+                      "occurredAt": "2026-08-03T12:00:00+09:00"
+                    }
+                    """.trimIndent()
+            }.andExpect {
+                status { isNotFound() }
+                jsonPath("$.code") { value("STORED_VALUE_ACCOUNT_NOT_FOUND") }
+            }
     }
 
     @Test

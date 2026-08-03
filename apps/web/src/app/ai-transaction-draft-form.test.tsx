@@ -27,15 +27,27 @@ const members = [
 const storedValueAccounts = [
   {
     id: 11,
+    ownerUserId: 1,
+    ownerDisplayName: "나",
     type: "ONNURI_GIFT_CERTIFICATE" as const,
     name: "온누리상품권",
     balance: 100_000,
   },
   {
     id: 12,
+    ownerUserId: 1,
+    ownerDisplayName: "나",
     type: "PREGNANCY_VOUCHER" as const,
     name: "임산부 바우처",
     balance: 500_000,
+  },
+  {
+    id: 13,
+    ownerUserId: 2,
+    ownerDisplayName: "배우자",
+    type: "ONNURI_GIFT_CERTIFICATE" as const,
+    name: "온누리상품권",
+    balance: 50_000,
   },
 ];
 
@@ -122,13 +134,16 @@ describe("AiTransactionDraftForm", () => {
 
     expect((await screen.findByLabelText("결제 경로") as HTMLSelectElement).value).toBe("QR");
     expect((screen.getByLabelText(/사용 잔액/) as HTMLSelectElement).value).toBe("11");
+    await user.selectOptions(screen.getByLabelText("결제자"), "2");
+    expect((screen.getByLabelText(/사용 잔액/) as HTMLSelectElement).value).toBe("13");
     await user.click(screen.getByRole("button", { name: "확인하고 저장" }));
 
     const requestBody = JSON.parse(String(fetchMock.mock.calls[3][1]?.body));
     expect(requestBody).toMatchObject({
       paymentMethod: "QR",
       cardIssuer: null,
-      storedValueAccountId: 11,
+      payerId: 2,
+      storedValueAccountId: 13,
     });
   });
 

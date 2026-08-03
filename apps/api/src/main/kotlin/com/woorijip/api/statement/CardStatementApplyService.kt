@@ -139,9 +139,13 @@ class CardStatementApplyService(
                     cardIssuer = statementImport.cardIssuer,
                     storedValueAccountId = candidate.storedValueAccountType?.let { accountType ->
                         storedValueAccountRepository.ensureDefaults(currentUser.householdId)
-                        storedValueAccountRepository
-                            .findAllByHouseholdId(currentUser.householdId)
-                            .single { account -> account.type == accountType }
+                        requireNotNull(
+                            storedValueAccountRepository.findByHouseholdIdAndOwnerUserIdAndType(
+                                householdId = currentUser.householdId,
+                                ownerUserId = currentUser.id,
+                                type = accountType,
+                            ),
+                        )
                             .id
                     },
                     occurredAt = candidate.occurredOn

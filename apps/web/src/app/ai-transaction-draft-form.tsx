@@ -117,7 +117,9 @@ export function AiTransactionDraftForm({
         setPaymentMethod(nextDraft.paymentMethod);
         setCardIssuer(nextDraft.cardIssuer ?? "");
         const storedValueAccount = storedValueAccounts.find(
-          (account) => account.type === nextDraft.storedValueAccountType,
+          (account) =>
+            account.ownerUserId === nextDraft.payerId &&
+            account.type === nextDraft.storedValueAccountType,
         );
         setStoredValueAccountId(storedValueAccount ? String(storedValueAccount.id) : "");
       }
@@ -299,6 +301,18 @@ export function AiTransactionDraftForm({
                 defaultValue={draft.payerId}
                 id="draft-payerId"
                 name="payerId"
+                onChange={(event) => {
+                  const selectedAccount = storedValueAccounts.find(
+                    (account) => String(account.id) === storedValueAccountId,
+                  );
+                  if (!selectedAccount) return;
+                  const nextAccount = storedValueAccounts.find(
+                    (account) =>
+                      account.ownerUserId === Number(event.target.value) &&
+                      account.type === selectedAccount.type,
+                  );
+                  setStoredValueAccountId(nextAccount ? String(nextAccount.id) : "");
+                }}
                 required
               >
                 {householdMembers.map((member) => (
@@ -365,7 +379,7 @@ export function AiTransactionDraftForm({
                 <option value="">일반 결제</option>
                 {storedValueAccounts.map((account) => (
                   <option key={account.id} value={account.id}>
-                    {account.name} · 잔액 {account.balance.toLocaleString("ko-KR")}원
+                    {account.ownerDisplayName} · {account.name} · 잔액 {account.balance.toLocaleString("ko-KR")}원
                   </option>
                 ))}
               </select>

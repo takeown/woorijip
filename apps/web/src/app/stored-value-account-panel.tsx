@@ -4,6 +4,8 @@ import { FormEvent, useState } from "react";
 
 export type StoredValueAccount = {
   id: number;
+  ownerUserId: number;
+  ownerDisplayName: string;
   type: "ONNURI_GIFT_CERTIFICATE" | "PREGNANCY_VOUCHER";
   name: string;
   balance: number;
@@ -66,7 +68,10 @@ export function StoredValueAccountPanel({ accounts, onChanged }: Props) {
         {accounts.map((account) => (
           <details className="group overflow-hidden rounded-xl border border-stone-200 bg-white" key={account.id}>
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
-              <span className="min-w-0 text-sm font-medium text-stone-700">{account.name}</span>
+              <span className="min-w-0">
+                <span className="block truncate text-xs text-stone-500">{account.ownerDisplayName}</span>
+                <span className="mt-0.5 block truncate text-sm font-medium text-stone-700">{account.name}</span>
+              </span>
               <span className="flex shrink-0 items-center gap-2">
                 <span className="font-semibold text-emerald-700">
                   {amountFormatter.format(account.balance)}원

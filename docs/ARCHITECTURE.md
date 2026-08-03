@@ -3,8 +3,8 @@
 Kotlin과 Spring을 처음 보는 상태에서 이 저장소의 API를 읽고 고칠 수 있도록 정리한
 문서다. 일반적인 Spring 설명이 아니라 이 프로젝트에 실제로 있는 파일만 다룬다.
 
-제품 방향은 `docs/PLAN.md`, 결정 배경은 `docs/DECISIONS.md`, 보안 기준은
-`docs/SECURITY.md`, 작업 규칙은 `AGENTS.md`를 본다.
+제품 방향은 `docs/PLAN.md`, 결정 배경은 `docs/DECISIONS.md`, 데이터 관계와 금액 의미는
+`docs/DATA_MODEL.md`, 보안 기준은 `docs/SECURITY.md`, 작업 규칙은 `AGENTS.md`를 본다.
 
 ## 1. 전체 그림
 
@@ -88,8 +88,8 @@ AI 요청에서 `AiSensitiveInputGuard`는 금지 데이터를 외부 전송 직
 
 AI 거래 초안은 카드·현금·QR 결제 경로와 온누리상품권·임산부 바우처 잔액 유형을
 서로 다른 필드로 반환한다. 외부 AI에는 household의 실제 잔액 계정 ID를 전달하지 않는다.
-웹은 AI가 반환한 잔액 유형을 현재 household에서 조회한 계정 ID와 연결하고, 사용자가
-초안을 확인한 뒤 기존 `POST /transactions` 요청으로 저장한다.
+웹은 AI가 반환한 잔액 유형과 결제자를 현재 household에서 조회한 사용자별 계정 ID와
+연결하고, 사용자가 초안을 확인한 뒤 기존 `POST /transactions` 요청으로 저장한다.
 
 사용자가 새 가맹점 규칙을 저장하면 `MerchantClassificationRuleService`가 같은
 transaction 안에서 현재 household의 재확정 대상 `MIGRATION` 거래와 이전 규칙으로
@@ -165,8 +165,9 @@ ID의 태그만 추가로 조회한다. 새 거래가 앞에 추가돼도 offset
 
 ### 별도 잔액 — 상품권과 바우처
 
-`storedvalue/StoredValueAccountController.kt`는 household의 온누리상품권·임산부 바우처
-잔액 조회와 충전·지급 입력을 받는다. `stored_value_accounts`는 잔액의 종류와 소유권을,
+`storedvalue/StoredValueAccountController.kt`는 household 구성원별 온누리상품권·임산부
+바우처 잔액 조회와 충전·지급 입력을 받는다. `stored_value_accounts`는 잔액의 종류와
+`owner_user_id` 소유자를,
 `stored_value_movements`는 충전·지급과 거래 사용을 보존한다. 잔액은 별도 숫자를 갱신하지
 않고 변동의 `balance_delta` 합계로 계산한다.
 

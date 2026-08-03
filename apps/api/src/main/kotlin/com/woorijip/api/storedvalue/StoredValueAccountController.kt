@@ -17,6 +17,8 @@ import java.time.OffsetDateTime
 
 data class StoredValueAccountResponse(
     val id: Long,
+    val ownerUserId: Long,
+    val ownerDisplayName: String,
     val type: StoredValueAccountType,
     val name: String,
     val balance: Long,
@@ -61,4 +63,4 @@ class StoredValueAccountController(
 }
 
 private fun StoredValueAccount.toResponse(): StoredValueAccountResponse =
-    StoredValueAccountResponse(id, type, name, balance)
+    StoredValueAccountResponse(id, ownerUserId, ownerDisplayName, type, name, balance)

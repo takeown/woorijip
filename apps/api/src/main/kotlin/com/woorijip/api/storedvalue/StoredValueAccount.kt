@@ -10,6 +10,8 @@ enum class StoredValueAccountType {
 data class StoredValueAccount(
     val id: Long,
     val householdId: Long,
+    val ownerUserId: Long,
+    val ownerDisplayName: String,
     val type: StoredValueAccountType,
     val name: String,
     val balance: Long,
