@@ -16,6 +16,7 @@ pnpm dev:web
 ```bash
 nvm use
 pnpm lint:web
+pnpm test:web
 pnpm build:web
 ```
 

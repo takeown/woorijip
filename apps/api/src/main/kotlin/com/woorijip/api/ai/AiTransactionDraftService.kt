@@ -50,7 +50,7 @@ class AiTransactionDraftService(
                 ),
             )
         } catch (exception: DraftGenerationException) {
-            logger.warn("AI 거래 초안 생성 실패: {}", exception.message, exception)
+            logger.warn("AI 거래 초안 생성 실패: {}", exception.message)
             throw ApiException(
                 ErrorCode.AI_DRAFT_UNAVAILABLE,
                 "AI 거래 초안을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.",

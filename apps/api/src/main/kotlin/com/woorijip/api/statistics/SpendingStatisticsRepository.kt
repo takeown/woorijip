@@ -137,6 +137,7 @@ class SpendingStatisticsRepository(
             WHERE transactions.household_id = :householdId
               AND transactions.occurred_at >= :start
               AND transactions.occurred_at < :endExclusive
+              AND transactions.classification_confirmed_at IS NOT NULL
               ${payerCondition("transactions", payerId)}
             GROUP BY transaction_tags.tag
             ORDER BY total_amount DESC, item_label

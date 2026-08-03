@@ -152,6 +152,15 @@ class SpendingStatisticsControllerTests(
         saveTransaction(
             currentUser.householdId,
             currentUser.id,
+            1,
+            "생활",
+            "2026-07-12T12:00:00+09:00",
+            tags = setOf(TransactionTag.SUBSCRIPTION),
+            classificationConfirmedAt = null,
+        )
+        saveTransaction(
+            currentUser.householdId,
+            currentUser.id,
             15_000,
             "식비",
             "2026-07-10T12:00:00+09:00",
@@ -349,6 +358,7 @@ class SpendingStatisticsControllerTests(
         occurredAt: String,
         paymentMethod: PaymentMethod = PaymentMethod.CARD,
         tags: Set<TransactionTag> = emptySet(),
+        classificationConfirmedAt: OffsetDateTime? = now,
     ) {
         val transactionId = assertNotNull(
             transactionRepository.save(
@@ -359,6 +369,7 @@ class SpendingStatisticsControllerTests(
                     description = null,
                     amount = amount,
                     category = TransactionCategory.entries.single { it.label == category },
+                    classificationConfirmedAt = classificationConfirmedAt,
                     paymentMethod = paymentMethod,
                     cardIssuer = if (paymentMethod == PaymentMethod.CARD) CardIssuer.SHINHAN else null,
                     occurredAt = OffsetDateTime.parse(occurredAt),
