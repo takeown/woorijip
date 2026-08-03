@@ -45,6 +45,7 @@ export function StoredValueAccountPanel({ accounts, onChanged }: Props) {
       if (!response.ok) throw new Error("잔액을 추가하지 못했습니다. 입력값을 확인해 주세요.");
       form.reset();
       await onChanged();
+      form.closest("details")?.removeAttribute("open");
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "잔액을 추가하지 못했습니다.");
     } finally {
@@ -53,42 +54,62 @@ export function StoredValueAccountPanel({ accounts, onChanged }: Props) {
   }
 
   return (
-    <section className="mb-7 space-y-4 rounded-2xl bg-stone-50 p-5">
-      <div>
-        <p className="text-sm font-medium text-emerald-700">별도 잔액</p>
-        <h2 className="mt-1 text-xl font-semibold">상품권·바우처</h2>
+    <section className="mb-7 mt-5 rounded-2xl bg-stone-50 p-4">
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium text-emerald-700">별도 잔액</p>
+          <h2 className="mt-1 text-lg font-semibold">상품권·바우처</h2>
+        </div>
+        <p className="pb-0.5 text-xs text-stone-500">눌러서 충전·지급</p>
       </div>
-      {accounts.map((account) => (
-        <form className="rounded-xl border border-stone-200 bg-white p-4" key={account.id} onSubmit={(event) => credit(event, account)}>
-          <div className="flex items-center justify-between gap-3">
-            <p className="font-medium text-stone-800">{account.name}</p>
-            <p className="font-semibold text-emerald-700">{amountFormatter.format(account.balance)}원</p>
-          </div>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <label className="text-xs font-medium text-stone-600">
-              {account.type === "PREGNANCY_VOUCHER" ? "지급 금액" : "충전 금액"}
-              <input className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm" min="1" name="balanceAmount" required type="number" />
-            </label>
-            {account.type === "ONNURI_GIFT_CERTIFICATE" ? (
-              <label className="text-xs font-medium text-stone-600">
-                계좌 출금액
-                <input className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm" min="0" name="paidAmount" required type="number" />
-              </label>
-            ) : null}
-            <label className="text-xs font-medium text-stone-600">
-              출금 계좌 <span className="font-normal">(선택)</span>
-              <input className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm" maxLength={100} name="sourceName" />
-            </label>
-            <label className="text-xs font-medium text-stone-600">
-              일시
-              <input className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm" name="occurredAt" required type="datetime-local" />
-            </label>
-          </div>
-          <button className="mt-3 rounded-lg bg-stone-800 px-3 py-2 text-sm font-medium text-white disabled:opacity-50" disabled={isSaving !== null} type="submit">
-            {isSaving === account.id ? "저장 중..." : account.type === "PREGNANCY_VOUCHER" ? "지급 기록" : "충전 기록"}
-          </button>
-        </form>
-      ))}
+      <div className="mt-3 space-y-2">
+        {accounts.map((account) => (
+          <details className="group overflow-hidden rounded-xl border border-stone-200 bg-white" key={account.id}>
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
+              <span className="min-w-0 text-sm font-medium text-stone-700">{account.name}</span>
+              <span className="flex shrink-0 items-center gap-2">
+                <span className="font-semibold text-emerald-700">
+                  {amountFormatter.format(account.balance)}원
+                </span>
+                <span
+                  aria-hidden="true"
+                  className="text-stone-400 transition-transform group-open:rotate-180"
+                >
+                  ▾
+                </span>
+              </span>
+            </summary>
+            <form
+              className="border-t border-stone-100 px-4 pb-4 pt-3"
+              onSubmit={(event) => credit(event, account)}
+            >
+              <div className="grid gap-3">
+                <label className="text-xs font-medium text-stone-600">
+                  {account.type === "PREGNANCY_VOUCHER" ? "지급 금액" : "충전 금액"}
+                  <input className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm" min="1" name="balanceAmount" required type="number" />
+                </label>
+                {account.type === "ONNURI_GIFT_CERTIFICATE" ? (
+                  <label className="text-xs font-medium text-stone-600">
+                    계좌 출금액
+                    <input className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm" min="0" name="paidAmount" required type="number" />
+                  </label>
+                ) : null}
+                <label className="text-xs font-medium text-stone-600">
+                  출금 계좌 <span className="font-normal">(선택)</span>
+                  <input className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm" maxLength={100} name="sourceName" />
+                </label>
+                <label className="text-xs font-medium text-stone-600">
+                  일시
+                  <input className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm" name="occurredAt" required type="datetime-local" />
+                </label>
+              </div>
+              <button className="mt-3 w-full rounded-lg bg-stone-800 px-3 py-2 text-sm font-medium text-white disabled:opacity-50" disabled={isSaving !== null} type="submit">
+                {isSaving === account.id ? "저장 중..." : account.type === "PREGNANCY_VOUCHER" ? "지급 기록" : "충전 기록"}
+              </button>
+            </form>
+          </details>
+        ))}
+      </div>
       {error ? <p className="text-sm text-red-700" role="alert">{error}</p> : null}
     </section>
   );

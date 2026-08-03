@@ -26,6 +26,12 @@ describe("StoredValueAccountPanel", () => {
       />,
     );
 
+    const accountSummary = screen.getByText("온누리상품권").closest("summary");
+    expect(accountSummary).not.toBeNull();
+    expect(accountSummary?.parentElement?.hasAttribute("open")).toBe(false);
+
+    await user.click(accountSummary!);
+    expect(accountSummary?.parentElement?.hasAttribute("open")).toBe(true);
     await user.type(screen.getByLabelText("충전 금액"), "10000");
     await user.type(screen.getByLabelText("계좌 출금액"), "9300");
     await user.type(screen.getByLabelText(/일시/), "2026-08-03T12:00");
@@ -38,6 +44,7 @@ describe("StoredValueAccountPanel", () => {
       paidAmount: 9_300,
     });
     expect(onChanged).toHaveBeenCalledOnce();
+    expect(accountSummary?.parentElement?.hasAttribute("open")).toBe(false);
   });
 });
 
