@@ -97,6 +97,51 @@ class StoredValueAccountControllerTests(
     }
 
     @Test
+    fun `creates and validates a directly named account category`() {
+        val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
+
+        mockMvc
+            .post("/stored-value-accounts") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content =
+                    """
+                    {
+                      "ownerUserId": ${currentUser.id},
+                      "name": "첫만남이용권",
+                      "category": "OTHER",
+                      "customCategoryName": "육아 지원금",
+                      "automationKey": null
+                    }
+                    """.trimIndent()
+            }.andExpect {
+                status { isCreated() }
+                jsonPath("$.category") { value("OTHER") }
+                jsonPath("$.customCategoryName") { value("육아 지원금") }
+            }
+
+        mockMvc
+            .post("/stored-value-accounts") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content =
+                    """
+                    {
+                      "ownerUserId": ${currentUser.id},
+                      "name": "종류명 없는 계정",
+                      "category": "OTHER",
+                      "automationKey": null
+                    }
+                    """.trimIndent()
+            }.andExpect {
+                status { isBadRequest() }
+                jsonPath("$.code") { value("INVALID_STORED_VALUE_ACCOUNT") }
+            }
+    }
+
+    @Test
     fun `updates archives restores and deletes an unused custom account`() {
         val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
         val accountId = createAccount(currentUser.id, "서울사랑상품권", "LOCAL_CURRENCY")

@@ -2,7 +2,7 @@
 
 마지막 수정: 2026-08-04
 
-현재 기준: Flyway V14
+현재 기준: Flyway V15
 
 이 문서는 데이터 관계, 소유권과 금액 의미를 빠르게 이해하기 위한 안내서다. 실제
 PostgreSQL 스키마의 유일한 기준은 `apps/api/src/main/resources/db/migration`의 Flyway
@@ -91,6 +91,7 @@ erDiagram
         bigint household_id FK
         bigint owner_user_id FK
         string category
+        string custom_category_name
         string automation_key
         datetime archived_at
     }
@@ -148,6 +149,8 @@ erDiagram
 소유자에게만 사용자가 생성하며 소유자는 생성 후 변경하지 않는다.
 
 `category`는 `GIFT_CERTIFICATE`, `VOUCHER`, `LOCAL_CURRENCY`, `PREPAID`, `OTHER` 중 하나다.
+`OTHER`는 화면의 직접 입력 분류이며 이때 `custom_category_name`에 사용자가 정한 종류명을
+필수로 저장한다. 다른 기본 분류에서는 `custom_category_name`을 저장하지 않는다.
 `automation_key`는 현대카드 명세서나 AI가 특정 계정을 찾을 때만 사용하며
 `ONNURI_GIFT_CERTIFICATE`, `PREGNANCY_VOUCHER` 또는 `NULL`이다. 한 소유자에게 같은
 자동 연동 키의 활성 계정은 하나만 존재한다. 자유 입력 이름과 일반 분류는 자동 연동
@@ -270,6 +273,7 @@ erDiagram
 | V12 | 상품권·바우처 잔액, 변동, 카드·QR 사용 연결 |
 | V13 | 잔액 계정을 household 구성원별 소유로 전환 |
 | V14 | 잔액 계정 커스텀 생성·분류·자동 연동 키·보관 상태 추가 |
+| V15 | 직접 입력 잔액 종류명 추가 및 기존 `OTHER` 계정 이전 |
 
 이미 적용되거나 커밋된 migration은 수정하지 않는다. 구조를 바꿀 때는 새 번호의
 migration을 추가하고 이 문서에는 변경된 최종 관계와 의미를 반영한다.

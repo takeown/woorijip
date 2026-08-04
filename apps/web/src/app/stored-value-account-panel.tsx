@@ -19,6 +19,7 @@ export type StoredValueAccount = {
   ownerUserId: number;
   ownerDisplayName: string;
   category: StoredValueAccountCategory;
+  customCategoryName: string | null;
   automationKey: StoredValueAutomationKey | null;
   name: string;
   balance: number;
@@ -49,12 +50,14 @@ const categories: { value: StoredValueAccountCategory; label: string }[] = [
   { value: "VOUCHER", label: "바우처" },
   { value: "LOCAL_CURRENCY", label: "지역화폐" },
   { value: "PREPAID", label: "선불잔액" },
-  { value: "OTHER", label: "기타" },
+  { value: "OTHER", label: "직접 입력" },
 ];
 
 export function StoredValueAccountPanel({ accounts, householdMembers, onChanged }: Props) {
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [createPreset, setCreatePreset] = useState<AccountPreset>("CUSTOM_GIFT_CERTIFICATE");
+  const [editCategories, setEditCategories] = useState<Record<number, StoredValueAccountCategory>>({});
 
   async function csrfToken() {
     const response = await fetch(`${apiUrl}/auth/csrf`, { credentials: "include" });
@@ -85,11 +88,15 @@ export function StoredValueAccountPanel({ accounts, householdMembers, onChanged 
           ownerUserId: Number(data.get("ownerUserId")),
           name: String(data.get("name") ?? "").trim(),
           category: selection.category,
+          customCategoryName: selection.category === "OTHER"
+            ? String(data.get("customCategoryName") ?? "").trim()
+            : null,
           automationKey: selection.automationKey,
         }),
       });
       if (!response.ok) throw new Error(await apiError(response, "잔액 계정을 추가하지 못했습니다."));
       form.reset();
+      setCreatePreset("CUSTOM_GIFT_CERTIFICATE");
       await onChanged();
       form.closest("details")?.removeAttribute("open");
     } catch (caughtError) {
@@ -133,6 +140,7 @@ export function StoredValueAccountPanel({ accounts, householdMembers, onChanged 
     account: StoredValueAccount,
     name: string,
     category: StoredValueAccountCategory,
+    customCategoryName: string | null,
     archived: boolean,
     savingAction: string,
   ) {
@@ -144,7 +152,7 @@ export function StoredValueAccountPanel({ accounts, householdMembers, onChanged 
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json", [csrf.headerName]: csrf.token },
-        body: JSON.stringify({ name, category, archived }),
+        body: JSON.stringify({ name, category, customCategoryName, archived }),
       });
       if (!response.ok) throw new Error(await apiError(response, "잔액 계정을 수정하지 못했습니다."));
       await onChanged();
@@ -158,10 +166,12 @@ export function StoredValueAccountPanel({ accounts, householdMembers, onChanged 
   async function saveDetails(event: FormEvent<HTMLFormElement>, account: StoredValueAccount) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
+    const category = String(data.get("category")) as StoredValueAccountCategory;
     await updateAccount(
       account,
       String(data.get("name") ?? "").trim(),
-      String(data.get("category")) as StoredValueAccountCategory,
+      category,
+      category === "OTHER" ? String(data.get("customCategoryName") ?? "").trim() : null,
       account.archived,
       "edit",
     );
@@ -214,18 +224,24 @@ export function StoredValueAccountPanel({ accounts, householdMembers, onChanged 
           </label>
           <label className="text-xs font-medium text-stone-600">
             종류
-            <select className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm" defaultValue="CUSTOM_GIFT_CERTIFICATE" name="preset">
-              <option value="ONNURI_GIFT_CERTIFICATE">온누리상품권 자동 연동</option>
-              <option value="PREGNANCY_VOUCHER">임산부 바우처 AI 인식</option>
+            <select className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm" name="preset" onChange={(event) => setCreatePreset(event.target.value as AccountPreset)} value={createPreset}>
+              <option value="ONNURI_GIFT_CERTIFICATE">온누리상품권</option>
+              <option value="PREGNANCY_VOUCHER">임산부 바우처</option>
               <option value="CUSTOM_GIFT_CERTIFICATE">일반 상품권</option>
               <option value="CUSTOM_VOUCHER">일반 바우처</option>
               <option value="LOCAL_CURRENCY">지역화폐</option>
               <option value="PREPAID">선불잔액</option>
-              <option value="OTHER">기타</option>
+              <option value="OTHER">직접 입력</option>
             </select>
           </label>
+          {createPreset === "OTHER" ? (
+            <label className="text-xs font-medium text-stone-600">
+              종류명
+              <input className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm" maxLength={40} name="customCategoryName" placeholder="예: 육아 지원금" required />
+            </label>
+          ) : null}
           <button className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-medium text-white disabled:opacity-50" disabled={savingKey !== null} type="submit">
-            {savingKey === "create" ? "추가 중..." : "계정 추가"}
+            {savingKey === "create" ? "추가 중..." : "잔액 추가"}
           </button>
         </form>
       </details>
@@ -236,7 +252,7 @@ export function StoredValueAccountPanel({ accounts, householdMembers, onChanged 
           <details className="group overflow-hidden rounded-xl border border-stone-200 bg-white" key={account.id}>
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
               <span className="min-w-0">
-                <span className="block truncate text-xs text-stone-500">{account.ownerDisplayName}{account.archived ? " · 보관됨" : ""}</span>
+                <span className="block truncate text-xs text-stone-500">{account.ownerDisplayName} · {accountCategoryLabel(account)}{account.archived ? " · 보관됨" : ""}</span>
                 <span className="mt-0.5 block truncate text-sm font-medium text-stone-700">{account.name}</span>
               </span>
               <span className="flex shrink-0 items-center gap-2">
@@ -276,14 +292,20 @@ export function StoredValueAccountPanel({ accounts, householdMembers, onChanged 
               </label>
               <label className="text-xs font-medium text-stone-600">
                 분류
-                <select className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm disabled:bg-stone-100" defaultValue={account.category} disabled={account.automationKey !== null} name="category">
+                <select className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm disabled:bg-stone-100" disabled={account.automationKey !== null} name="category" onChange={(event) => setEditCategories((current) => ({ ...current, [account.id]: event.target.value as StoredValueAccountCategory }))} value={editCategories[account.id] ?? account.category}>
                   {categories.map((category) => <option key={category.value} value={category.value}>{category.label}</option>)}
                 </select>
                 {account.automationKey ? <input name="category" type="hidden" value={account.category} /> : null}
               </label>
+              {(editCategories[account.id] ?? account.category) === "OTHER" ? (
+                <label className="text-xs font-medium text-stone-600">
+                  종류명
+                  <input className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm" defaultValue={account.customCategoryName ?? ""} maxLength={40} name="customCategoryName" required />
+                </label>
+              ) : null}
               <div className="grid grid-cols-2 gap-2">
                 <button className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-medium text-stone-700 disabled:opacity-50" disabled={savingKey !== null} type="submit">정보 저장</button>
-                <button className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-medium text-stone-700 disabled:opacity-50" disabled={savingKey !== null} onClick={() => updateAccount(account, account.name, account.category, !account.archived, "archive")} type="button">{account.archived ? "다시 사용" : "보관"}</button>
+                <button className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-medium text-stone-700 disabled:opacity-50" disabled={savingKey !== null} onClick={() => updateAccount(account, account.name, account.category, account.customCategoryName, !account.archived, "archive")} type="button">{account.archived ? "다시 사용" : "보관"}</button>
               </div>
               {account.canDelete ? <button className="text-xs font-medium text-red-700 disabled:opacity-50" disabled={savingKey !== null} onClick={() => deleteAccount(account)} type="button">사용 이력 없는 계정 삭제</button> : <p className="text-xs text-stone-500">사용 이력이 있어 삭제 대신 보관할 수 있습니다.</p>}
             </form>
@@ -293,6 +315,12 @@ export function StoredValueAccountPanel({ accounts, householdMembers, onChanged 
       {error ? <p className="mt-3 text-sm text-red-700" role="alert">{error}</p> : null}
     </section>
   );
+}
+
+function accountCategoryLabel(account: StoredValueAccount): string {
+  return account.customCategoryName
+    ?? categories.find((category) => category.value === account.category)?.label
+    ?? account.category;
 }
 
 function presetDetails(preset: AccountPreset): {

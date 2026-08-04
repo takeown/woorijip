@@ -23,10 +23,12 @@ class StoredValueAccountService(
         ownerUserId: Long,
         name: String,
         category: StoredValueAccountCategory,
+        customCategoryName: String?,
         automationKey: StoredValueAutomationKey?,
     ): StoredValueAccount {
         requireOwnerInHousehold(currentUser.householdId, ownerUserId)
         requireAutomationCategory(category, automationKey)
+        requireCustomCategoryName(category, customCategoryName)
         requireAvailableAutomationKey(currentUser.householdId, ownerUserId, automationKey)
         val id = repository.create(
             householdId = currentUser.householdId,
@@ -34,6 +36,7 @@ class StoredValueAccountService(
             name = name,
             category = category,
             automationKey = automationKey,
+            customCategoryName = customCategoryName,
             createdAt = OffsetDateTime.now(),
         )
         return requireNotNull(repository.findByIdAndHouseholdIdForUpdate(id, currentUser.householdId))
@@ -45,10 +48,12 @@ class StoredValueAccountService(
         accountId: Long,
         name: String,
         category: StoredValueAccountCategory,
+        customCategoryName: String?,
         archived: Boolean,
     ): StoredValueAccount {
         val account = findForUpdate(accountId, currentUser.householdId)
         requireAutomationCategory(category, account.automationKey)
+        requireCustomCategoryName(category, customCategoryName)
         if (!archived && account.archivedAt != null) {
             requireAvailableAutomationKey(
                 currentUser.householdId,
@@ -61,6 +66,7 @@ class StoredValueAccountService(
             householdId = currentUser.householdId,
             name = name,
             category = category,
+            customCategoryName = customCategoryName,
             archivedAt = if (archived) account.archivedAt ?: OffsetDateTime.now() else null,
         )
         return requireNotNull(
@@ -175,6 +181,23 @@ class StoredValueAccountService(
         }
         if (!valid) {
             throw ApiException(ErrorCode.INVALID_STORED_VALUE_ACCOUNT, "자동 연동 종류와 잔액 분류가 맞지 않습니다.")
+        }
+    }
+
+    private fun requireCustomCategoryName(
+        category: StoredValueAccountCategory,
+        customCategoryName: String?,
+    ) {
+        val valid = if (category == StoredValueAccountCategory.OTHER) {
+            customCategoryName != null
+        } else {
+            customCategoryName == null
+        }
+        if (!valid) {
+            throw ApiException(
+                ErrorCode.INVALID_STORED_VALUE_ACCOUNT,
+                "직접 입력 분류에는 종류명이 필요합니다.",
+            )
         }
     }
 }

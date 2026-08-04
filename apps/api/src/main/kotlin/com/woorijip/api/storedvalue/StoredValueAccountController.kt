@@ -23,6 +23,7 @@ data class StoredValueAccountResponse(
     val ownerUserId: Long,
     val ownerDisplayName: String,
     val category: StoredValueAccountCategory,
+    val customCategoryName: String?,
     val automationKey: StoredValueAutomationKey?,
     val name: String,
     val balance: Long,
@@ -39,6 +40,8 @@ data class CreateStoredValueAccountRequest(
     val name: String?,
     @field:NotNull
     val category: StoredValueAccountCategory?,
+    @field:Size(max = 40)
+    val customCategoryName: String?,
     val automationKey: StoredValueAutomationKey?,
 )
 
@@ -48,6 +51,8 @@ data class UpdateStoredValueAccountRequest(
     val name: String?,
     @field:NotNull
     val category: StoredValueAccountCategory?,
+    @field:Size(max = 40)
+    val customCategoryName: String?,
     @field:NotNull
     val archived: Boolean?,
 )
@@ -84,6 +89,7 @@ class StoredValueAccountController(
             ownerUserId = requireNotNull(request.ownerUserId),
             name = requireNotNull(request.name).trim(),
             category = requireNotNull(request.category),
+            customCategoryName = request.customCategoryName?.trim()?.takeIf(String::isNotEmpty),
             automationKey = request.automationKey,
         ).toResponse()
 
@@ -98,6 +104,7 @@ class StoredValueAccountController(
             accountId = accountId,
             name = requireNotNull(request.name).trim(),
             category = requireNotNull(request.category),
+            customCategoryName = request.customCategoryName?.trim()?.takeIf(String::isNotEmpty),
             archived = requireNotNull(request.archived),
         ).toResponse()
 
@@ -130,6 +137,7 @@ private fun StoredValueAccount.toResponse(): StoredValueAccountResponse =
         ownerUserId = ownerUserId,
         ownerDisplayName = ownerDisplayName,
         category = category,
+        customCategoryName = customCategoryName,
         automationKey = automationKey,
         name = name,
         balance = balance,

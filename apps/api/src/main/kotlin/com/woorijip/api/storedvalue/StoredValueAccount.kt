@@ -21,6 +21,7 @@ data class StoredValueAccount(
     val ownerUserId: Long,
     val ownerDisplayName: String,
     val category: StoredValueAccountCategory,
+    val customCategoryName: String?,
     val automationKey: StoredValueAutomationKey?,
     val name: String,
     val balance: Long,

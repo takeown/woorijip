@@ -13,7 +13,7 @@ class StoredValueAccountRepository(
         jdbcTemplate.query(
             """
             SELECT a.id, a.household_id, a.owner_user_id, u.display_name AS owner_display_name,
-                   a.category, a.automation_key, a.name, a.archived_at, a.created_at,
+                   a.category, a.custom_category_name, a.automation_key, a.name, a.archived_at, a.created_at,
                    COALESCE(SUM(m.balance_delta), 0) AS balance,
                    COUNT(m.id) = 0 AND NOT EXISTS (
                        SELECT 1 FROM transactions AS t WHERE t.stored_value_account_id = a.id
@@ -33,7 +33,7 @@ class StoredValueAccountRepository(
         jdbcTemplate.query(
             """
             SELECT a.id, a.household_id, a.owner_user_id, u.display_name AS owner_display_name,
-                   a.category, a.automation_key, a.name, a.archived_at, a.created_at,
+                   a.category, a.custom_category_name, a.automation_key, a.name, a.archived_at, a.created_at,
                    COALESCE((
                        SELECT SUM(m.balance_delta) FROM stored_value_movements AS m WHERE m.account_id = a.id
                    ), 0) AS balance,
@@ -68,15 +68,18 @@ class StoredValueAccountRepository(
         name: String,
         category: StoredValueAccountCategory,
         automationKey: StoredValueAutomationKey?,
+        customCategoryName: String? = null,
         createdAt: OffsetDateTime,
     ): Long =
         requireNotNull(
             jdbcTemplate.queryForObject(
                 """
                 INSERT INTO stored_value_accounts (
-                    household_id, owner_user_id, category, automation_key, name, created_at
+                    household_id, owner_user_id, category, custom_category_name,
+                    automation_key, name, created_at
                 ) VALUES (
-                    :householdId, :ownerUserId, :category, :automationKey, :name, :createdAt
+                    :householdId, :ownerUserId, :category, :customCategoryName,
+                    :automationKey, :name, :createdAt
                 )
                 RETURNING id
                 """.trimIndent(),
@@ -84,6 +87,7 @@ class StoredValueAccountRepository(
                     .addValue("householdId", householdId)
                     .addValue("ownerUserId", ownerUserId)
                     .addValue("category", category.name)
+                    .addValue("customCategoryName", customCategoryName)
                     .addValue("automationKey", automationKey?.name)
                     .addValue("name", name)
                     .addValue("createdAt", createdAt),
@@ -96,12 +100,16 @@ class StoredValueAccountRepository(
         householdId: Long,
         name: String,
         category: StoredValueAccountCategory,
+        customCategoryName: String?,
         archivedAt: OffsetDateTime?,
     ): Int =
         jdbcTemplate.update(
             """
             UPDATE stored_value_accounts
-            SET name = :name, category = :category, archived_at = :archivedAt
+            SET name = :name,
+                category = :category,
+                custom_category_name = :customCategoryName,
+                archived_at = :archivedAt
             WHERE id = :id AND household_id = :householdId
             """.trimIndent(),
             MapSqlParameterSource()
@@ -109,6 +117,7 @@ class StoredValueAccountRepository(
                 .addValue("householdId", householdId)
                 .addValue("name", name)
                 .addValue("category", category.name)
+                .addValue("customCategoryName", customCategoryName)
                 .addValue("archivedAt", archivedAt),
         )
 
@@ -196,6 +205,7 @@ class StoredValueAccountRepository(
             ownerUserId = resultSet.getLong("owner_user_id"),
             ownerDisplayName = resultSet.getString("owner_display_name"),
             category = StoredValueAccountCategory.valueOf(resultSet.getString("category")),
+            customCategoryName = resultSet.getString("custom_category_name"),
             automationKey = resultSet.getString("automation_key")?.let(StoredValueAutomationKey::valueOf),
             name = resultSet.getString("name"),
             balance = resultSet.getLong("balance"),
