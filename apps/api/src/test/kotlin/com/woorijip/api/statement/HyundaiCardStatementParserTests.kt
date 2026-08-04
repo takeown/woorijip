@@ -1,6 +1,6 @@
 package com.woorijip.api.statement
 
-import com.woorijip.api.storedvalue.StoredValueAccountType
+import com.woorijip.api.storedvalue.StoredValueAutomationKey
 import com.woorijip.api.transaction.CardIssuer
 import java.time.LocalDate
 import java.time.YearMonth
@@ -27,7 +27,7 @@ class HyundaiCardStatementParserTests {
         assertEquals("GS25 테스트점", onnuri.merchant)
         assertEquals(2_400, onnuri.approvedAmount)
         assertEquals(0, onnuri.billedAmount)
-        assertEquals(StoredValueAccountType.ONNURI_GIFT_CERTIFICATE, onnuri.storedValueAccountType)
+        assertEquals(StoredValueAutomationKey.ONNURI_GIFT_CERTIFICATE, onnuri.storedValueAccountType)
         assertEquals(-2_400, statement.adjustments.single().amount)
         assertEquals(StatementEntryType.REVERSAL, statement.candidates.last().type)
     }

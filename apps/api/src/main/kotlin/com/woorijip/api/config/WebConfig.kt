@@ -31,7 +31,7 @@ class WebConfig(
             registry
                 .addMapping(path)
                 .allowedOrigins(*allowedOrigins)
-                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
                 .allowedHeaders("Content-Type", "X-XSRF-TOKEN")
                 .allowCredentials(true)
         }

@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { StoredValueAccountPanel } from "./stored-value-account-panel";
@@ -25,24 +25,33 @@ describe("StoredValueAccountPanel", () => {
           id: 3,
           ownerUserId: 1,
           ownerDisplayName: "나",
-          type: "ONNURI_GIFT_CERTIFICATE",
+          category: "GIFT_CERTIFICATE",
+          customCategoryName: null,
+          automationKey: "ONNURI_GIFT_CERTIFICATE",
           name: "온누리상품권",
           balance: 0,
+          archived: false,
+          canDelete: true,
         }]}
+        householdMembers={[{ userId: 1, displayName: "나" }]}
         onChanged={onChanged}
       />,
     );
 
-    const accountSummary = screen.getByText("온누리상품권").closest("summary");
+    const accountSummary = screen
+      .getByText("온누리상품권", { selector: "span" })
+      .closest("summary");
     expect(accountSummary).not.toBeNull();
     expect(accountSummary?.parentElement?.hasAttribute("open")).toBe(false);
 
     await user.click(accountSummary!);
     expect(accountSummary?.parentElement?.hasAttribute("open")).toBe(true);
-    await user.type(screen.getByLabelText("충전 금액"), "10000");
-    await user.type(screen.getByLabelText("계좌 출금액"), "9300");
+    await user.type(screen.getByLabelText("잔액 추가 금액"), "10000");
+    await user.type(screen.getByLabelText("실제 출금액"), "9300");
     await user.type(screen.getByLabelText(/일시/), "2026-08-03T12:00");
-    await user.click(screen.getByRole("button", { name: "충전 기록" }));
+    const creditForm = screen.getByLabelText("잔액 추가 금액").closest("form");
+    expect(creditForm).not.toBeNull();
+    await user.click(within(creditForm!).getByRole("button", { name: "잔액 추가" }));
 
     const request = fetchMock.mock.calls[1];
     expect(request[0]).toBe("http://localhost:8080/stored-value-accounts/3/credits");
@@ -53,11 +62,80 @@ describe("StoredValueAccountPanel", () => {
     expect(onChanged).toHaveBeenCalledOnce();
     expect(accountSummary?.parentElement?.hasAttribute("open")).toBe(false);
   });
+
+  test("creates a custom account for the selected household member", async () => {
+    const user = userEvent.setup();
+    const onChanged = vi.fn();
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ token: "csrf", headerName: "X-XSRF-TOKEN" }))
+      .mockResolvedValueOnce(jsonResponse({}, 201));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <StoredValueAccountPanel
+        accounts={[]}
+        householdMembers={[
+          { userId: 1, displayName: "나" },
+          { userId: 2, displayName: "배우자" },
+        ]}
+        onChanged={onChanged}
+      />,
+    );
+
+    await user.click(screen.getByText("잔액 계정 추가"));
+    await user.type(screen.getByLabelText("이름"), "서울사랑상품권");
+    await user.selectOptions(screen.getByLabelText("소유자"), "2");
+    await user.selectOptions(screen.getByLabelText("종류"), "LOCAL_CURRENCY");
+    await user.click(screen.getByRole("button", { name: "잔액 추가" }));
+
+    expect(fetchMock.mock.calls[1][0]).toBe("http://localhost:8080/stored-value-accounts");
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toEqual({
+      ownerUserId: 2,
+      name: "서울사랑상품권",
+      category: "LOCAL_CURRENCY",
+      customCategoryName: null,
+      automationKey: null,
+    });
+    expect(onChanged).toHaveBeenCalledOnce();
+  });
+
+  test("shows and sends a directly entered category name", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ token: "csrf", headerName: "X-XSRF-TOKEN" }))
+      .mockResolvedValueOnce(jsonResponse({}, 201));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <StoredValueAccountPanel
+        accounts={[]}
+        householdMembers={[{ userId: 2, displayName: "배우자" }]}
+        onChanged={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByText("잔액 계정 추가"));
+    expect(screen.queryByLabelText("종류명")).toBeNull();
+    await user.selectOptions(screen.getByLabelText("종류"), "OTHER");
+    await user.type(screen.getByLabelText("이름"), "첫만남이용권");
+    await user.type(screen.getByLabelText("종류명"), "육아 지원금");
+    await user.click(screen.getByRole("button", { name: "잔액 추가" }));
+
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toEqual({
+      ownerUserId: 2,
+      name: "첫만남이용권",
+      category: "OTHER",
+      customCategoryName: "육아 지원금",
+      automationKey: null,
+    });
+  });
 });
 
-function jsonResponse(body: unknown): Response {
+function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     headers: { "Content-Type": "application/json" },
-    status: 200,
+    status,
   });
 }

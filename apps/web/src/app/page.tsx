@@ -198,6 +198,7 @@ export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) 
         </div>
         <StoredValueAccountPanel
           accounts={storedValueAccounts}
+          householdMembers={householdMembers}
           onChanged={async () => setStoredValueAccounts(await fetchStoredValueAccounts())}
         />
         <div className="my-7 flex items-center gap-3 text-xs text-stone-400">

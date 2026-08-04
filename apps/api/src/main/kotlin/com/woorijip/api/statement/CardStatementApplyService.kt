@@ -138,15 +138,16 @@ class CardStatementApplyService(
                     paymentMethod = PaymentMethod.CARD,
                     cardIssuer = statementImport.cardIssuer,
                     storedValueAccountId = candidate.storedValueAccountType?.let { accountType ->
-                        storedValueAccountRepository.ensureDefaults(currentUser.householdId)
-                        requireNotNull(
-                            storedValueAccountRepository.findByHouseholdIdAndOwnerUserIdAndType(
+                        storedValueAccountRepository
+                            .findActiveByHouseholdIdAndOwnerUserIdAndAutomationKey(
                                 householdId = currentUser.householdId,
                                 ownerUserId = currentUser.id,
-                                type = accountType,
-                            ),
-                        )
-                            .id
+                                automationKey = accountType,
+                            )
+                            ?.id
+                            ?: throw InvalidCardStatementException(
+                                "명세서의 온누리 사용을 반영하려면 먼저 본인 온누리상품권 계정을 추가해 주세요.",
+                            )
                     },
                     occurredAt = candidate.occurredOn
                         .atTime(12, 0)

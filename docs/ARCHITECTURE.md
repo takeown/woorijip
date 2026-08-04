@@ -165,15 +165,18 @@ ID의 태그만 추가로 조회한다. 새 거래가 앞에 추가돼도 offset
 
 ### 별도 잔액 — 상품권과 바우처
 
-`storedvalue/StoredValueAccountController.kt`는 household 구성원별 온누리상품권·임산부
-바우처 잔액 조회와 충전·지급 입력을 받는다. `stored_value_accounts`는 잔액의 종류와
-`owner_user_id` 소유자를,
+`storedvalue/StoredValueAccountController.kt`는 household 구성원별 상품권·바우처·지역화폐
+계정 생성, 조회, 이름·분류·보관 상태 수정, 미사용 계정 삭제와 충전·지급 입력을 받는다.
+조회 시 기본 계정을 자동 생성하지 않는다. `stored_value_accounts`는 자유 입력 이름,
+일반 분류, `OTHER`일 때의 직접 입력 종류명, 선택적인 자동 연동 키와 `owner_user_id` 소유자를,
 `stored_value_movements`는 충전·지급과 거래 사용을 보존한다. 잔액은 별도 숫자를 갱신하지
 않고 변동의 `balance_delta` 합계로 계산한다.
 
 거래가 잔액 계정을 사용하면 `transactions.stored_value_account_id`와 `SPEND` 변동이
 연결된다. 거래 수정에서는 기존 사용 변동을 제거한 뒤 새 금액과 계정으로 다시 검증하고,
 거래 삭제에서는 외래 키의 `ON DELETE CASCADE`가 사용 변동을 함께 제거해 잔액을 복원한다.
+보관한 계정은 새 충전과 새 거래에 사용할 수 없다. 변동이나 연결 거래가 없는 계정만
+삭제하며 이력이 있으면 409 오류로 보관을 안내한다.
 
 ### Flyway — 데이터베이스 구조 변경
 

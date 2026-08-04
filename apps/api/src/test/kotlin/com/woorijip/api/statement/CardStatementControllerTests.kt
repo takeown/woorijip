@@ -9,7 +9,8 @@ import com.woorijip.api.transaction.Transaction
 import com.woorijip.api.transaction.TransactionCategory
 import com.woorijip.api.transaction.TransactionRepository
 import com.woorijip.api.storedvalue.StoredValueAccountRepository
-import com.woorijip.api.storedvalue.StoredValueAccountType
+import com.woorijip.api.storedvalue.StoredValueAccountCategory
+import com.woorijip.api.storedvalue.StoredValueAutomationKey
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
@@ -101,9 +102,17 @@ class CardStatementControllerTests(
     @Test
     fun `previews Hyundai html xls and applies an Onnuri purchase against its balance`() {
         val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
-        storedValueAccountRepository.ensureDefaults(currentUser.householdId)
-        val onnuriAccount = storedValueAccountRepository.findAllByHouseholdId(currentUser.householdId)
-            .single { it.type == StoredValueAccountType.ONNURI_GIFT_CERTIFICATE }
+        val accountId = storedValueAccountRepository.create(
+            householdId = currentUser.householdId,
+            ownerUserId = currentUser.id,
+            name = "온누리상품권",
+            category = StoredValueAccountCategory.GIFT_CERTIFICATE,
+            automationKey = StoredValueAutomationKey.ONNURI_GIFT_CERTIFICATE,
+            createdAt = OffsetDateTime.parse("2026-06-01T12:00:00+09:00"),
+        )
+        val onnuriAccount = requireNotNull(
+            storedValueAccountRepository.findByIdAndHouseholdIdForUpdate(accountId, currentUser.householdId),
+        )
         storedValueAccountRepository.addCredit(
             accountId = onnuriAccount.id,
             balanceAmount = 2_400,

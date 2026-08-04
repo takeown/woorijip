@@ -2,12 +2,15 @@ package com.woorijip.api.storedvalue
 
 import com.woorijip.api.auth.CurrentUser
 import jakarta.validation.Valid
+import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Positive
 import jakarta.validation.constraints.PositiveOrZero
 import jakarta.validation.constraints.Size
 import org.springframework.http.HttpStatus
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
@@ -19,9 +22,39 @@ data class StoredValueAccountResponse(
     val id: Long,
     val ownerUserId: Long,
     val ownerDisplayName: String,
-    val type: StoredValueAccountType,
+    val category: StoredValueAccountCategory,
+    val customCategoryName: String?,
+    val automationKey: StoredValueAutomationKey?,
     val name: String,
     val balance: Long,
+    val archived: Boolean,
+    val canDelete: Boolean,
+)
+
+data class CreateStoredValueAccountRequest(
+    @field:NotNull
+    @field:Positive
+    val ownerUserId: Long?,
+    @field:NotBlank
+    @field:Size(max = 100)
+    val name: String?,
+    @field:NotNull
+    val category: StoredValueAccountCategory?,
+    @field:Size(max = 40)
+    val customCategoryName: String?,
+    val automationKey: StoredValueAutomationKey?,
+)
+
+data class UpdateStoredValueAccountRequest(
+    @field:NotBlank
+    @field:Size(max = 100)
+    val name: String?,
+    @field:NotNull
+    val category: StoredValueAccountCategory?,
+    @field:Size(max = 40)
+    val customCategoryName: String?,
+    @field:NotNull
+    val archived: Boolean?,
 )
 
 data class CreditStoredValueAccountRequest(
@@ -45,6 +78,42 @@ class StoredValueAccountController(
     fun findAll(currentUser: CurrentUser): List<StoredValueAccountResponse> =
         service.findAll(currentUser).map(StoredValueAccount::toResponse)
 
+    @PostMapping("/stored-value-accounts")
+    @ResponseStatus(HttpStatus.CREATED)
+    fun create(
+        currentUser: CurrentUser,
+        @Valid @RequestBody request: CreateStoredValueAccountRequest,
+    ): StoredValueAccountResponse =
+        service.create(
+            currentUser = currentUser,
+            ownerUserId = requireNotNull(request.ownerUserId),
+            name = requireNotNull(request.name).trim(),
+            category = requireNotNull(request.category),
+            customCategoryName = request.customCategoryName?.trim()?.takeIf(String::isNotEmpty),
+            automationKey = request.automationKey,
+        ).toResponse()
+
+    @PatchMapping("/stored-value-accounts/{accountId}")
+    fun update(
+        currentUser: CurrentUser,
+        @PathVariable accountId: Long,
+        @Valid @RequestBody request: UpdateStoredValueAccountRequest,
+    ): StoredValueAccountResponse =
+        service.update(
+            currentUser = currentUser,
+            accountId = accountId,
+            name = requireNotNull(request.name).trim(),
+            category = requireNotNull(request.category),
+            customCategoryName = request.customCategoryName?.trim()?.takeIf(String::isNotEmpty),
+            archived = requireNotNull(request.archived),
+        ).toResponse()
+
+    @DeleteMapping("/stored-value-accounts/{accountId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun delete(currentUser: CurrentUser, @PathVariable accountId: Long) {
+        service.delete(currentUser, accountId)
+    }
+
     @PostMapping("/stored-value-accounts/{accountId}/credits")
     @ResponseStatus(HttpStatus.CREATED)
     fun credit(
@@ -63,4 +132,15 @@ class StoredValueAccountController(
 }
 
 private fun StoredValueAccount.toResponse(): StoredValueAccountResponse =
-    StoredValueAccountResponse(id, ownerUserId, ownerDisplayName, type, name, balance)
+    StoredValueAccountResponse(
+        id = id,
+        ownerUserId = ownerUserId,
+        ownerDisplayName = ownerDisplayName,
+        category = category,
+        customCategoryName = customCategoryName,
+        automationKey = automationKey,
+        name = name,
+        balance = balance,
+        archived = archivedAt != null,
+        canDelete = canDelete,
+    )

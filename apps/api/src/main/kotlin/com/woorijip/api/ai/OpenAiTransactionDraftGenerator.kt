@@ -1,6 +1,6 @@
 package com.woorijip.api.ai
 
-import com.woorijip.api.storedvalue.StoredValueAccountType
+import com.woorijip.api.storedvalue.StoredValueAutomationKey
 import com.woorijip.api.transaction.CardIssuer
 import com.woorijip.api.transaction.PaymentMethod
 import com.woorijip.api.transaction.TransactionCategory
@@ -172,7 +172,7 @@ class OpenAiTransactionDraftGenerator(
                 ),
                 "storedValueAccountType" to mapOf(
                     "type" to listOf("string", "null"),
-                    "enum" to StoredValueAccountType.entries.map(StoredValueAccountType::name) + null,
+                    "enum" to StoredValueAutomationKey.entries.map(StoredValueAutomationKey::name) + null,
                 ),
                 "message" to nullableString,
             ),
