@@ -1,7 +1,7 @@
 package com.woorijip.api.statement
 
 import com.woorijip.api.auth.CurrentUser
-import com.woorijip.api.storedvalue.StoredValueAccountType
+import com.woorijip.api.storedvalue.StoredValueAutomationKey
 import com.woorijip.api.transaction.CardIssuer
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
@@ -110,7 +110,7 @@ class CardStatementImportRepository(
                     installment_sequence,
                     remaining_installments,
                     remaining_principal,
-                    stored_value_account_type
+                    stored_value_automation_key
                 )
                 VALUES (
                     :importId,
@@ -173,7 +173,7 @@ class CardStatementImportRepository(
                    installment_sequence,
                    remaining_installments,
                    remaining_principal,
-                   stored_value_account_type,
+                   stored_value_automation_key,
                    applied_transaction_id
             FROM card_statement_candidates
             WHERE import_id = :importId
@@ -240,8 +240,8 @@ class CardStatementImportRepository(
                 installmentSequence = resultSet.nullableInt("installment_sequence"),
                 remainingInstallments = resultSet.nullableInt("remaining_installments"),
                 remainingPrincipal = resultSet.nullableLong("remaining_principal"),
-                storedValueAccountType = resultSet.getString("stored_value_account_type")?.let(
-                    StoredValueAccountType::valueOf,
+                storedValueAccountType = resultSet.getString("stored_value_automation_key")?.let(
+                    StoredValueAutomationKey::valueOf,
                 ),
             ),
             appliedTransactionId = resultSet.nullableLong("applied_transaction_id"),

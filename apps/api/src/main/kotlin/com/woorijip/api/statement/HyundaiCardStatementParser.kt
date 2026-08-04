@@ -1,6 +1,6 @@
 package com.woorijip.api.statement
 
-import com.woorijip.api.storedvalue.StoredValueAccountType
+import com.woorijip.api.storedvalue.StoredValueAutomationKey
 import com.woorijip.api.transaction.CardIssuer
 import org.springframework.stereotype.Component
 import java.io.StringReader
@@ -87,7 +87,7 @@ class HyundaiCardStatementParser : CardStatementParser {
                     throw InvalidCardStatementException("온누리상품권 사용 행과 대응하는 가맹점 결제를 찾을 수 없습니다.")
                 }
                 candidates[previousIndex] = previous.copy(
-                    storedValueAccountType = StoredValueAccountType.ONNURI_GIFT_CERTIFICATE,
+                    storedValueAccountType = StoredValueAutomationKey.ONNURI_GIFT_CERTIFICATE,
                 )
                 adjustments += StatementAdjustment(row.sourceRow, merchant, adjustmentAmount)
                 return@forEach

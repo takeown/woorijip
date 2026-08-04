@@ -347,7 +347,7 @@ export function TransactionForm({
           value={storedValueAccountId}
         >
           <option value="">일반 결제</option>
-          {storedValueAccounts.map((account) => (
+          {storedValueAccounts.filter((account) => !account.archived).map((account) => (
             <option key={account.id} value={account.id}>
               {account.ownerDisplayName} · {account.name} · 잔액 {account.balance.toLocaleString("ko-KR")}원
             </option>

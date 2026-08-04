@@ -5,7 +5,7 @@ import com.woorijip.api.error.ApiException
 import com.woorijip.api.error.ErrorCode
 import com.woorijip.api.household.HouseholdMember
 import com.woorijip.api.household.HouseholdMembershipRepository
-import com.woorijip.api.storedvalue.StoredValueAccountType
+import com.woorijip.api.storedvalue.StoredValueAutomationKey
 import com.woorijip.api.transaction.CardIssuer
 import com.woorijip.api.transaction.PaymentMethod
 import com.woorijip.api.transaction.TransactionCategory
@@ -27,7 +27,7 @@ data class AiTransactionDraft(
     val payerDisplayName: String? = null,
     val paymentMethod: PaymentMethod? = null,
     val cardIssuer: CardIssuer? = null,
-    val storedValueAccountType: StoredValueAccountType? = null,
+    val storedValueAccountType: StoredValueAutomationKey? = null,
     val message: String,
 )
 

@@ -9,35 +9,21 @@ import java.time.OffsetDateTime
 class StoredValueAccountRepository(
     private val jdbcTemplate: NamedParameterJdbcTemplate,
 ) {
-    fun ensureDefaults(householdId: Long) {
-        jdbcTemplate.update(
-            """
-            INSERT INTO stored_value_accounts (household_id, owner_user_id, type, name)
-            SELECT membership.household_id, membership.user_id, account_type.type, account_type.name
-            FROM household_memberships AS membership
-            CROSS JOIN (
-                VALUES ('ONNURI_GIFT_CERTIFICATE', '온누리상품권'),
-                       ('PREGNANCY_VOUCHER', '임산부 바우처')
-            ) AS account_type(type, name)
-            WHERE membership.household_id = :householdId
-            ON CONFLICT (household_id, owner_user_id, type) DO NOTHING
-            """.trimIndent(),
-            mapOf("householdId" to householdId),
-        )
-    }
-
     fun findAllByHouseholdId(householdId: Long): List<StoredValueAccount> =
         jdbcTemplate.query(
             """
             SELECT a.id, a.household_id, a.owner_user_id, u.display_name AS owner_display_name,
-                   a.type, a.name, a.created_at,
-                   COALESCE(SUM(m.balance_delta), 0) AS balance
+                   a.category, a.automation_key, a.name, a.archived_at, a.created_at,
+                   COALESCE(SUM(m.balance_delta), 0) AS balance,
+                   COUNT(m.id) = 0 AND NOT EXISTS (
+                       SELECT 1 FROM transactions AS t WHERE t.stored_value_account_id = a.id
+                   ) AS can_delete
             FROM stored_value_accounts AS a
             JOIN users AS u ON u.id = a.owner_user_id
             LEFT JOIN stored_value_movements AS m ON m.account_id = a.id
             WHERE a.household_id = :householdId
             GROUP BY a.id, u.display_name
-            ORDER BY a.owner_user_id, a.type
+            ORDER BY a.archived_at NULLS FIRST, a.owner_user_id, a.name, a.id
             """.trimIndent(),
             mapOf("householdId" to householdId),
             ::account,
@@ -47,9 +33,15 @@ class StoredValueAccountRepository(
         jdbcTemplate.query(
             """
             SELECT a.id, a.household_id, a.owner_user_id, u.display_name AS owner_display_name,
-                   a.type, a.name, a.created_at,
-                   COALESCE((SELECT SUM(m.balance_delta) FROM stored_value_movements AS m WHERE m.account_id = a.id), 0)
-                       AS balance
+                   a.category, a.automation_key, a.name, a.archived_at, a.created_at,
+                   COALESCE((
+                       SELECT SUM(m.balance_delta) FROM stored_value_movements AS m WHERE m.account_id = a.id
+                   ), 0) AS balance,
+                   NOT EXISTS (
+                       SELECT 1 FROM stored_value_movements AS m WHERE m.account_id = a.id
+                   ) AND NOT EXISTS (
+                       SELECT 1 FROM transactions AS t WHERE t.stored_value_account_id = a.id
+                   ) AS can_delete
             FROM stored_value_accounts AS a
             JOIN users AS u ON u.id = a.owner_user_id
             WHERE a.id = :id AND a.household_id = :householdId
@@ -59,14 +51,82 @@ class StoredValueAccountRepository(
             ::account,
         ).singleOrNull()
 
-    fun findByHouseholdIdAndOwnerUserIdAndType(
+    fun findActiveByHouseholdIdAndOwnerUserIdAndAutomationKey(
         householdId: Long,
         ownerUserId: Long,
-        type: StoredValueAccountType,
+        automationKey: StoredValueAutomationKey,
     ): StoredValueAccount? =
         findAllByHouseholdId(householdId).singleOrNull { account ->
-            account.ownerUserId == ownerUserId && account.type == type
+            account.ownerUserId == ownerUserId &&
+                account.automationKey == automationKey &&
+                account.archivedAt == null
         }
+
+    fun create(
+        householdId: Long,
+        ownerUserId: Long,
+        name: String,
+        category: StoredValueAccountCategory,
+        automationKey: StoredValueAutomationKey?,
+        createdAt: OffsetDateTime,
+    ): Long =
+        requireNotNull(
+            jdbcTemplate.queryForObject(
+                """
+                INSERT INTO stored_value_accounts (
+                    household_id, owner_user_id, category, automation_key, name, created_at
+                ) VALUES (
+                    :householdId, :ownerUserId, :category, :automationKey, :name, :createdAt
+                )
+                RETURNING id
+                """.trimIndent(),
+                MapSqlParameterSource()
+                    .addValue("householdId", householdId)
+                    .addValue("ownerUserId", ownerUserId)
+                    .addValue("category", category.name)
+                    .addValue("automationKey", automationKey?.name)
+                    .addValue("name", name)
+                    .addValue("createdAt", createdAt),
+                Long::class.java,
+            ),
+        )
+
+    fun update(
+        id: Long,
+        householdId: Long,
+        name: String,
+        category: StoredValueAccountCategory,
+        archivedAt: OffsetDateTime?,
+    ): Int =
+        jdbcTemplate.update(
+            """
+            UPDATE stored_value_accounts
+            SET name = :name, category = :category, archived_at = :archivedAt
+            WHERE id = :id AND household_id = :householdId
+            """.trimIndent(),
+            MapSqlParameterSource()
+                .addValue("id", id)
+                .addValue("householdId", householdId)
+                .addValue("name", name)
+                .addValue("category", category.name)
+                .addValue("archivedAt", archivedAt),
+        )
+
+    fun deleteUnused(id: Long, householdId: Long): Int =
+        jdbcTemplate.update(
+            """
+            DELETE FROM stored_value_accounts AS a
+            WHERE a.id = :id
+              AND a.household_id = :householdId
+              AND NOT EXISTS (
+                  SELECT 1 FROM stored_value_movements AS m WHERE m.account_id = a.id
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM transactions AS t WHERE t.stored_value_account_id = a.id
+              )
+            """.trimIndent(),
+            mapOf("id" to id, "householdId" to householdId),
+        )
 
     fun addCredit(
         accountId: Long,
@@ -135,9 +195,12 @@ class StoredValueAccountRepository(
             householdId = resultSet.getLong("household_id"),
             ownerUserId = resultSet.getLong("owner_user_id"),
             ownerDisplayName = resultSet.getString("owner_display_name"),
-            type = StoredValueAccountType.valueOf(resultSet.getString("type")),
+            category = StoredValueAccountCategory.valueOf(resultSet.getString("category")),
+            automationKey = resultSet.getString("automation_key")?.let(StoredValueAutomationKey::valueOf),
             name = resultSet.getString("name"),
             balance = resultSet.getLong("balance"),
+            archivedAt = resultSet.getObject("archived_at", OffsetDateTime::class.java),
+            canDelete = resultSet.getBoolean("can_delete"),
             createdAt = resultSet.getObject("created_at", OffsetDateTime::class.java),
         )
 }

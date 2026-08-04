@@ -1,8 +1,8 @@
 # 데이터 모델
 
-마지막 수정: 2026-08-03
+마지막 수정: 2026-08-04
 
-현재 기준: Flyway V13
+현재 기준: Flyway V14
 
 이 문서는 데이터 관계, 소유권과 금액 의미를 빠르게 이해하기 위한 안내서다. 실제
 PostgreSQL 스키마의 유일한 기준은 `apps/api/src/main/resources/db/migration`의 Flyway
@@ -90,7 +90,9 @@ erDiagram
         bigint id PK
         bigint household_id FK
         bigint owner_user_id FK
-        string type
+        string category
+        string automation_key
+        datetime archived_at
     }
     STORED_VALUE_MOVEMENTS {
         bigint id PK
@@ -138,12 +140,18 @@ erDiagram
 둘은 같은 개념이 아니다.
 
 - `transactions.payer_id`: 가맹점 거래를 실제로 결제한 구성원
-- `stored_value_accounts.owner_user_id`: 온누리상품권·임산부 바우처 잔액의 소유자
+- `stored_value_accounts.owner_user_id`: 상품권·바우처·지역화폐 잔액의 소유자
 - `transactions.stored_value_account_id`: 해당 거래에서 사용한 잔액 계정
 
 한 household 안에서는 결제자와 잔액 소유자가 달라도 기록할 수 있다. AI 초안은 결제자
-소유 계정을 기본으로 고르지만 사용자가 확인 단계에서 바꿀 수 있다. 잔액 계정은
-`(household_id, owner_user_id, type)` 조합으로 하나만 존재한다.
+소유 계정을 기본으로 고르지만 사용자가 확인 단계에서 바꿀 수 있다. 계정은 필요한
+소유자에게만 사용자가 생성하며 소유자는 생성 후 변경하지 않는다.
+
+`category`는 `GIFT_CERTIFICATE`, `VOUCHER`, `LOCAL_CURRENCY`, `PREPAID`, `OTHER` 중 하나다.
+`automation_key`는 현대카드 명세서나 AI가 특정 계정을 찾을 때만 사용하며
+`ONNURI_GIFT_CERTIFICATE`, `PREGNANCY_VOUCHER` 또는 `NULL`이다. 한 소유자에게 같은
+자동 연동 키의 활성 계정은 하나만 존재한다. 자유 입력 이름과 일반 분류는 자동 연동
+의미를 대신하지 않는다.
 
 ### 사용자와 로그인 수단
 
@@ -170,6 +178,7 @@ erDiagram
 - `ADJUSTMENT`, `OPENING_BALANCE`: 거래 없이 잔액만 조정한다.
 - 한 거래에는 잔액 사용 변동이 최대 하나만 연결된다.
 - 잔액 부족 검증과 거래·변동 저장은 같은 데이터베이스 transaction에서 처리한다.
+- 보관한 계정은 새 `CREDIT`과 새 거래의 `SPEND`에 사용할 수 없다.
 
 온누리상품권 10,000원을 9,300원에 충전한 경우 잔액 증가액은 10,000원이고 실제 출금액은
 9,300원이다. 이후 2,400원을 사용하면 거래 금액과 잔액 감소액은 각각 2,400원이다.
@@ -197,8 +206,9 @@ erDiagram
 - 원본 파일은 저장하지 않고 정규화된 후보와 논리 fingerprint만 저장한다.
 - 후보는 `(import_id, source_row)` 조합으로 고유하다.
 - 반영된 거래가 삭제되면 `applied_transaction_id`는 `NULL`로 돌아가 재검토할 수 있다.
-- 현대카드 온누리 청구할인 행은 별도 후보가 아니라 직전 구매 후보의 잔액 유형 힌트다.
-- 명세서에서 새 온누리 거래를 만들면 업로드한 사용자 소유 계정에 연결한다.
+- 현대카드 온누리 청구할인 행은 별도 후보가 아니라 직전 구매 후보의 자동 연동 키 힌트다.
+- 명세서에서 새 온누리 거래를 만들면 업로드한 사용자의 활성 온누리 자동 연동 계정에
+  연결한다. 계정이 없으면 자동 생성하지 않고 반영을 거부한다.
 
 ## 가맹점 분류 규칙
 
@@ -215,12 +225,13 @@ erDiagram
 | household | membership, 분류 규칙, 잔액 계정은 cascade 대상이며 거래 참조가 있으면 삭제가 제한될 수 있음 |
 | 거래 | 거래 태그와 잔액 `SPEND` 변동 삭제, 명세서 후보의 적용 거래는 `NULL`로 변경 |
 | 카드 명세서 import | 모든 후보 삭제 |
-| 잔액 계정 | 모든 잔액 변동 삭제, 연결 거래가 있으면 계정 삭제 제한 |
+| 잔액 계정 | 변동과 연결 거래가 모두 없을 때만 직접 삭제, 이력이 있으면 보관 |
 | 가맹점 분류 규칙 | 규칙 태그 삭제 |
 | HTTP 세션 | 세션 속성 삭제 |
 
-현재 제품에는 사용자·household·잔액 계정을 직접 삭제하는 API가 없다. 위 규칙은 향후
-삭제 기능을 추가할 때 반드시 다시 검토한다.
+보관한 잔액 계정은 목록과 과거 거래에서 유지하지만 새 충전과 새 거래 선택에서는 제외한다.
+기존 거래가 같은 보관 계정을 유지한 채 수정되는 경우에는 잔액 변동을 다시 검증해 저장할
+수 있다. 현재 제품에는 사용자와 household를 직접 삭제하는 API가 없다.
 
 ## 테이블 역할
 
@@ -234,7 +245,7 @@ erDiagram
 | 거래 | `transaction_tags` | 거래의 중복 불가 다중 태그 |
 | 분류 | `merchant_classification_rules` | household별 가맹점 기본 분류 |
 | 분류 | `merchant_classification_rule_tags` | 분류 규칙의 태그 |
-| 잔액 | `stored_value_accounts` | 구성원별 상품권·바우처 계정 |
+| 잔액 | `stored_value_accounts` | 구성원별 커스텀 잔액 계정과 자동 연동·보관 상태 |
 | 잔액 | `stored_value_movements` | 충전·지급·사용·조정 이력 |
 | 명세서 | `card_statement_imports` | 월별 명세서 대조 실행 단위 |
 | 명세서 | `card_statement_candidates` | 정규화된 명세서 행과 반영 상태 |
@@ -258,6 +269,7 @@ erDiagram
 | V11 | 육아 카테고리 |
 | V12 | 상품권·바우처 잔액, 변동, 카드·QR 사용 연결 |
 | V13 | 잔액 계정을 household 구성원별 소유로 전환 |
+| V14 | 잔액 계정 커스텀 생성·분류·자동 연동 키·보관 상태 추가 |
 
 이미 적용되거나 커밋된 migration은 수정하지 않는다. 구조를 바꿀 때는 새 번호의
 migration을 추가하고 이 문서에는 변경된 최종 관계와 의미를 반영한다.

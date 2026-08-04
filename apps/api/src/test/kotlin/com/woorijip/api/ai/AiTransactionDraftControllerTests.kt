@@ -7,7 +7,7 @@ import com.woorijip.api.household.HouseholdMembership
 import com.woorijip.api.household.HouseholdMembershipRepository
 import com.woorijip.api.identity.AppUser
 import com.woorijip.api.identity.AppUserRepository
-import com.woorijip.api.storedvalue.StoredValueAccountType
+import com.woorijip.api.storedvalue.StoredValueAutomationKey
 import com.woorijip.api.transaction.TransactionRepository
 import com.woorijip.api.transaction.CardIssuer
 import com.woorijip.api.transaction.PaymentMethod
@@ -313,7 +313,7 @@ class AiTransactionDraftTestConfiguration {
                     occurredAt = "2026-07-21T12:30:00+09:00",
                     payer = GeneratedPayer.ME,
                     paymentMethod = PaymentMethod.QR,
-                    storedValueAccountType = StoredValueAccountType.ONNURI_GIFT_CERTIFICATE,
+                    storedValueAccountType = StoredValueAutomationKey.ONNURI_GIFT_CERTIFICATE,
                 )
                 message.contains("현대카드에 연결한 온누리상품권") -> GeneratedTransactionDraft(
                     status = GeneratedDraftStatus.READY,
@@ -324,7 +324,7 @@ class AiTransactionDraftTestConfiguration {
                     payer = GeneratedPayer.ME,
                     paymentMethod = PaymentMethod.CARD,
                     cardIssuer = CardIssuer.HYUNDAI,
-                    storedValueAccountType = StoredValueAccountType.ONNURI_GIFT_CERTIFICATE,
+                    storedValueAccountType = StoredValueAutomationKey.ONNURI_GIFT_CERTIFICATE,
                 )
                 else -> GeneratedTransactionDraft(
                     status = GeneratedDraftStatus.READY,

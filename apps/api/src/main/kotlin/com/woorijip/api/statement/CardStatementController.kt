@@ -1,7 +1,7 @@
 package com.woorijip.api.statement
 
 import com.woorijip.api.auth.CurrentUser
-import com.woorijip.api.storedvalue.StoredValueAccountType
+import com.woorijip.api.storedvalue.StoredValueAutomationKey
 import com.woorijip.api.transaction.CardIssuer
 import com.woorijip.api.transaction.Transaction
 import com.woorijip.api.transaction.TransactionCategory
@@ -49,7 +49,7 @@ data class StatementCandidateResponse(
     val installmentSequence: Int?,
     val remainingInstallments: Int?,
     val remainingPrincipal: Long?,
-    val storedValueAccountType: StoredValueAccountType?,
+    val storedValueAccountType: StoredValueAutomationKey?,
     val matchStatus: StatementMatchStatus,
     val transactionIds: List<Long>,
     val relatedTransactions: List<StatementTransactionResponse>,

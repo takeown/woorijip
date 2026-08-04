@@ -28,7 +28,7 @@ type ReadyDraft = {
   payerDisplayName: string;
   paymentMethod: PaymentMethod;
   cardIssuer: CardIssuer | null;
-  storedValueAccountType: StoredValueAccount["type"] | null;
+  storedValueAccountType: StoredValueAccount["automationKey"] | null;
   message: string;
 };
 
@@ -119,7 +119,8 @@ export function AiTransactionDraftForm({
         const storedValueAccount = storedValueAccounts.find(
           (account) =>
             account.ownerUserId === nextDraft.payerId &&
-            account.type === nextDraft.storedValueAccountType,
+            account.automationKey === nextDraft.storedValueAccountType &&
+            !account.archived,
         );
         setStoredValueAccountId(storedValueAccount ? String(storedValueAccount.id) : "");
       }
@@ -309,7 +310,8 @@ export function AiTransactionDraftForm({
                   const nextAccount = storedValueAccounts.find(
                     (account) =>
                       account.ownerUserId === Number(event.target.value) &&
-                      account.type === selectedAccount.type,
+                      account.automationKey === selectedAccount.automationKey &&
+                      !account.archived,
                   );
                   setStoredValueAccountId(nextAccount ? String(nextAccount.id) : "");
                 }}
@@ -377,7 +379,7 @@ export function AiTransactionDraftForm({
                 value={storedValueAccountId}
               >
                 <option value="">일반 결제</option>
-                {storedValueAccounts.map((account) => (
+                {storedValueAccounts.filter((account) => !account.archived).map((account) => (
                   <option key={account.id} value={account.id}>
                     {account.ownerDisplayName} · {account.name} · 잔액 {account.balance.toLocaleString("ko-KR")}원
                   </option>
