@@ -130,8 +130,28 @@ export function AuthenticatedShell({ children }: AuthenticatedShellProps) {
   }
 
   return (
-    <main className="min-h-screen bg-stone-100 px-5 py-8 text-stone-900 sm:px-8">
-      <header className="mx-auto mb-8 flex w-full max-w-6xl flex-wrap items-center justify-between gap-4">
+    <main className="min-h-screen bg-stone-100 px-4 pb-28 pt-5 text-stone-900 sm:px-6 lg:px-8 lg:py-8">
+      <header className="mx-auto mb-5 flex w-full max-w-6xl items-center justify-between lg:hidden">
+        <Link
+          className="flex min-h-11 items-center gap-2.5 text-xl font-semibold tracking-tight text-stone-900"
+          href="/"
+        >
+          <BrandLogo className="h-9 w-9" />
+          <span>우리집</span>
+        </Link>
+        <div className="flex items-center gap-3 text-sm text-stone-600">
+          <span className="max-w-28 truncate">{currentUser.displayName}</span>
+          <button
+            className="min-h-11 px-2 font-medium text-emerald-700 hover:text-emerald-800"
+            onClick={logout}
+            type="button"
+          >
+            로그아웃
+          </button>
+        </div>
+      </header>
+
+      <header className="mx-auto mb-8 hidden w-full max-w-6xl flex-wrap items-center justify-between gap-4 lg:flex">
         <div className="flex items-center gap-6">
           <Link
             className="flex items-center gap-2.5 text-xl font-semibold tracking-tight text-stone-900"
@@ -140,7 +160,7 @@ export function AuthenticatedShell({ children }: AuthenticatedShellProps) {
             <BrandLogo className="h-9 w-9" />
             <span>우리집</span>
           </Link>
-          <nav className="flex rounded-full bg-white p-1 shadow-sm" aria-label="주요 메뉴">
+          <nav className="flex rounded-full bg-white p-1 shadow-sm" aria-label="데스크톱 주요 메뉴">
             <NavigationLink active={pathname === "/"} href="/">
               거래
             </NavigationLink>
@@ -164,7 +184,58 @@ export function AuthenticatedShell({ children }: AuthenticatedShellProps) {
         </div>
       </header>
       {children(currentUser)}
+      <nav
+        className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-3 border-t border-stone-200 bg-white/95 px-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-8px_24px_rgba(41,37,36,0.08)] backdrop-blur lg:hidden"
+        aria-label="모바일 주요 메뉴"
+      >
+        <MobileNavigationLink active={pathname === "/"} href="/" icon="transaction">
+          거래
+        </MobileNavigationLink>
+        <MobileNavigationLink active={pathname === "/stats"} href="/stats" icon="stats">
+          통계
+        </MobileNavigationLink>
+        <MobileNavigationLink
+          active={pathname === "/statements"}
+          href="/statements"
+          icon="statement"
+        >
+          명세서
+        </MobileNavigationLink>
+      </nav>
     </main>
+  );
+}
+
+function MobileNavigationLink({
+  active,
+  children,
+  href,
+  icon,
+}: {
+  active: boolean;
+  children: ReactNode;
+  href: string;
+  icon: "transaction" | "stats" | "statement";
+}) {
+  const paths = {
+    transaction: "M5 7h14M5 12h14M5 17h9",
+    stats: "M5 19V9m7 10V5m7 14v-7",
+    statement: "M7 4h10a2 2 0 0 1 2 2v14l-3-2-4 2-4-2-3 2V6a2 2 0 0 1 2-2Z",
+  };
+
+  return (
+    <Link
+      aria-current={active ? "page" : undefined}
+      className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl text-xs font-medium transition ${
+        active ? "text-emerald-700" : "text-stone-500 hover:bg-stone-50"
+      }`}
+      href={href}
+    >
+      <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24">
+        <path d={paths[icon]} stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+      </svg>
+      <span>{children}</span>
+    </Link>
   );
 }
 

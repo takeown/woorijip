@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { AuthenticatedShell } from "./authenticated-shell";
 
@@ -30,17 +30,25 @@ describe("AuthenticatedShell", () => {
       </AuthenticatedShell>,
     );
 
-    expect(await screen.findByText("테스트 사용자")).toBeDefined();
+    expect(await screen.findAllByText("테스트 사용자")).toHaveLength(2);
     expect(screen.getByText("통계 콘텐츠")).toBeDefined();
-    expect(screen.getByRole("link", { name: "거래" }).getAttribute("href")).toBe("/");
-    const statsLink = screen.getByRole("link", { name: "통계" });
-    expect(statsLink.getAttribute("href")).toBe("/stats");
-    expect(statsLink.getAttribute("aria-current")).toBeNull();
-    const statementsLink = screen.getByRole("link", { name: "명세서" });
-    expect(statementsLink.getAttribute("href")).toBe("/statements");
-    expect(statementsLink.getAttribute("aria-current")).toBe("page");
-    expect(screen.getByRole("link", { name: "우리집" }).querySelector("svg")).not.toBeNull();
-    expect(container.querySelectorAll("svg")).toHaveLength(1);
+    const desktopNavigation = screen.getByRole("navigation", {
+      name: "데스크톱 주요 메뉴",
+    });
+    const mobileNavigation = screen.getByRole("navigation", {
+      name: "모바일 주요 메뉴",
+    });
+    for (const navigation of [desktopNavigation, mobileNavigation]) {
+      expect(within(navigation).getByRole("link", { name: "거래" }).getAttribute("href")).toBe("/");
+      const statsLink = within(navigation).getByRole("link", { name: "통계" });
+      expect(statsLink.getAttribute("href")).toBe("/stats");
+      expect(statsLink.getAttribute("aria-current")).toBeNull();
+      const statementsLink = within(navigation).getByRole("link", { name: "명세서" });
+      expect(statementsLink.getAttribute("href")).toBe("/statements");
+      expect(statementsLink.getAttribute("aria-current")).toBe("page");
+    }
+    expect(screen.getAllByRole("link", { name: "우리집" })).toHaveLength(2);
+    expect(container.querySelectorAll("svg")).toHaveLength(5);
   });
 });
 

@@ -1,10 +1,12 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { TransactionsPage } from "./page";
 
 vi.mock("./ai-transaction-draft-form", () => ({
-  AiTransactionDraftForm: () => <div>AI 입력</div>,
+  AiTransactionDraftForm: ({ onCreated }: { onCreated: () => Promise<void> }) => (
+    <button onClick={() => void onCreated()} type="button">AI 테스트 거래 생성</button>
+  ),
 }));
 
 vi.mock("./transaction-form", () => ({
@@ -22,6 +24,111 @@ afterEach(() => {
 });
 
 describe("TransactionsPage", () => {
+  test("opens and closes the mobile transaction entry panel", async () => {
+    const user = userEvent.setup();
+    mockMobileMediaQuery();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(async (input) => {
+        const url = String(input);
+        if (url.endsWith("/households/current/members")) {
+          return jsonResponse([{ userId: 1, displayName: "나" }]);
+        }
+        if (url.endsWith("/stored-value-accounts")) return jsonResponse([]);
+        if (url.includes("/statistics/spending")) {
+          return jsonResponse({ amountChange: 0, current: { totalAmount: 0 } });
+        }
+        return jsonResponse({ items: [], nextCursor: null });
+      }),
+    );
+
+    const { container } = render(
+      <TransactionsPage
+        currentUser={{ id: 1, displayName: "나", householdId: 10 }}
+      />,
+    );
+
+    expect(await screen.findByRole("button", { name: "거래 추가" })).toBeDefined();
+    expect(screen.getByRole("link", { name: /보유 잔액/ }).getAttribute("href")).toBe(
+      "/balances",
+    );
+    const entryPanel = container.querySelector<HTMLElement>(
+      "[aria-labelledby='transaction-entry-title']",
+    );
+    const transactionSection = screen.getByRole("heading", { name: "거래 내역" }).closest("section");
+    const initialInert = transactionSection?.inert;
+    expect(entryPanel).not.toBeNull();
+    if (entryPanel) entryPanel.scrollTop = 240;
+
+    const entryTrigger = screen.getByRole("button", { name: "거래 추가" });
+    await user.click(entryTrigger);
+
+    expect(screen.getByRole("dialog", { name: "거래 입력" })).toBeDefined();
+    await waitFor(() => expect(entryPanel?.scrollTop).toBe(0));
+    expect(transactionSection?.inert).toBe(true);
+    await user.click(screen.getByRole("button", { name: "거래 추가 닫기" }));
+    expect(screen.queryByRole("dialog", { name: "거래 입력" })).toBeNull();
+    expect(transactionSection?.inert).toBe(initialInert);
+    expect(document.activeElement).toBe(entryTrigger);
+  });
+
+  test("closes the mobile entry panel when the viewport changes to desktop", async () => {
+    const user = userEvent.setup();
+    const mediaQuery = mockMobileMediaQuery();
+    vi.stubGlobal("fetch", createInitialFetchMock());
+
+    render(
+      <TransactionsPage
+        currentUser={{ id: 1, displayName: "나", householdId: 10 }}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "거래 추가" }));
+    expect(document.body.style.overflow).toBe("hidden");
+
+    act(() => mediaQuery.switchToDesktop());
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "거래 입력" })).toBeNull();
+      expect(document.body.style.overflow).toBe("");
+    });
+  });
+
+  test("refreshes the monthly summary after creating a transaction", async () => {
+    const user = userEvent.setup();
+    mockMobileMediaQuery();
+    let summaryRequestCount = 0;
+    const fetchMock = vi.fn<typeof fetch>(async (input) => {
+      const url = String(input);
+      if (url.includes("/statistics/spending")) {
+        summaryRequestCount += 1;
+        return jsonResponse({
+          amountChange: 0,
+          current: { totalAmount: summaryRequestCount === 1 ? 100_000 : 108_000 },
+        });
+      }
+      if (url.endsWith("/households/current/members")) {
+        return jsonResponse([{ userId: 1, displayName: "나" }]);
+      }
+      if (url.endsWith("/stored-value-accounts")) return jsonResponse([]);
+      return jsonResponse({ items: [], nextCursor: null });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <TransactionsPage
+        currentUser={{ id: 1, displayName: "나", householdId: 10 }}
+      />,
+    );
+
+    expect(await screen.findByText("100,000원")).toBeDefined();
+    await user.click(screen.getByRole("button", { name: "거래 추가" }));
+    await user.click(screen.getByRole("button", { name: "AI 테스트 거래 생성" }));
+
+    expect(await screen.findByText("108,000원")).toBeDefined();
+    expect(summaryRequestCount).toBe(2);
+  });
+
   test("loads the next cursor page and resets pagination when the payer filter changes", async () => {
     const user = userEvent.setup();
     const fetchMock = vi.fn<typeof fetch>(async (input) => {
@@ -142,4 +249,42 @@ function jsonResponse(body: unknown): Response {
     headers: { "Content-Type": "application/json" },
     status: 200,
   });
+}
+
+function createInitialFetchMock() {
+  return vi.fn<typeof fetch>(async (input) => {
+    const url = String(input);
+    if (url.endsWith("/households/current/members")) {
+      return jsonResponse([{ userId: 1, displayName: "나" }]);
+    }
+    if (url.endsWith("/stored-value-accounts")) return jsonResponse([]);
+    if (url.includes("/statistics/spending")) {
+      return jsonResponse({ amountChange: 0, current: { totalAmount: 0 } });
+    }
+    return jsonResponse({ items: [], nextCursor: null });
+  });
+}
+
+function mockMobileMediaQuery() {
+  let matches = true;
+  const listeners = new Set<(event: MediaQueryListEvent) => void>();
+  const mediaQuery = {
+    addEventListener: vi.fn((type: string, listener: (event: MediaQueryListEvent) => void) => {
+      if (type === "change") listeners.add(listener);
+    }),
+    get matches() {
+      return matches;
+    },
+    removeEventListener: vi.fn((type: string, listener: (event: MediaQueryListEvent) => void) => {
+      if (type === "change") listeners.delete(listener);
+    }),
+  };
+  vi.stubGlobal("matchMedia", vi.fn(() => mediaQuery));
+
+  return {
+    switchToDesktop() {
+      matches = false;
+      listeners.forEach((listener) => listener({ matches } as MediaQueryListEvent));
+    },
+  };
 }
