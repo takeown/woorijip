@@ -7,6 +7,7 @@ import type { StoredValueAccount } from "./stored-value-account-panel";
 type Props = {
   accounts: StoredValueAccount[];
   onOpenEntry: () => void;
+  refreshKey: number;
 };
 
 type MonthlySummary = {
@@ -19,7 +20,7 @@ type MonthlySummary = {
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 const amountFormatter = new Intl.NumberFormat("ko-KR");
 
-export function MobileHomeOverview({ accounts, onOpenEntry }: Props) {
+export function MobileHomeOverview({ accounts, onOpenEntry, refreshKey }: Props) {
   const [summary, setSummary] = useState<MonthlySummary | null>(null);
   const [summaryError, setSummaryError] = useState(false);
   const activeAccounts = accounts.filter((account) => !account.archived);
@@ -55,7 +56,7 @@ export function MobileHomeOverview({ accounts, onOpenEntry }: Props) {
     loadForMobile();
     mediaQuery.addEventListener("change", loadForMobile);
     return () => mediaQuery.removeEventListener("change", loadForMobile);
-  }, [fetchSummary]);
+  }, [fetchSummary, refreshKey]);
 
   return (
     <section className="lg:hidden">

@@ -31,7 +31,7 @@ describe("MobileHomeOverview", () => {
       ),
     );
 
-    render(
+    const { rerender } = render(
       <MobileHomeOverview
         accounts={[
           {
@@ -48,6 +48,7 @@ describe("MobileHomeOverview", () => {
           },
         ]}
         onOpenEntry={onOpenEntry}
+        refreshKey={0}
       />,
     );
 
@@ -60,6 +61,23 @@ describe("MobileHomeOverview", () => {
 
     await user.click(screen.getByRole("button", { name: /빠르게 거래 기록하기/ }));
     expect(onOpenEntry).toHaveBeenCalledOnce();
+
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse({
+        amountChange: -10_000,
+        current: { totalAmount: 130_000 },
+      }),
+    );
+    rerender(
+      <MobileHomeOverview
+        accounts={[]}
+        onOpenEntry={onOpenEntry}
+        refreshKey={1}
+      />,
+    );
+
+    expect(await screen.findByText("130,000원")).toBeDefined();
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 });
 

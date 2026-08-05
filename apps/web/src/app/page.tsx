@@ -56,7 +56,9 @@ export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) 
   const [isChangingFilter, setIsChangingFilter] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isEntryPanelOpen, setIsEntryPanelOpen] = useState(false);
+  const [summaryRefreshKey, setSummaryRefreshKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const pageRef = useRef<HTMLDivElement>(null);
   const entryPanelRef = useRef<HTMLElement>(null);
   const entryTriggerRef = useRef<HTMLElement | null>(null);
 
@@ -123,35 +125,64 @@ export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) 
   }, [fetchHouseholdMembers, fetchStoredValueAccounts, fetchTransactions]);
 
   useEffect(() => {
-    if (!isEntryPanelOpen) return;
+    if (!isEntryPanelOpen) {
+      entryTriggerRef.current?.focus();
+      return;
+    }
+    const mediaQuery = window.matchMedia("(max-width: 1023px)");
+    if (!mediaQuery.matches) return;
+
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    if (entryPanelRef.current) {
-      entryPanelRef.current.scrollTop = 0;
-      entryPanelRef.current.focus();
+    const entryPanel = entryPanelRef.current;
+    const page = pageRef.current;
+    const shell = page?.closest("main");
+    const inertElements = [
+      ...Array.from(shell?.children ?? []).filter((element) => element !== page),
+      ...Array.from(page?.children ?? []).filter((element) => element !== entryPanel),
+    ].filter((element): element is HTMLElement => element instanceof HTMLElement);
+    const previousInertValues = inertElements.map((element) => element.inert);
+    inertElements.forEach((element) => {
+      element.inert = true;
+    });
+
+    if (entryPanel) {
+      entryPanel.scrollTop = 0;
+      entryPanel.focus();
+    }
+
+    function closePanel() {
+      setIsEntryPanelOpen(false);
     }
 
     function closeOnEscape(event: KeyboardEvent) {
-      if (event.key !== "Escape") return;
-      setIsEntryPanelOpen(false);
-      entryTriggerRef.current?.focus();
+      if (event.key === "Escape") closePanel();
+    }
+
+    function closeOnDesktop(event: MediaQueryListEvent) {
+      if (!event.matches) closePanel();
     }
 
     window.addEventListener("keydown", closeOnEscape);
+    mediaQuery.addEventListener("change", closeOnDesktop);
     return () => {
       document.body.style.overflow = previousOverflow;
+      inertElements.forEach((element, index) => {
+        element.inert = previousInertValues[index];
+      });
       window.removeEventListener("keydown", closeOnEscape);
+      mediaQuery.removeEventListener("change", closeOnDesktop);
     };
   }, [isEntryPanelOpen]);
 
   function openEntryPanel() {
+    if (!window.matchMedia("(max-width: 1023px)").matches) return;
     entryTriggerRef.current = document.activeElement as HTMLElement | null;
     setIsEntryPanelOpen(true);
   }
 
   function closeEntryPanel() {
     setIsEntryPanelOpen(false);
-    entryTriggerRef.current?.focus();
   }
 
   async function changePayerFilter(filter: PayerFilter) {
@@ -182,6 +213,7 @@ export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) 
     setTransactions(page.items);
     setNextCursor(page.nextCursor);
     setStoredValueAccounts(accounts);
+    setSummaryRefreshKey((current) => current + 1);
     closeEntryPanel();
   }
 
@@ -193,6 +225,7 @@ export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) 
     setTransactions(page.items);
     setNextCursor(page.nextCursor);
     setStoredValueAccounts(accounts);
+    setSummaryRefreshKey((current) => current + 1);
     setEditingTransactionId(null);
   }
 
@@ -220,10 +253,14 @@ export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) 
   }
 
   return (
-    <div className="mx-auto grid w-full max-w-6xl gap-5 lg:grid-cols-[380px_1fr] lg:gap-8">
+    <div
+      className="mx-auto grid w-full max-w-6xl gap-5 lg:grid-cols-[380px_1fr] lg:gap-8"
+      ref={pageRef}
+    >
       <MobileHomeOverview
         accounts={storedValueAccounts}
         onOpenEntry={openEntryPanel}
+        refreshKey={summaryRefreshKey}
       />
 
       <section
