@@ -70,6 +70,19 @@ data class CreditStoredValueAccountRequest(
     val occurredAt: OffsetDateTime?,
 )
 
+data class AdjustStoredValueAccountRequest(
+    @field:NotNull
+    val direction: StoredValueAdjustmentDirection?,
+    @field:NotNull
+    @field:Positive
+    val amount: Long?,
+    @field:NotBlank
+    @field:Size(max = 100)
+    val reason: String?,
+    @field:NotNull
+    val occurredAt: OffsetDateTime?,
+)
+
 @RestController
 class StoredValueAccountController(
     private val service: StoredValueAccountService,
@@ -127,6 +140,22 @@ class StoredValueAccountController(
             balanceAmount = requireNotNull(request.balanceAmount),
             paidAmount = requireNotNull(request.paidAmount),
             sourceName = request.sourceName?.trim()?.takeIf(String::isNotEmpty),
+            occurredAt = requireNotNull(request.occurredAt),
+        ).toResponse()
+
+    @PostMapping("/stored-value-accounts/{accountId}/adjustments")
+    @ResponseStatus(HttpStatus.CREATED)
+    fun adjust(
+        currentUser: CurrentUser,
+        @PathVariable accountId: Long,
+        @Valid @RequestBody request: AdjustStoredValueAccountRequest,
+    ): StoredValueAccountResponse =
+        service.adjust(
+            currentUser = currentUser,
+            accountId = accountId,
+            direction = requireNotNull(request.direction),
+            amount = requireNotNull(request.amount),
+            reason = requireNotNull(request.reason).trim(),
             occurredAt = requireNotNull(request.occurredAt),
         ).toResponse()
 }

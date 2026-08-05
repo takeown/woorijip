@@ -166,11 +166,15 @@ ID의 태그만 추가로 조회한다. 새 거래가 앞에 추가돼도 offset
 ### 별도 잔액 — 상품권과 바우처
 
 `storedvalue/StoredValueAccountController.kt`는 household 구성원별 상품권·바우처·지역화폐
-계정 생성, 조회, 이름·분류·보관 상태 수정, 미사용 계정 삭제와 충전·지급 입력을 받는다.
+계정 생성, 조회, 이름·분류·보관 상태 수정, 미사용 계정 삭제와 충전·지급·수동 조정 입력을 받는다.
 조회 시 기본 계정을 자동 생성하지 않는다. `stored_value_accounts`는 자유 입력 이름,
 일반 분류, `OTHER`일 때의 직접 입력 종류명, 선택적인 자동 연동 키와 `owner_user_id` 소유자를,
 `stored_value_movements`는 충전·지급과 거래 사용을 보존한다. 잔액은 별도 숫자를 갱신하지
 않고 변동의 `balance_delta` 합계로 계산한다.
+
+수동 조정은 `ADJUSTMENT` 변동으로 저장하며 증가·차감 방향을 서버에서 부호로 변환한다.
+차감 전에는 계정 행을 잠그고 현재 잔액을 확인하며 조정 사유는 `source_name`에 보존한다.
+수동 조정은 `transactions`와 연결하지 않으므로 소비 통계에는 포함되지 않는다.
 
 거래가 잔액 계정을 사용하면 `transactions.stored_value_account_id`와 `SPEND` 변동이
 연결된다. 거래 수정에서는 기존 사용 변동을 제거한 뒤 새 금액과 계정으로 다시 검증하고,

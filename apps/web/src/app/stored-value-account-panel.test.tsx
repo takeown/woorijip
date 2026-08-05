@@ -46,11 +46,11 @@ describe("StoredValueAccountPanel", () => {
 
     await user.click(accountSummary!);
     expect(accountSummary?.parentElement?.hasAttribute("open")).toBe(true);
-    await user.type(screen.getByLabelText("잔액 추가 금액"), "10000");
-    await user.type(screen.getByLabelText("실제 출금액"), "9300");
-    await user.type(screen.getByLabelText(/일시/), "2026-08-03T12:00");
     const creditForm = screen.getByLabelText("잔액 추가 금액").closest("form");
     expect(creditForm).not.toBeNull();
+    await user.type(within(creditForm!).getByLabelText("잔액 추가 금액"), "10000");
+    await user.type(within(creditForm!).getByLabelText("실제 출금액"), "9300");
+    await user.type(within(creditForm!).getByLabelText("일시"), "2026-08-03T12:00");
     await user.click(within(creditForm!).getByRole("button", { name: "잔액 추가" }));
 
     const request = fetchMock.mock.calls[1];
@@ -61,6 +61,56 @@ describe("StoredValueAccountPanel", () => {
     });
     expect(onChanged).toHaveBeenCalledOnce();
     expect(accountSummary?.parentElement?.hasAttribute("open")).toBe(false);
+  });
+
+  test("sends a manual balance decrease separately from spending", async () => {
+    const user = userEvent.setup();
+    const onChanged = vi.fn();
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ token: "csrf", headerName: "X-XSRF-TOKEN" }))
+      .mockResolvedValueOnce(jsonResponse({}));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <StoredValueAccountPanel
+        accounts={[{
+          id: 3,
+          ownerUserId: 1,
+          ownerDisplayName: "나",
+          category: "GIFT_CERTIFICATE",
+          customCategoryName: null,
+          automationKey: "ONNURI_GIFT_CERTIFICATE",
+          name: "온누리상품권",
+          balance: 10_000,
+          archived: false,
+          canDelete: false,
+        }]}
+        householdMembers={[{ userId: 1, displayName: "나" }]}
+        onChanged={onChanged}
+      />,
+    );
+
+    const accountSummary = screen
+      .getByText("온누리상품권", { selector: "span" })
+      .closest("summary");
+    await user.click(accountSummary!);
+    await user.click(screen.getByText("잔액 조정", { selector: "summary" }));
+    const adjustmentForm = screen.getByLabelText("조정 금액").closest("form");
+    expect(adjustmentForm).not.toBeNull();
+    await user.type(within(adjustmentForm!).getByLabelText("조정 금액"), "2400");
+    await user.type(within(adjustmentForm!).getByLabelText("조정 사유"), "누락 사용");
+    await user.type(within(adjustmentForm!).getByLabelText("조정 일시"), "2026-08-05T12:00");
+    await user.click(within(adjustmentForm!).getByRole("button", { name: "잔액 조정" }));
+
+    expect(fetchMock.mock.calls[1][0]).toBe("http://localhost:8080/stored-value-accounts/3/adjustments");
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toEqual({
+      direction: "DECREASE",
+      amount: 2_400,
+      reason: "누락 사용",
+      occurredAt: "2026-08-05T03:00:00.000Z",
+    });
+    expect(onChanged).toHaveBeenCalledOnce();
   });
 
   test("creates a custom account for the selected household member", async () => {

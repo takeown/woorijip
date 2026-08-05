@@ -142,6 +142,84 @@ class StoredValueAccountControllerTests(
     }
 
     @Test
+    fun `increases and decreases a balance with manual adjustments`() {
+        val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
+        val accountId = createAccount(currentUser.id, "온누리상품권", "GIFT_CERTIFICATE")
+
+        mockMvc
+            .post("/stored-value-accounts/$accountId/credits") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content =
+                    """
+                    {"balanceAmount":10000,"paidAmount":9300,"occurredAt":"2026-08-05T12:00:00+09:00"}
+                    """.trimIndent()
+            }.andExpect {
+                status { isCreated() }
+                jsonPath("$.balance") { value(10_000) }
+            }
+
+        mockMvc
+            .post("/stored-value-accounts/$accountId/adjustments") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content =
+                    """
+                    {
+                      "direction": "DECREASE",
+                      "amount": 2400,
+                      "reason": "누락 사용",
+                      "occurredAt": "2026-08-05T13:00:00+09:00"
+                    }
+                    """.trimIndent()
+            }.andExpect {
+                status { isCreated() }
+                jsonPath("$.balance") { value(7_600) }
+                jsonPath("$.canDelete") { value(false) }
+            }
+
+        mockMvc
+            .post("/stored-value-accounts/$accountId/adjustments") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content =
+                    """
+                    {
+                      "direction": "INCREASE",
+                      "amount": 1000,
+                      "reason": "환불",
+                      "occurredAt": "2026-08-05T14:00:00+09:00"
+                    }
+                    """.trimIndent()
+            }.andExpect {
+                status { isCreated() }
+                jsonPath("$.balance") { value(8_600) }
+            }
+
+        mockMvc
+            .post("/stored-value-accounts/$accountId/adjustments") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content =
+                    """
+                    {
+                      "direction": "DECREASE",
+                      "amount": 9000,
+                      "reason": "잘못된 차감",
+                      "occurredAt": "2026-08-05T15:00:00+09:00"
+                    }
+                    """.trimIndent()
+            }.andExpect {
+                status { isBadRequest() }
+                jsonPath("$.code") { value("INSUFFICIENT_STORED_VALUE_BALANCE") }
+            }
+    }
+
+    @Test
     fun `updates archives restores and deletes an unused custom account`() {
         val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
         val accountId = createAccount(currentUser.id, "서울사랑상품권", "LOCAL_CURRENCY")

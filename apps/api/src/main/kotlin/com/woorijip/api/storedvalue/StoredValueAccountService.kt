@@ -114,6 +114,34 @@ class StoredValueAccountService(
         )
     }
 
+    @Transactional
+    fun adjust(
+        currentUser: CurrentUser,
+        accountId: Long,
+        direction: StoredValueAdjustmentDirection,
+        amount: Long,
+        reason: String,
+        occurredAt: OffsetDateTime,
+    ): StoredValueAccount {
+        val account = findForUpdate(accountId, currentUser.householdId)
+        if (account.archivedAt != null) {
+            throw ApiException(ErrorCode.INVALID_STORED_VALUE_ACCOUNT, "보관한 잔액 계정은 조정할 수 없습니다.")
+        }
+        if (direction == StoredValueAdjustmentDirection.DECREASE && account.balance < amount) {
+            throw ApiException(ErrorCode.INSUFFICIENT_STORED_VALUE_BALANCE, "잔액 계정의 잔액이 부족합니다.")
+        }
+        repository.addAdjustment(
+            accountId = account.id,
+            balanceDelta = if (direction == StoredValueAdjustmentDirection.INCREASE) amount else -amount,
+            reason = reason,
+            occurredAt = occurredAt,
+            createdAt = OffsetDateTime.now(),
+        )
+        return requireNotNull(
+            repository.findByIdAndHouseholdIdForUpdate(account.id, currentUser.householdId),
+        )
+    }
+
     fun replaceSpend(
         householdId: Long,
         transactionId: Long,

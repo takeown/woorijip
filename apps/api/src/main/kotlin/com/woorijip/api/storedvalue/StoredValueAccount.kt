@@ -15,6 +15,11 @@ enum class StoredValueAutomationKey {
     PREGNANCY_VOUCHER,
 }
 
+enum class StoredValueAdjustmentDirection {
+    INCREASE,
+    DECREASE,
+}
+
 data class StoredValueAccount(
     val id: Long,
     val householdId: Long,

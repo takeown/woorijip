@@ -163,6 +163,31 @@ class StoredValueAccountRepository(
         )
     }
 
+    fun addAdjustment(
+        accountId: Long,
+        balanceDelta: Long,
+        reason: String,
+        occurredAt: OffsetDateTime,
+        createdAt: OffsetDateTime,
+    ) {
+        jdbcTemplate.update(
+            """
+            INSERT INTO stored_value_movements (
+                account_id, type, balance_delta, source_name, occurred_at, created_at
+            ) VALUES (
+                :accountId, 'ADJUSTMENT', :balanceDelta, :reason, :occurredAt, :createdAt
+            )
+            """.trimIndent(),
+            mapOf(
+                "accountId" to accountId,
+                "balanceDelta" to balanceDelta,
+                "reason" to reason,
+                "occurredAt" to occurredAt,
+                "createdAt" to createdAt,
+            ),
+        )
+    }
+
     fun deleteSpendByTransactionId(transactionId: Long) {
         jdbcTemplate.update(
             "DELETE FROM stored_value_movements WHERE transaction_id = :transactionId",
