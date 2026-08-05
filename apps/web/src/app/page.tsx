@@ -266,7 +266,7 @@ export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) 
       <section
         aria-labelledby="transaction-entry-title"
         aria-modal={isEntryPanelOpen ? true : undefined}
-        className={`${isEntryPanelOpen ? "fixed inset-0 z-40 block h-full overflow-y-auto rounded-none border-0 bg-white p-0 shadow-none outline-none" : "hidden"} lg:static lg:col-start-1 lg:row-start-1 lg:block lg:h-fit lg:rounded-3xl lg:border lg:border-stone-200 lg:bg-white lg:p-7 lg:shadow-sm`}
+        className={`${isEntryPanelOpen ? "fixed inset-0 z-40 block h-full w-full max-w-full overflow-x-hidden overflow-y-auto rounded-none border-0 bg-white p-0 shadow-none outline-none" : "hidden"} lg:static lg:col-start-1 lg:row-start-1 lg:block lg:h-fit lg:w-auto lg:max-w-none lg:overflow-visible lg:rounded-3xl lg:border lg:border-stone-200 lg:bg-white lg:p-7 lg:shadow-sm`}
         ref={entryPanelRef}
         role={isEntryPanelOpen ? "dialog" : undefined}
         tabIndex={isEntryPanelOpen ? -1 : undefined}
@@ -282,7 +282,7 @@ export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) 
             ×
           </button>
         </div>
-        <div className="px-5 pb-[calc(3rem+env(safe-area-inset-bottom))] pt-5 lg:p-0">
+        <div className="min-w-0 px-5 pb-[calc(3rem+env(safe-area-inset-bottom))] pt-5 lg:p-0">
           <p className="text-sm font-medium text-emerald-700">우리 둘의 생활 기록</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight" id="transaction-entry-title">
             거래 입력
