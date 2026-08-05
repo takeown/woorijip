@@ -94,13 +94,13 @@ export function StoredValueAccountPanel({ accounts, householdMembers, onChanged 
           automationKey: selection.automationKey,
         }),
       });
-      if (!response.ok) throw new Error(await apiError(response, "잔액 계정을 추가하지 못했습니다."));
+      if (!response.ok) throw new Error(await apiError(response, "상품권·바우처를 추가하지 못했습니다."));
       form.reset();
       setCreatePreset("CUSTOM_GIFT_CERTIFICATE");
       await onChanged();
       form.closest("details")?.removeAttribute("open");
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "잔액 계정을 추가하지 못했습니다.");
+      setError(caughtError instanceof Error ? caughtError.message : "상품권·바우처를 추가하지 못했습니다.");
     } finally {
       setSavingKey(null);
     }
@@ -184,10 +184,10 @@ export function StoredValueAccountPanel({ accounts, householdMembers, onChanged 
         headers: { "Content-Type": "application/json", [csrf.headerName]: csrf.token },
         body: JSON.stringify({ name, category, customCategoryName, archived }),
       });
-      if (!response.ok) throw new Error(await apiError(response, "잔액 계정을 수정하지 못했습니다."));
+      if (!response.ok) throw new Error(await apiError(response, "잔액을 수정하지 못했습니다."));
       await onChanged();
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "잔액 계정을 수정하지 못했습니다.");
+      setError(caughtError instanceof Error ? caughtError.message : "잔액을 수정하지 못했습니다.");
     } finally {
       setSavingKey(null);
     }
@@ -208,7 +208,7 @@ export function StoredValueAccountPanel({ accounts, householdMembers, onChanged 
   }
 
   async function deleteAccount(account: StoredValueAccount) {
-    if (!window.confirm(`"${account.name}" 계정을 삭제할까요?`)) return;
+    if (!window.confirm(`"${account.name}" 삭제할까요?`)) return;
     setSavingKey(`delete-${account.id}`);
     setError(null);
     try {
@@ -218,10 +218,10 @@ export function StoredValueAccountPanel({ accounts, householdMembers, onChanged 
         credentials: "include",
         headers: { [csrf.headerName]: csrf.token },
       });
-      if (!response.ok) throw new Error(await apiError(response, "잔액 계정을 삭제하지 못했습니다."));
+      if (!response.ok) throw new Error(await apiError(response, "잔액을 삭제하지 못했습니다."));
       await onChanged();
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "잔액 계정을 삭제하지 못했습니다.");
+      setError(caughtError instanceof Error ? caughtError.message : "잔액을 삭제하지 못했습니다.");
     } finally {
       setSavingKey(null);
     }
@@ -239,7 +239,7 @@ export function StoredValueAccountPanel({ accounts, householdMembers, onChanged 
 
       <details className="mt-3 rounded-xl border border-dashed border-emerald-300 bg-emerald-50/50">
         <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-emerald-800 [&::-webkit-details-marker]:hidden">
-          잔액 계정 추가
+          상품권·바우처 추가
         </summary>
         <form className="grid gap-3 border-t border-emerald-100 px-4 pb-4 pt-3" onSubmit={createAccount}>
           <label className="text-xs font-medium text-stone-600">
@@ -277,7 +277,7 @@ export function StoredValueAccountPanel({ accounts, householdMembers, onChanged 
       </details>
 
       <div className="mt-3 space-y-2">
-        {accounts.length === 0 ? <p className="rounded-xl bg-white px-4 py-5 text-center text-sm text-stone-500">필요한 상품권이나 바우처 계정을 추가해 주세요.</p> : null}
+        {accounts.length === 0 ? <p className="rounded-xl bg-white px-4 py-5 text-center text-sm text-stone-500">필요한 상품권이나 바우처를 추가해 주세요.</p> : null}
         {accounts.map((account) => (
           <details className="group overflow-hidden rounded-xl border border-stone-200 bg-white" key={account.id}>
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
@@ -348,7 +348,7 @@ export function StoredValueAccountPanel({ accounts, householdMembers, onChanged 
 
             <form className="grid gap-3 border-t border-stone-100 bg-stone-50 px-4 pb-4 pt-3" onSubmit={(event) => saveDetails(event, account)}>
               <label className="text-xs font-medium text-stone-600">
-                계정 이름
+                이름
                 <input className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm" defaultValue={account.name} maxLength={100} name="name" required />
               </label>
               <label className="text-xs font-medium text-stone-600">

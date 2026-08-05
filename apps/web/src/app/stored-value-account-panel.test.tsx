@@ -133,7 +133,7 @@ describe("StoredValueAccountPanel", () => {
       />,
     );
 
-    await user.click(screen.getByText("잔액 계정 추가"));
+    await user.click(screen.getByText("상품권·바우처 추가"));
     await user.type(screen.getByLabelText("이름"), "서울사랑상품권");
     await user.selectOptions(screen.getByLabelText("소유자"), "2");
     await user.selectOptions(screen.getByLabelText("종류"), "LOCAL_CURRENCY");
@@ -166,7 +166,7 @@ describe("StoredValueAccountPanel", () => {
       />,
     );
 
-    await user.click(screen.getByText("잔액 계정 추가"));
+    await user.click(screen.getByText("상품권·바우처 추가"));
     expect(screen.queryByLabelText("종류명")).toBeNull();
     await user.selectOptions(screen.getByLabelText("종류"), "OTHER");
     await user.type(screen.getByLabelText("이름"), "첫만남이용권");

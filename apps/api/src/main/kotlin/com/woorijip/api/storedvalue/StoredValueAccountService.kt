@@ -80,7 +80,7 @@ class StoredValueAccountService(
         if (!account.canDelete || repository.deleteUnused(account.id, currentUser.householdId) != 1) {
             throw ApiException(
                 ErrorCode.STORED_VALUE_ACCOUNT_IN_USE,
-                "사용 이력이 있는 잔액 계정은 삭제할 수 없습니다. 대신 보관해 주세요.",
+                "사용 이력이 있는 잔액은 삭제할 수 없습니다. 대신 보관해 주세요.",
             )
         }
     }
@@ -96,7 +96,7 @@ class StoredValueAccountService(
     ): StoredValueAccount {
         val account = findForUpdate(accountId, currentUser.householdId)
         if (account.archivedAt != null) {
-            throw ApiException(ErrorCode.INVALID_STORED_VALUE_ACCOUNT, "보관한 잔액 계정에는 금액을 추가할 수 없습니다.")
+            throw ApiException(ErrorCode.INVALID_STORED_VALUE_ACCOUNT, "보관한 잔액에는 금액을 추가할 수 없습니다.")
         }
         if (paidAmount > balanceAmount) {
             throw ApiException(ErrorCode.INVALID_STORED_VALUE_ACCOUNT, "계좌 출금액은 충전·지급 금액을 넘을 수 없습니다.")
@@ -125,10 +125,10 @@ class StoredValueAccountService(
     ): StoredValueAccount {
         val account = findForUpdate(accountId, currentUser.householdId)
         if (account.archivedAt != null) {
-            throw ApiException(ErrorCode.INVALID_STORED_VALUE_ACCOUNT, "보관한 잔액 계정은 조정할 수 없습니다.")
+            throw ApiException(ErrorCode.INVALID_STORED_VALUE_ACCOUNT, "보관한 잔액은 조정할 수 없습니다.")
         }
         if (direction == StoredValueAdjustmentDirection.DECREASE && account.balance < amount) {
-            throw ApiException(ErrorCode.INSUFFICIENT_STORED_VALUE_BALANCE, "잔액 계정의 잔액이 부족합니다.")
+            throw ApiException(ErrorCode.INSUFFICIENT_STORED_VALUE_BALANCE, "잔액이 부족합니다.")
         }
         repository.addAdjustment(
             accountId = account.id,
@@ -158,17 +158,17 @@ class StoredValueAccountService(
         if (accountId == null) return
         val account = findForUpdate(accountId, householdId)
         if (account.archivedAt != null && accountId != previousAccountId) {
-            throw ApiException(ErrorCode.INVALID_STORED_VALUE_ACCOUNT, "보관한 잔액 계정은 새 거래에 사용할 수 없습니다.")
+            throw ApiException(ErrorCode.INVALID_STORED_VALUE_ACCOUNT, "보관한 잔액은 새 거래에 사용할 수 없습니다.")
         }
         if (account.balance < amount) {
-            throw ApiException(ErrorCode.INSUFFICIENT_STORED_VALUE_BALANCE, "잔액 계정의 잔액이 부족합니다.")
+            throw ApiException(ErrorCode.INSUFFICIENT_STORED_VALUE_BALANCE, "잔액이 부족합니다.")
         }
         repository.addSpend(accountId, transactionId, amount, occurredAt, now)
     }
 
     private fun findForUpdate(accountId: Long, householdId: Long): StoredValueAccount =
         repository.findByIdAndHouseholdIdForUpdate(accountId, householdId)
-            ?: throw ApiException(ErrorCode.STORED_VALUE_ACCOUNT_NOT_FOUND, "잔액 계정을 찾을 수 없습니다.")
+            ?: throw ApiException(ErrorCode.STORED_VALUE_ACCOUNT_NOT_FOUND, "잔액을 찾을 수 없습니다.")
 
     private fun requireOwnerInHousehold(householdId: Long, ownerUserId: Long) {
         if (!householdMembershipRepository.existsByHouseholdIdAndUserId(householdId, ownerUserId)) {
@@ -191,7 +191,7 @@ class StoredValueAccountService(
         ) {
             throw ApiException(
                 ErrorCode.INVALID_STORED_VALUE_ACCOUNT,
-                "같은 소유자의 자동 연동 잔액 계정이 이미 있습니다.",
+                "같은 소유자의 자동 연동 잔액이 이미 있습니다.",
             )
         }
     }

@@ -311,7 +311,7 @@ class TransactionService(
             else -> true
         }
         if (!isValid) {
-            throw ApiException(ErrorCode.INVALID_STORED_VALUE_ACCOUNT, "잔액 계정은 카드 또는 QR 사용에만 연결할 수 있습니다.")
+            throw ApiException(ErrorCode.INVALID_STORED_VALUE_ACCOUNT, "잔액은 카드 또는 QR 결제에만 연결할 수 있습니다.")
         }
     }
 }
