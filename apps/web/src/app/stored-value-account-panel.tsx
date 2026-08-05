@@ -94,13 +94,13 @@ export function StoredValueAccountPanel({ accounts, householdMembers, onChanged 
           automationKey: selection.automationKey,
         }),
       });
-      if (!response.ok) throw new Error(await apiError(response, "잔액 계정을 추가하지 못했습니다."));
+      if (!response.ok) throw new Error(await apiError(response, "상품권·바우처를 추가하지 못했습니다."));
       form.reset();
       setCreatePreset("CUSTOM_GIFT_CERTIFICATE");
       await onChanged();
       form.closest("details")?.removeAttribute("open");
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "잔액 계정을 추가하지 못했습니다.");
+      setError(caughtError instanceof Error ? caughtError.message : "상품권·바우처를 추가하지 못했습니다.");
     } finally {
       setSavingKey(null);
     }
@@ -136,6 +136,36 @@ export function StoredValueAccountPanel({ accounts, householdMembers, onChanged 
     }
   }
 
+  async function adjust(event: FormEvent<HTMLFormElement>, account: StoredValueAccount) {
+    event.preventDefault();
+    setSavingKey(`adjust-${account.id}`);
+    setError(null);
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    try {
+      const csrf = await csrfToken();
+      const response = await fetch(`${apiUrl}/stored-value-accounts/${account.id}/adjustments`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", [csrf.headerName]: csrf.token },
+        body: JSON.stringify({
+          direction: String(data.get("direction")),
+          amount: Number(data.get("amount")),
+          reason: String(data.get("reason") ?? "").trim(),
+          occurredAt: new Date(String(data.get("occurredAt"))).toISOString(),
+        }),
+      });
+      if (!response.ok) throw new Error(await apiError(response, "잔액을 조정하지 못했습니다."));
+      form.reset();
+      await onChanged();
+      form.closest("details")?.removeAttribute("open");
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : "잔액을 조정하지 못했습니다.");
+    } finally {
+      setSavingKey(null);
+    }
+  }
+
   async function updateAccount(
     account: StoredValueAccount,
     name: string,
@@ -154,10 +184,10 @@ export function StoredValueAccountPanel({ accounts, householdMembers, onChanged 
         headers: { "Content-Type": "application/json", [csrf.headerName]: csrf.token },
         body: JSON.stringify({ name, category, customCategoryName, archived }),
       });
-      if (!response.ok) throw new Error(await apiError(response, "잔액 계정을 수정하지 못했습니다."));
+      if (!response.ok) throw new Error(await apiError(response, "잔액을 수정하지 못했습니다."));
       await onChanged();
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "잔액 계정을 수정하지 못했습니다.");
+      setError(caughtError instanceof Error ? caughtError.message : "잔액을 수정하지 못했습니다.");
     } finally {
       setSavingKey(null);
     }
@@ -178,7 +208,7 @@ export function StoredValueAccountPanel({ accounts, householdMembers, onChanged 
   }
 
   async function deleteAccount(account: StoredValueAccount) {
-    if (!window.confirm(`"${account.name}" 계정을 삭제할까요?`)) return;
+    if (!window.confirm(`"${account.name}" 삭제할까요?`)) return;
     setSavingKey(`delete-${account.id}`);
     setError(null);
     try {
@@ -188,10 +218,10 @@ export function StoredValueAccountPanel({ accounts, householdMembers, onChanged 
         credentials: "include",
         headers: { [csrf.headerName]: csrf.token },
       });
-      if (!response.ok) throw new Error(await apiError(response, "잔액 계정을 삭제하지 못했습니다."));
+      if (!response.ok) throw new Error(await apiError(response, "잔액을 삭제하지 못했습니다."));
       await onChanged();
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "잔액 계정을 삭제하지 못했습니다.");
+      setError(caughtError instanceof Error ? caughtError.message : "잔액을 삭제하지 못했습니다.");
     } finally {
       setSavingKey(null);
     }
@@ -209,7 +239,7 @@ export function StoredValueAccountPanel({ accounts, householdMembers, onChanged 
 
       <details className="mt-3 rounded-xl border border-dashed border-emerald-300 bg-emerald-50/50">
         <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-emerald-800 [&::-webkit-details-marker]:hidden">
-          잔액 계정 추가
+          상품권·바우처 추가
         </summary>
         <form className="grid gap-3 border-t border-emerald-100 px-4 pb-4 pt-3" onSubmit={createAccount}>
           <label className="text-xs font-medium text-stone-600">
@@ -247,7 +277,7 @@ export function StoredValueAccountPanel({ accounts, householdMembers, onChanged 
       </details>
 
       <div className="mt-3 space-y-2">
-        {accounts.length === 0 ? <p className="rounded-xl bg-white px-4 py-5 text-center text-sm text-stone-500">필요한 상품권이나 바우처 계정을 추가해 주세요.</p> : null}
+        {accounts.length === 0 ? <p className="rounded-xl bg-white px-4 py-5 text-center text-sm text-stone-500">필요한 상품권이나 바우처를 추가해 주세요.</p> : null}
         {accounts.map((account) => (
           <details className="group overflow-hidden rounded-xl border border-stone-200 bg-white" key={account.id}>
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
@@ -262,32 +292,63 @@ export function StoredValueAccountPanel({ accounts, householdMembers, onChanged 
             </summary>
 
             {!account.archived ? (
-              <form className="grid gap-3 border-t border-stone-100 px-4 pb-4 pt-3" onSubmit={(event) => credit(event, account)}>
-                <label className="text-xs font-medium text-stone-600">
-                  잔액 추가 금액
-                  <input className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm" min="1" name="balanceAmount" required type="number" />
-                </label>
-                <label className="text-xs font-medium text-stone-600">
-                  실제 출금액
-                  <input className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm" defaultValue={account.category === "VOUCHER" ? 0 : undefined} min="0" name="paidAmount" required type="number" />
-                </label>
-                <label className="text-xs font-medium text-stone-600">
-                  출금 계좌·지급처 <span className="font-normal">(선택)</span>
-                  <input className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm" maxLength={100} name="sourceName" />
-                </label>
-                <label className="text-xs font-medium text-stone-600">
-                  일시
-                  <input className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm" name="occurredAt" required type="datetime-local" />
-                </label>
-                <button className="rounded-lg bg-stone-800 px-3 py-2 text-sm font-medium text-white disabled:opacity-50" disabled={savingKey !== null} type="submit">
-                  {savingKey === `credit-${account.id}` ? "저장 중..." : "잔액 추가"}
-                </button>
-              </form>
+              <>
+                <form className="grid gap-3 border-t border-stone-100 px-4 pb-4 pt-3" onSubmit={(event) => credit(event, account)}>
+                  <label className="text-xs font-medium text-stone-600">
+                    잔액 추가 금액
+                    <input className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm" min="1" name="balanceAmount" required type="number" />
+                  </label>
+                  <label className="text-xs font-medium text-stone-600">
+                    실제 출금액
+                    <input className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm" defaultValue={account.category === "VOUCHER" ? 0 : undefined} min="0" name="paidAmount" required type="number" />
+                  </label>
+                  <label className="text-xs font-medium text-stone-600">
+                    출금 계좌·지급처 <span className="font-normal">(선택)</span>
+                    <input className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm" maxLength={100} name="sourceName" />
+                  </label>
+                  <label className="text-xs font-medium text-stone-600">
+                    일시
+                    <input className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm" name="occurredAt" required type="datetime-local" />
+                  </label>
+                  <button className="rounded-lg bg-stone-800 px-3 py-2 text-sm font-medium text-white disabled:opacity-50" disabled={savingKey !== null} type="submit">
+                    {savingKey === `credit-${account.id}` ? "저장 중..." : "잔액 추가"}
+                  </button>
+                </form>
+
+                <details className="border-t border-stone-100 bg-amber-50/50">
+                  <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-amber-800 [&::-webkit-details-marker]:hidden">잔액 조정</summary>
+                  <form className="grid gap-3 border-t border-amber-100 px-4 pb-4 pt-3" onSubmit={(event) => adjust(event, account)}>
+                    <p className="text-xs text-stone-500">잔액만 변경되며 소비 통계에는 포함되지 않습니다.</p>
+                    <label className="text-xs font-medium text-stone-600">
+                      조정 방향
+                      <select className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm" defaultValue="DECREASE" name="direction">
+                        <option value="DECREASE">차감</option>
+                        <option value="INCREASE">증가</option>
+                      </select>
+                    </label>
+                    <label className="text-xs font-medium text-stone-600">
+                      조정 금액
+                      <input className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm" min="1" name="amount" required type="number" />
+                    </label>
+                    <label className="text-xs font-medium text-stone-600">
+                      조정 사유
+                      <input className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm" maxLength={100} name="reason" placeholder="예: 누락 사용, 환불, 잔액 정정" required />
+                    </label>
+                    <label className="text-xs font-medium text-stone-600">
+                      조정 일시
+                      <input className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm" name="occurredAt" required type="datetime-local" />
+                    </label>
+                    <button className="rounded-lg bg-amber-700 px-3 py-2 text-sm font-medium text-white disabled:opacity-50" disabled={savingKey !== null} type="submit">
+                      {savingKey === `adjust-${account.id}` ? "조정 중..." : "잔액 조정"}
+                    </button>
+                  </form>
+                </details>
+              </>
             ) : null}
 
             <form className="grid gap-3 border-t border-stone-100 bg-stone-50 px-4 pb-4 pt-3" onSubmit={(event) => saveDetails(event, account)}>
               <label className="text-xs font-medium text-stone-600">
-                계정 이름
+                이름
                 <input className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm" defaultValue={account.name} maxLength={100} name="name" required />
               </label>
               <label className="text-xs font-medium text-stone-600">
@@ -307,7 +368,7 @@ export function StoredValueAccountPanel({ accounts, householdMembers, onChanged 
                 <button className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-medium text-stone-700 disabled:opacity-50" disabled={savingKey !== null} type="submit">정보 저장</button>
                 <button className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-medium text-stone-700 disabled:opacity-50" disabled={savingKey !== null} onClick={() => updateAccount(account, account.name, account.category, account.customCategoryName, !account.archived, "archive")} type="button">{account.archived ? "다시 사용" : "보관"}</button>
               </div>
-              {account.canDelete ? <button className="text-xs font-medium text-red-700 disabled:opacity-50" disabled={savingKey !== null} onClick={() => deleteAccount(account)} type="button">사용 이력 없는 계정 삭제</button> : <p className="text-xs text-stone-500">사용 이력이 있어 삭제 대신 보관할 수 있습니다.</p>}
+              {account.canDelete ? <button className="rounded-lg bg-red-700 px-3 py-2 text-sm font-medium text-white disabled:opacity-50" disabled={savingKey !== null} onClick={() => deleteAccount(account)} type="button">삭제</button> : <p className="text-xs text-stone-500">사용 이력이 있어 삭제 대신 보관할 수 있습니다.</p>}
             </form>
           </details>
         ))}
