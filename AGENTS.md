@@ -15,21 +15,23 @@
 - `apps/web`: Next.js App Router, TypeScript, Tailwind CSS
 - `apps/api`: Kotlin, Spring Boot, Spring Data JDBC, Flyway
 - `compose.yaml`: 로컬 PostgreSQL
+- `docs/README.md`: 역할별 기준 문서 안내
 - `docs/PLAN.md`: 제품 범위, 현재·다음 마일스톤, 백로그
 - `docs/MILESTONES_ARCHIVE.md`: 완료한 마일스톤 상세
 - `docs/DECISIONS.md`: 제품·기술 결정과 배경
-- `docs/ARCHITECTURE.md`: API 요청 흐름, 계층별 역할, 변경 지점, 장애 확인 순서
-- `docs/DATA_MODEL.md`: 데이터 관계, 소유권, 금액 의미, 삭제 정책
+- `docs/api/ARCHITECTURE.md`: API 요청 흐름, 계층별 역할, 변경 지점, 장애 확인 순서
+- `docs/api/DATA_MODEL.md`: 데이터 관계, 소유권, 금액 의미, 삭제 정책
 - `docs/SECURITY.md`: 보안 경계, 데이터 처리와 검증 기준
+- `docs/operations/DEPLOYMENT.md`: 운영 배포, 상태 확인, rollback
 
 하나의 모노레포로 관리하지만 웹과 API는 독립적으로 배포한다.
 
-API 구조를 설명하거나 변경 지점을 안내할 때는 `docs/ARCHITECTURE.md`를 기준으로 삼고,
+API 구조를 설명하거나 변경 지점을 안내할 때는 `docs/api/ARCHITECTURE.md`를 기준으로 삼고,
 구조가 달라졌다면 이 문서도 함께 갱신한다. 각 디렉터리의 `CLAUDE.md`는 같은 위치의
 `AGENTS.md`를 가리키는 한 줄 파일이므로 지침은 `AGENTS.md`에만 작성한다.
 
 테이블 관계, 데이터 소유권, 금액 의미 또는 주요 삭제 정책이 달라졌다면
-`docs/DATA_MODEL.md`도 함께 갱신한다. 실제 스키마 정의의 기준은 Flyway migration이며,
+`docs/api/DATA_MODEL.md`도 함께 갱신한다. 실제 스키마 정의의 기준은 Flyway migration이며,
 이미 적용되거나 커밋된 migration은 수정하지 않고 새 번호 파일을 추가한다.
 
 ## 작업 방식
@@ -118,8 +120,8 @@ Node는 `.nvmrc`에 지정된 24 버전을 사용한다. 저장소에 포함된 
   수정하거나 날짜만 바꾸지 않는다.
 - 제품 범위와 마일스톤은 `docs/PLAN.md`, 완료 기록은 `docs/MILESTONES_ARCHIVE.md`,
   제품·기술 결정은 `docs/DECISIONS.md`에 반영한다.
-- API 요청 흐름과 계층 구조는 `docs/ARCHITECTURE.md`, 데이터 관계·소유권·금액 의미와
-  삭제 정책은 `docs/DATA_MODEL.md`, 보안 경계와 검증 기준은 `docs/SECURITY.md`에 반영한다.
+- API 요청 흐름과 계층 구조는 `docs/api/ARCHITECTURE.md`, 데이터 관계·소유권·금액 의미와
+  삭제 정책은 `docs/api/DATA_MODEL.md`, 보안 경계와 검증 기준은 `docs/SECURITY.md`에 반영한다.
 
 ## 계획 관리
 

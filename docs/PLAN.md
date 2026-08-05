@@ -86,7 +86,7 @@
 
 - 완료한 마일스톤 상세: `docs/MILESTONES_ARCHIVE.md`
 - 제품·기술 결정과 배경: `docs/DECISIONS.md`
-- API 요청 흐름과 변경 지점: `docs/ARCHITECTURE.md`
-- 데이터 관계와 소유권: `docs/DATA_MODEL.md`
+- API 요청 흐름과 변경 지점: `docs/api/ARCHITECTURE.md`
+- 데이터 관계와 소유권: `docs/api/DATA_MODEL.md`
 - 보안 경계와 검증 기준: `docs/SECURITY.md`
-- 운영과 배포 절차: `docs/DEPLOYMENT.md`
+- 운영과 배포 절차: `docs/operations/DEPLOYMENT.md`

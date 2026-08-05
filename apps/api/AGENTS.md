@@ -41,7 +41,7 @@
 - household 기능 추가 이후 모든 가구 소유 데이터는 `household_id`로 제한한다.
 - 스키마 변경은 `src/main/resources/db/migration`의 Flyway migration으로 작성한다.
 - 테이블 관계, 데이터 소유권, 금액 의미 또는 삭제 정책이 달라지면
-  `docs/DATA_MODEL.md`를 함께 갱신한다.
+  `docs/api/DATA_MODEL.md`를 함께 갱신한다.
 - 배포 환경에서 Hibernate 또는 기타 도구의 자동 스키마 생성에 의존하지 않는다.
 - 이미 배포된 migration을 수정하지 않고 새 migration을 추가한다.
 
@@ -58,14 +58,14 @@
 
 | 변경 범위 | 기준 문서 |
 | --- | --- |
-| API 요청 흐름, 계층 또는 변경 지점 | `docs/ARCHITECTURE.md` |
-| Flyway, 테이블 관계, 소유권 또는 금액 의미 | `docs/DATA_MODEL.md` |
+| API 요청 흐름, 계층 또는 변경 지점 | `docs/api/ARCHITECTURE.md` |
+| Flyway, 테이블 관계, 소유권 또는 금액 의미 | `docs/api/DATA_MODEL.md` |
 | `ai/**` 또는 외부 서비스 연동 | `docs/SECURITY.md`의 외부 서비스와 AI |
 | `auth/**` 또는 `config/SecurityConfig.kt` | `docs/SECURITY.md`의 인증과 세션 |
 | household 소유 데이터 | `docs/SECURITY.md`의 Household 권한 경계 |
 | `statement/**` 또는 파일 업로드 | `docs/SECURITY.md`의 파일 업로드 |
 | 로그, 오류 응답 또는 비밀값 | `docs/SECURITY.md`의 로그와 오류, 비밀값과 배포 |
-| `deploy/**` 또는 `.github/workflows/**` | `docs/DEPLOYMENT.md`와 `docs/SECURITY.md` |
+| `deploy/**` 또는 `.github/workflows/**` | `docs/operations/DEPLOYMENT.md`와 `docs/SECURITY.md` |
 
 보안 경계를 변경하면 성공 경로뿐 아니라 비인증 요청, 다른 household 접근, 금지 데이터,
 실패 후 데이터 잔존 여부 중 해당하는 음성 테스트를 추가한다.

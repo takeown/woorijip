@@ -4,7 +4,7 @@ Kotlin과 Spring을 처음 보는 상태에서 이 저장소의 API를 읽고 �
 문서다. 일반적인 Spring 설명이 아니라 이 프로젝트에 실제로 있는 파일만 다룬다.
 
 제품 방향은 `docs/PLAN.md`, 결정 배경은 `docs/DECISIONS.md`, 데이터 관계와 금액 의미는
-`docs/DATA_MODEL.md`, 보안 기준은 `docs/SECURITY.md`, 작업 규칙은 `AGENTS.md`를 본다.
+`docs/api/DATA_MODEL.md`, 보안 기준은 `docs/SECURITY.md`, 작업 규칙은 `AGENTS.md`를 본다.
 
 ## 1. 전체 그림
 
