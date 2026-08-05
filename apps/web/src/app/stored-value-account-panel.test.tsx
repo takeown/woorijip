@@ -108,7 +108,7 @@ describe("StoredValueAccountPanel", () => {
       direction: "DECREASE",
       amount: 2_400,
       reason: "누락 사용",
-      occurredAt: "2026-08-05T03:00:00.000Z",
+      occurredAt: new Date("2026-08-05T12:00").toISOString(),
     });
     expect(onChanged).toHaveBeenCalledOnce();
   });
