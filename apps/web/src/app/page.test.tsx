@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { TransactionsPage } from "./page";
@@ -22,6 +22,44 @@ afterEach(() => {
 });
 
 describe("TransactionsPage", () => {
+  test("opens and closes the mobile transaction entry panel", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(async (input) => {
+        const url = String(input);
+        if (url.endsWith("/households/current/members")) {
+          return jsonResponse([{ userId: 1, displayName: "나" }]);
+        }
+        if (url.endsWith("/stored-value-accounts")) return jsonResponse([]);
+        return jsonResponse({ items: [], nextCursor: null });
+      }),
+    );
+
+    const { container } = render(
+      <TransactionsPage
+        currentUser={{ id: 1, displayName: "나", householdId: 10 }}
+      />,
+    );
+
+    expect(await screen.findByRole("button", { name: "거래 추가" })).toBeDefined();
+    expect(screen.getByRole("link", { name: /보유 잔액/ }).getAttribute("href")).toBe(
+      "/balances",
+    );
+    const entryPanel = container.querySelector<HTMLElement>(
+      "[aria-labelledby='transaction-entry-title']",
+    );
+    expect(entryPanel).not.toBeNull();
+    if (entryPanel) entryPanel.scrollTop = 240;
+
+    await user.click(screen.getByRole("button", { name: "거래 추가" }));
+
+    expect(screen.getByRole("dialog", { name: "거래 입력" })).toBeDefined();
+    await waitFor(() => expect(entryPanel?.scrollTop).toBe(0));
+    await user.click(screen.getByRole("button", { name: "거래 추가 닫기" }));
+    expect(screen.queryByRole("dialog", { name: "거래 입력" })).toBeNull();
+  });
+
   test("loads the next cursor page and resets pagination when the payer filter changes", async () => {
     const user = userEvent.setup();
     const fetchMock = vi.fn<typeof fetch>(async (input) => {

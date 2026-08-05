@@ -270,7 +270,7 @@ export function AiTransactionDraftForm({
                 placeholder="세제와 휴지"
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-stone-700" htmlFor="draft-amount">
                   금액
