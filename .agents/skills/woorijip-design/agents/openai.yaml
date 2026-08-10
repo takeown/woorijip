@@ -1,0 +1,4 @@
+interface:
+  display_name: "우리집 디자인"
+  short_description: "우리집의 따뜻하고 읽기 쉬운 UI 원칙을 적용합니다"
+  default_prompt: "Use $woorijip-design to audit and improve this UI while preserving 우리집의 product language and accessibility."
