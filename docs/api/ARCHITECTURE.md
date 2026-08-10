@@ -74,13 +74,20 @@ AI 자연어 거래 입력은 다음 경로를 지난다.
 | --- | --- | --- |
 | 1 | `statistics/SpendingStatisticsController.kt` | 기간, 기준 날짜와 결제자 필터를 받는다 |
 | 2 | `statistics/SpendingStatisticsService.kt` | 서울 시간 범위와 이전 비교 기간을 정하고 집계를 조합한다 |
-| 3 | `statistics/SpendingStatisticsRepository.kt` | household와 결제자 범위 안에서 합계, 카테고리와 태그를 집계한다 |
-| 4 | `statistics/RecurringSpendingChangeExplainer.kt` | 확정 태그의 신규·증가·감소·종료를 결정적인 문장으로 만든다 |
+| 3 | `statistics/SpendingStatisticsRepository.kt` | household와 결제자 범위 안에서 합계, 카테고리와 태그를 집계하고 가장 큰 카테고리의 근거 거래를 제한 조회한다 |
+| 4 | `statistics/SpendingStatisticsService.kt` | 월간 통계에서 가장 큰 카테고리, 총지출 비중과 금액순 상위 근거 거래 세 건을 조합한다 |
+| 5 | `statistics/RecurringSpendingChangeExplainer.kt` | 확정 태그의 신규·증가·감소·종료를 결정적인 문장으로 만든다 |
 
 반복 지출 설명은 외부 AI를 호출하지 않는다. 사용자가 확정한 `구독`, `공과금`,
 `정기결제` 태그만 비교하고, 반복성이 보장되지 않는 `생활` 카테고리나 가맹점 패턴은
 자동으로 반복 지출이라 판단하지 않는다. 태그는 서로 겹칠 수 있으므로 설명별 금액을
 더해 반복 지출 총액으로 사용하지 않는다.
+
+월간 지출 요약도 외부 AI를 호출하지 않는다. 통계 화면이 `includeMonthlySummary=true`로
+명시한 요청에서만 선택한 household, 결제자와 서울 시간 범위의 집계 중 금액이 가장 큰
+카테고리를 고르고, 같은 조건과 카테고리에 속한 거래를 금액순으로 최대 세 건만 조회해
+설명의 근거로 반환한다. 홈처럼 근거를 사용하지 않는 요청, 일간·주간과 거래가 없는 월에는
+월간 요약을 반환하지 않는다.
 
 AI 요청에서 `AiSensitiveInputGuard`는 금지 데이터를 외부 전송 직전에 검사하고,
 `OpenAiSafetyIdentifier`는 내부 사용자 ID를 HMAC 가명 식별자로 바꾼다. 허용 전송

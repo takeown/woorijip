@@ -43,6 +43,14 @@ data class SpendingComparisonBreakdown(
     val changeRatePercent: BigDecimal?,
 )
 
+data class MonthlySpendingSummary(
+    val topCategory: SpendingBreakdown,
+    val sharePercent: BigDecimal,
+    val categoryAmountChange: Long,
+    val categoryChangeRatePercent: BigDecimal?,
+    val evidenceTransactions: List<SpendingEvidenceTransaction>,
+)
+
 data class SpendingStatistics(
     val period: SpendingPeriod,
     val payer: SpendingPayer,
@@ -59,6 +67,7 @@ data class SpendingStatistics(
     val categoryComparisons: List<SpendingComparisonBreakdown>,
     val tagComparisons: List<SpendingComparisonBreakdown>,
     val recurringSpendingChanges: List<RecurringSpendingChange>,
+    val monthlySummary: MonthlySpendingSummary?,
 )
 
 @Service
@@ -73,6 +82,7 @@ class SpendingStatisticsService(
         period: SpendingPeriod,
         payer: SpendingPayer = SpendingPayer.ALL,
         referenceDate: LocalDate = LocalDate.now(SEOUL),
+        includeMonthlySummary: Boolean = false,
     ): SpendingStatistics {
         val currentRange = range(period, referenceDate)
         val previousRange = previousRange(period, currentRange.start)
@@ -117,6 +127,10 @@ class SpendingStatisticsService(
             currentTags,
             previousTags,
         ) { key -> tagLabel(TransactionTag.valueOf(key)) }
+        val categoryComparisons = compareBreakdowns(
+            currentCategories,
+            previousCategories,
+        ) { key -> TransactionCategory.valueOf(key).label }
 
         return SpendingStatistics(
             period = period,
@@ -145,12 +159,52 @@ class SpendingStatisticsService(
                 currentCategories.map { item ->
                     item.copy(label = TransactionCategory.valueOf(item.key).label)
                 },
-            categoryComparisons = compareBreakdowns(
-                currentCategories,
-                previousCategories,
-            ) { key -> TransactionCategory.valueOf(key).label },
+            categoryComparisons = categoryComparisons,
             tagComparisons = tagComparisons,
             recurringSpendingChanges = recurringSpendingChangeExplainer.explain(tagComparisons),
+            monthlySummary = monthlySummary(
+                period = period,
+                included = includeMonthlySummary,
+                householdId = currentUser.householdId,
+                payerId = payerId,
+                range = currentRange,
+                current = current,
+                currentCategories = currentCategories,
+                categoryComparisons = categoryComparisons,
+            ),
+        )
+    }
+
+    private fun monthlySummary(
+        period: SpendingPeriod,
+        included: Boolean,
+        householdId: Long,
+        payerId: Long?,
+        range: DateRange,
+        current: SpendingAggregate,
+        currentCategories: List<SpendingBreakdown>,
+        categoryComparisons: List<SpendingComparisonBreakdown>,
+    ): MonthlySpendingSummary? {
+        if (!included || period != SpendingPeriod.MONTH || current.totalAmount == 0L) return null
+        val topCategory = currentCategories.firstOrNull() ?: return null
+        val comparison = categoryComparisons.single { it.key == topCategory.key }
+
+        return MonthlySpendingSummary(
+            topCategory = topCategory.copy(label = TransactionCategory.valueOf(topCategory.key).label),
+            sharePercent = BigDecimal
+                .valueOf(topCategory.amount)
+                .multiply(HUNDRED)
+                .divide(BigDecimal.valueOf(current.totalAmount), 1, RoundingMode.HALF_UP),
+            categoryAmountChange = comparison.amountChange,
+            categoryChangeRatePercent = comparison.changeRatePercent,
+            evidenceTransactions = spendingStatisticsRepository.topTransactionsByCategory(
+                householdId = householdId,
+                start = range.startAt,
+                endExclusive = range.endExclusiveAt,
+                payerId = payerId,
+                category = topCategory.key,
+                limit = MONTHLY_EVIDENCE_LIMIT,
+            ),
         )
     }
 
@@ -270,5 +324,6 @@ class SpendingStatisticsService(
         val SEOUL: ZoneId = ZoneId.of("Asia/Seoul")
         val HUNDRED: BigDecimal = BigDecimal.valueOf(100)
         const val NO_PAYER_ID: Long = -1
+        const val MONTHLY_EVIDENCE_LIMIT: Int = 3
     }
 }

@@ -52,7 +52,14 @@ class SpendingStatisticsControllerTests(
         val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
         val partnerId = createMember(currentUser.householdId, "배우자")
         saveTransaction(currentUser.householdId, currentUser.id, 10_000, "식비", "2026-06-15T12:00:00+09:00")
-        saveTransaction(currentUser.householdId, currentUser.id, 12_000, "식비", "2026-07-01T00:00:00+09:00")
+        saveTransaction(
+            currentUser.householdId,
+            currentUser.id,
+            12_000,
+            "식비",
+            "2026-07-01T00:00:00+09:00",
+            merchant = "동네 마트",
+        )
         saveTransaction(
             currentUser.householdId,
             partnerId,
@@ -60,17 +67,26 @@ class SpendingStatisticsControllerTests(
             "식비",
             "2026-07-15T10:00:00+09:00",
             PaymentMethod.CASH,
+            merchant = "시장 반찬가게",
         )
         saveTransaction(currentUser.householdId, currentUser.id, 30_000, "생활", "2026-08-01T00:00:00+09:00")
 
         val otherHouseholdId = createHousehold("다른 집")
         val otherUserId = createMember(otherHouseholdId, "다른 사용자")
-        saveTransaction(otherHouseholdId, otherUserId, 999_000, "식비", "2026-07-10T12:00:00+09:00")
+        saveTransaction(
+            otherHouseholdId,
+            otherUserId,
+            999_000,
+            "식비",
+            "2026-07-10T12:00:00+09:00",
+            merchant = "다른 집 가맹점",
+        )
 
         mockMvc
             .get("/statistics/spending") {
                 param("period", "month")
                 param("date", "2026-07-26")
+                param("includeMonthlySummary", "true")
                 with(allowedOidcLogin())
             }.andExpect {
                 status { isOk() }
@@ -92,6 +108,17 @@ class SpendingStatisticsControllerTests(
                 jsonPath("$.byCategory", hasSize<Any>(1))
                 jsonPath("$.byCategory[0].label") { value("식비") }
                 jsonPath("$.byCategory[0].amount") { value(20_000) }
+                jsonPath("$.monthlySummary.topCategory.key") { value("FOOD") }
+                jsonPath("$.monthlySummary.topCategory.label") { value("식비") }
+                jsonPath("$.monthlySummary.topCategory.amount") { value(20_000) }
+                jsonPath("$.monthlySummary.sharePercent") { value(100.0) }
+                jsonPath("$.monthlySummary.categoryAmountChange") { value(10_000) }
+                jsonPath("$.monthlySummary.categoryChangeRatePercent") { value(100.0) }
+                jsonPath("$.monthlySummary.evidenceTransactions", hasSize<Any>(2))
+                jsonPath("$.monthlySummary.evidenceTransactions[0].merchant") { value("동네 마트") }
+                jsonPath("$.monthlySummary.evidenceTransactions[0].amount") { value(12_000) }
+                jsonPath("$.monthlySummary.evidenceTransactions[0].payerLabel") { value("첫 번째 사용자") }
+                jsonPath("$.monthlySummary.evidenceTransactions[1].merchant") { value("시장 반찬가게") }
             }
     }
 
@@ -114,6 +141,7 @@ class SpendingStatisticsControllerTests(
                 jsonPath("$.endDateExclusive") { value("2026-07-16") }
                 jsonPath("$.current.totalAmount") { value(11_000) }
                 jsonPath("$.current.transactionCount") { value(2) }
+                jsonPath("$.monthlySummary") { doesNotExist() }
             }
 
         mockMvc
@@ -244,6 +272,7 @@ class SpendingStatisticsControllerTests(
                 }
                 jsonPath("$.recurringSpendingChanges[1].tag") { value("RECURRING_PAYMENT") }
                 jsonPath("$.recurringSpendingChanges[2].tag") { value("UTILITY") }
+                jsonPath("$.monthlySummary") { doesNotExist() }
             }
     }
 
@@ -282,6 +311,7 @@ class SpendingStatisticsControllerTests(
                 param("period", "month")
                 param("payer", "me")
                 param("date", "2026-07-26")
+                param("includeMonthlySummary", "true")
                 with(allowedOidcLogin())
             }.andExpect {
                 status { isOk() }
@@ -301,6 +331,9 @@ class SpendingStatisticsControllerTests(
                 jsonPath("$.tagComparisons[0].key") { value("SUBSCRIPTION") }
                 jsonPath("$.recurringSpendingChanges", hasSize<Any>(1))
                 jsonPath("$.recurringSpendingChanges[0].tag") { value("SUBSCRIPTION") }
+                jsonPath("$.monthlySummary.topCategory.key") { value("FOOD") }
+                jsonPath("$.monthlySummary.evidenceTransactions", hasSize<Any>(1))
+                jsonPath("$.monthlySummary.evidenceTransactions[0].payerLabel") { value("첫 번째 사용자") }
             }
 
         mockMvc
@@ -308,6 +341,7 @@ class SpendingStatisticsControllerTests(
                 param("period", "month")
                 param("payer", "partner")
                 param("date", "2026-07-26")
+                param("includeMonthlySummary", "true")
                 with(allowedOidcLogin())
             }.andExpect {
                 status { isOk() }
@@ -324,6 +358,9 @@ class SpendingStatisticsControllerTests(
                 jsonPath("$.tagComparisons[0].key") { value("UTILITY") }
                 jsonPath("$.recurringSpendingChanges", hasSize<Any>(1))
                 jsonPath("$.recurringSpendingChanges[0].tag") { value("UTILITY") }
+                jsonPath("$.monthlySummary.topCategory.key") { value("LIVING") }
+                jsonPath("$.monthlySummary.evidenceTransactions", hasSize<Any>(1))
+                jsonPath("$.monthlySummary.evidenceTransactions[0].payerLabel") { value("배우자") }
             }
     }
 
@@ -344,6 +381,7 @@ class SpendingStatisticsControllerTests(
                 jsonPath("$.changeRatePercent") { doesNotExist() }
                 jsonPath("$.byPayer", hasSize<Any>(0))
                 jsonPath("$.recurringSpendingChanges", hasSize<Any>(0))
+                jsonPath("$.monthlySummary") { doesNotExist() }
             }
 
         mockMvc
@@ -378,13 +416,14 @@ class SpendingStatisticsControllerTests(
         paymentMethod: PaymentMethod = PaymentMethod.CARD,
         tags: Set<TransactionTag> = emptySet(),
         classificationConfirmedAt: OffsetDateTime? = now,
+        merchant: String = "테스트 가맹점",
     ) {
         val transactionId = assertNotNull(
             transactionRepository.save(
                 Transaction(
                     householdId = householdId,
                     payerId = payerId,
-                    merchant = "테스트 가맹점",
+                    merchant = merchant,
                     description = null,
                     amount = amount,
                     category = TransactionCategory.entries.single { it.label == category },
