@@ -64,6 +64,7 @@ describe("TransactionsPage", () => {
     await user.click(entryTrigger);
 
     expect(screen.getByRole("dialog", { name: "거래 입력" })).toBeDefined();
+    expect(entryPanel?.className).toContain("overflow-x-hidden");
     await waitFor(() => expect(entryPanel?.scrollTop).toBe(0));
     expect(transactionSection?.inert).toBe(true);
     await user.click(screen.getByRole("button", { name: "거래 추가 닫기" }));
