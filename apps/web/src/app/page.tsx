@@ -325,13 +325,10 @@ export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) 
         </div>
       </section>
 
-      <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm lg:col-start-2 lg:row-start-1 lg:rounded-3xl lg:p-7">
+      <section className="border-t border-border-soft pt-6 lg:col-start-2 lg:row-start-1 lg:rounded-3xl lg:border lg:border-stone-200 lg:bg-white lg:p-7 lg:shadow-sm">
         <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-sm font-medium text-emerald-700">최근 기록</p>
-            <h2 className="mt-2 text-3xl font-semibold tracking-tight">거래 내역</h2>
-          </div>
-          <p className="text-sm text-stone-500">{transactions.length}건 표시</p>
+          <h2 className="min-w-0 text-2xl font-semibold tracking-tight [overflow-wrap:anywhere] lg:text-3xl">거래 내역</h2>
+          <p className="font-ui text-sm text-stone-500 tabular-nums">{transactions.length}건 표시</p>
         </div>
 
         <div className="mt-6 flex gap-2" aria-label="결제자 필터">
@@ -341,10 +338,10 @@ export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) 
             ["partner", "배우자"],
           ] as const).map(([filter, label]) => (
             <button
-              className={`min-h-11 rounded-full px-4 py-2 text-sm font-medium transition ${
+              className={`min-h-11 whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-colors duration-150 ease-[var(--ease-out)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 ${
                 payerFilter === filter
-                  ? "bg-emerald-700 text-white"
-                  : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                  ? "bg-accent text-accent-ink"
+                  : "bg-surface-muted text-stone-700 hover:bg-accent-soft"
               }`}
               key={filter}
               onClick={() => changePayerFilter(filter)}
@@ -363,7 +360,7 @@ export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) 
         ) : null}
 
         {transactions.length === 0 && !error ? (
-          <div className="mt-8 rounded-2xl border border-dashed border-stone-300 px-6 py-16 text-center">
+          <div className="mt-8 border-y border-border-soft py-12 text-left">
             <p className="font-medium text-stone-700">아직 기록한 거래가 없습니다.</p>
             <p className="mt-2 text-sm text-stone-500">거래 추가 버튼으로 첫 기록을 남겨 보세요.</p>
           </div>
@@ -421,7 +418,7 @@ export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) 
                       ) : null}
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className="font-semibold text-stone-900">
+                      <p className="font-ui font-semibold text-stone-900 tabular-nums">
                         {amountFormatter.format(transaction.amount)}원
                       </p>
                       <button
@@ -439,19 +436,19 @@ export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) 
             </ul>
             {nextCursor ? (
               <button
-                className="mt-6 w-full rounded-xl border border-stone-300 px-4 py-3 text-sm font-medium text-stone-700 transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-6 w-full whitespace-nowrap rounded-xl border border-border-soft bg-surface px-4 py-3 text-sm font-medium text-stone-700 transition-[background-color,transform] duration-150 ease-[var(--ease-out)] hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={isLoadingMore || isChangingFilter}
                 onClick={loadMoreTransactions}
                 type="button"
               >
-                {isLoadingMore ? "불러오는 중..." : "더 보기"}
+                {isLoadingMore ? "불러오는 중…" : "더 보기"}
               </button>
             ) : null}
           </>
         ) : null}
       </section>
       <button
-        className="fixed bottom-[calc(5.25rem+env(safe-area-inset-bottom))] right-5 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-700 text-3xl font-light text-white shadow-lg transition hover:bg-emerald-800 lg:hidden"
+        className="fixed bottom-[calc(5.25rem+env(safe-area-inset-bottom))] right-5 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-3xl font-light text-accent-ink shadow-lg transition-[background-color,transform] duration-150 ease-[var(--ease-out)] hover:bg-accent-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus active:translate-y-px lg:hidden"
         onClick={openEntryPanel}
         type="button"
         aria-label="거래 추가"

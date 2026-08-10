@@ -61,30 +61,30 @@ export function MobileHomeOverview({ accounts, onOpenEntry, refreshKey }: Props)
   return (
     <section className="lg:hidden">
       <p className="text-sm text-stone-500">우리 둘의 생활 기록</p>
-      <h1 className="mt-1 text-2xl font-semibold tracking-tight">이번 달 우리집</h1>
+      <h1 className="mt-1 min-w-0 text-2xl font-semibold tracking-tight [overflow-wrap:anywhere]">이번 달 우리집</h1>
 
-      <div className="mt-5 rounded-3xl bg-emerald-800 p-5 text-white shadow-sm">
-        <p className="text-sm text-emerald-100">이번 달에 지금까지 쓴 돈</p>
+      <div className="mt-5 rounded-xl border border-border-soft bg-surface-muted p-5 text-foreground">
+        <p className="text-sm text-stone-600">이번 달에 지금까지 쓴 돈</p>
         {summary ? (
           <>
-            <p className="mt-2 text-3xl font-semibold tracking-tight">
+            <p className="mt-2 font-ui text-4xl font-semibold tracking-tight tabular-nums">
               {amountFormatter.format(summary.current.totalAmount)}원
             </p>
-            <p className="mt-3 text-sm text-emerald-100">
+            <p className="mt-3 text-sm text-stone-600">
               {summary.amountChange === 0
                 ? "이전 기간과 지출이 같아요."
                 : `이전 기간보다 ${amountFormatter.format(Math.abs(summary.amountChange))}원 ${summary.amountChange > 0 ? "많아요" : "적어요"}.`}
             </p>
           </>
         ) : summaryError ? (
-          <p className="mt-3 text-sm text-emerald-100">지출 요약을 불러오지 못했습니다.</p>
+          <p className="mt-3 text-sm text-stone-600">지출 요약을 불러오지 못했습니다.</p>
         ) : (
-          <p className="mt-3 text-sm text-emerald-100">지출을 계산하고 있습니다.</p>
+          <p className="mt-3 text-sm text-stone-600">지출을 계산하고 있습니다.</p>
         )}
       </div>
 
       <button
-        className="mt-3 flex min-h-14 w-full items-center justify-between rounded-2xl border border-stone-200 bg-white px-4 text-left shadow-sm"
+        className="mt-3 flex min-h-14 w-full items-center justify-between rounded-xl border border-border-soft bg-surface px-4 text-left transition-[background-color,transform] duration-150 ease-[var(--ease-out)] hover:bg-accent-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
         onClick={onOpenEntry}
         type="button"
       >
@@ -92,13 +92,13 @@ export function MobileHomeOverview({ accounts, onOpenEntry, refreshKey }: Props)
           <span className="block text-sm font-medium text-stone-900">빠르게 거래 기록하기</span>
           <span className="mt-1 block text-xs text-stone-500">예: 오늘 김밥 8천원</span>
         </span>
-        <span className="rounded-xl bg-emerald-700 px-3 py-2 text-sm font-medium text-white">
+        <span className="shrink-0 whitespace-nowrap rounded-full bg-accent px-3 py-2 text-sm font-medium text-accent-ink">
           AI 입력
         </span>
       </button>
 
       <Link
-        className="mt-3 block rounded-2xl border border-stone-200 bg-white p-4 shadow-sm"
+        className="mt-4 block border-y border-border-soft py-4 transition-colors duration-150 ease-[var(--ease-out)] hover:bg-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus active:bg-surface-muted"
         href="/balances"
       >
         <span className="flex items-center justify-between gap-3">
@@ -108,7 +108,7 @@ export function MobileHomeOverview({ accounts, onOpenEntry, refreshKey }: Props)
               상품권·바우처·지역화폐 관리
             </span>
           </span>
-          <span className="text-sm font-medium text-emerald-700">전체 보기</span>
+          <span className="shrink-0 whitespace-nowrap text-sm font-medium text-accent-strong">전체 보기</span>
         </span>
         {activeAccounts.length > 0 ? (
           <span className="mt-3 grid gap-2">
@@ -117,7 +117,7 @@ export function MobileHomeOverview({ accounts, onOpenEntry, refreshKey }: Props)
                 <span className="min-w-0 truncate text-stone-600">
                   {account.ownerDisplayName} · {account.name}
                 </span>
-                <span className="shrink-0 font-semibold text-stone-900">
+                <span className="shrink-0 font-ui font-semibold text-stone-900 tabular-nums">
                   {amountFormatter.format(account.balance)}원
                 </span>
               </span>
