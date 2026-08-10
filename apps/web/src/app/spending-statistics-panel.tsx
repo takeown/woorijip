@@ -44,6 +44,22 @@ type RecurringSpendingChange = {
   message: string;
 };
 
+type SpendingEvidenceTransaction = {
+  id: number;
+  merchant: string;
+  amount: number;
+  occurredAt: string;
+  payerLabel: string;
+};
+
+type MonthlySpendingSummary = {
+  topCategory: BreakdownItem;
+  sharePercent: number;
+  categoryAmountChange: number;
+  categoryChangeRatePercent: number | null;
+  evidenceTransactions: SpendingEvidenceTransaction[];
+};
+
 type SpendingStatistics = {
   period: SpendingPeriod;
   payer: SpendingPayer;
@@ -60,6 +76,7 @@ type SpendingStatistics = {
   categoryComparisons: ComparisonBreakdownItem[];
   tagComparisons: ComparisonBreakdownItem[];
   recurringSpendingChanges?: RecurringSpendingChange[];
+  monthlySummary?: MonthlySpendingSummary | null;
 };
 
 type SpendingStatisticsPanelProps = {
@@ -77,13 +94,18 @@ const monthFormatter = new Intl.DateTimeFormat("ko-KR", {
   timeZone: "UTC",
   year: "numeric",
 });
+const evidenceDateFormatter = new Intl.DateTimeFormat("ko-KR", {
+  day: "numeric",
+  month: "long",
+  timeZone: "Asia/Seoul",
+});
 
 export function SpendingStatisticsPanel({ refreshKey }: SpendingStatisticsPanelProps) {
   const [period, setPeriod] = useState<SpendingPeriod>("MONTH");
   const [payer, setPayer] = useState<SpendingPayer>("ALL");
   const [referenceDate, setReferenceDate] = useState(seoulToday);
   const requestKey = `${period}:${payer}:${referenceDate}:${refreshKey}`;
-  const requestUrl = `${apiUrl}/statistics/spending?period=${period}&payer=${payer}&date=${referenceDate}`;
+  const requestUrl = `${apiUrl}/statistics/spending?period=${period}&payer=${payer}&date=${referenceDate}&includeMonthlySummary=true`;
   const [loadResult, setLoadResult] = useState<{
     requestKey: string;
     statistics: SpendingStatistics | null;
@@ -293,6 +315,10 @@ export function SpendingStatisticsPanel({ refreshKey }: SpendingStatisticsPanelP
             </dl>
           </div>
 
+          {statistics.period === "MONTH" && statistics.monthlySummary ? (
+            <MonthlySummary startDate={statistics.startDate} summary={statistics.monthlySummary} />
+          ) : null}
+
           {statistics.current.transactionCount === 0 ? (
             <div className="mt-8 border-y border-border-soft py-10 text-left">
               <p className="font-medium text-stone-700">이 기간에는 기록된 지출이 없습니다.</p>
@@ -339,6 +365,70 @@ export function SpendingStatisticsPanel({ refreshKey }: SpendingStatisticsPanelP
       ) : null}
     </section>
   );
+}
+
+function MonthlySummary({
+  startDate,
+  summary,
+}: {
+  startDate: string;
+  summary: MonthlySpendingSummary;
+}) {
+  return (
+    <section
+      aria-labelledby="monthly-spending-summary-title"
+      className="mt-8 border-y border-border-soft bg-accent-soft px-4 py-6 sm:px-5"
+    >
+      <h3 className="text-xl font-semibold text-foreground" id="monthly-spending-summary-title">
+        {monthlyQuestionLabel(startDate)}
+      </h3>
+      <p className="mt-3 text-lg font-semibold text-stone-900">
+        {summary.topCategory.label}에 가장 많이 썼어요.
+      </p>
+      <p className="mt-1 font-ui text-sm text-stone-700 tabular-nums">
+        {amountFormatter.format(summary.topCategory.amount)}원 · 전체의 {summary.sharePercent}%
+      </p>
+      <p className="mt-2 text-sm text-stone-700">{categoryChangeLabel(summary)}</p>
+
+      <div className="mt-5 border-t border-border-soft pt-4">
+        <h4 className="text-sm font-semibold text-stone-900">이 설명의 근거</h4>
+        <ul className="mt-2 divide-y divide-border-soft">
+          {summary.evidenceTransactions.map((transaction) => (
+            <li className="flex items-baseline justify-between gap-4 py-3" key={transaction.id}>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-stone-800">{transaction.merchant}</p>
+                <p className="mt-1 font-ui text-xs text-stone-600 tabular-nums">
+                  {evidenceDateFormatter.format(new Date(transaction.occurredAt))} · {transaction.payerLabel}
+                </p>
+              </div>
+              <p className="shrink-0 font-ui text-sm font-semibold text-stone-900 tabular-nums">
+                {amountFormatter.format(transaction.amount)}원
+              </p>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+function monthlyQuestionLabel(startDate: string): string {
+  if (startDate.slice(0, 7) === seoulToday().slice(0, 7)) {
+    return "이번 달 돈 어디 갔어?";
+  }
+  return `${monthFormatter.format(parseDate(startDate))} 돈 어디 갔어?`;
+}
+
+function categoryChangeLabel(summary: MonthlySpendingSummary): string {
+  if (summary.categoryAmountChange === summary.topCategory.amount) {
+    return "지난달에는 이 분류 지출이 없었어요.";
+  }
+  if (summary.categoryAmountChange === 0) {
+    return "지난달과 같은 금액이에요.";
+  }
+
+  const direction = summary.categoryAmountChange > 0 ? "늘었어요" : "줄었어요";
+  return `지난달보다 ${amountFormatter.format(Math.abs(summary.categoryAmountChange))}원 ${direction}.`;
 }
 
 function RecurringSpendingChanges({

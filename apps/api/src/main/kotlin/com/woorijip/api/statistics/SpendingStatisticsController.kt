@@ -18,6 +18,7 @@ class SpendingStatisticsController(
         @RequestParam(defaultValue = "MONTH") period: String,
         @RequestParam(defaultValue = "ALL") payer: String,
         @RequestParam(required = false) date: LocalDate?,
+        @RequestParam(defaultValue = "false") includeMonthlySummary: Boolean,
     ): SpendingStatistics {
         val spendingPeriod = try {
             SpendingPeriod.valueOf(period.uppercase())
@@ -30,9 +31,20 @@ class SpendingStatisticsController(
             throw ApiException(ErrorCode.UNSUPPORTED_FILTER, "지원하지 않는 결제자 필터입니다.")
         }
         return if (date == null) {
-            spendingStatisticsService.find(currentUser, spendingPeriod, spendingPayer)
+            spendingStatisticsService.find(
+                currentUser,
+                spendingPeriod,
+                spendingPayer,
+                includeMonthlySummary = includeMonthlySummary,
+            )
         } else {
-            spendingStatisticsService.find(currentUser, spendingPeriod, spendingPayer, date)
+            spendingStatisticsService.find(
+                currentUser,
+                spendingPeriod,
+                spendingPayer,
+                referenceDate = date,
+                includeMonthlySummary = includeMonthlySummary,
+            )
         }
     }
 }

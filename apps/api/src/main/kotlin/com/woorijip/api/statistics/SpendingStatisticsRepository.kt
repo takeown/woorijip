@@ -19,6 +19,14 @@ data class SpendingBreakdown(
     val transactionCount: Long,
 )
 
+data class SpendingEvidenceTransaction(
+    val id: Long,
+    val merchant: String,
+    val amount: Long,
+    val occurredAt: OffsetDateTime,
+    val payerLabel: String,
+)
+
 @Repository
 class SpendingStatisticsRepository(
     private val jdbcTemplate: NamedParameterJdbcTemplate,
@@ -151,6 +159,44 @@ class SpendingStatisticsRepository(
             parameters(householdId, start, endExclusive, payerId),
             ::breakdown,
         )
+
+    fun topTransactionsByCategory(
+        householdId: Long,
+        start: OffsetDateTime,
+        endExclusive: OffsetDateTime,
+        payerId: Long?,
+        category: String,
+        limit: Int,
+    ): List<SpendingEvidenceTransaction> =
+        jdbcTemplate.query(
+            """
+            SELECT t.id,
+                   t.merchant,
+                   t.amount,
+                   t.occurred_at,
+                   users.display_name AS payer_label
+            FROM transactions AS t
+            JOIN users ON users.id = t.payer_id
+            WHERE t.household_id = :householdId
+              AND t.occurred_at >= :start
+              AND t.occurred_at < :endExclusive
+              AND t.category = :category
+              ${payerCondition("t", payerId)}
+            ORDER BY t.amount DESC, t.occurred_at DESC, t.id DESC
+            LIMIT :limit
+            """.trimIndent(),
+            parameters(householdId, start, endExclusive, payerId)
+                .addValue("category", category)
+                .addValue("limit", limit),
+        ) { resultSet, _ ->
+            SpendingEvidenceTransaction(
+                id = resultSet.getLong("id"),
+                merchant = resultSet.getString("merchant"),
+                amount = resultSet.getLong("amount"),
+                occurredAt = resultSet.getObject("occurred_at", OffsetDateTime::class.java),
+                payerLabel = resultSet.getString("payer_label"),
+            )
+        }
 
     private fun parameters(
         householdId: Long,

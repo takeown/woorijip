@@ -53,6 +53,28 @@ const monthlyStatistics = {
       message: "선택한 기간 구독 지출이 이전 기간보다 5,000원 증가했어요.",
     },
   ],
+  monthlySummary: {
+    topCategory: { key: "FOOD", label: "식비", amount: 125_000, transactionCount: 4 },
+    sharePercent: 100,
+    categoryAmountChange: 25_000,
+    categoryChangeRatePercent: 25,
+    evidenceTransactions: [
+      {
+        id: 10,
+        merchant: "우리동네 마트",
+        amount: 75_000,
+        occurredAt: "2026-07-20T19:30:00+09:00",
+        payerLabel: "나",
+      },
+      {
+        id: 11,
+        merchant: "주말 장보기",
+        amount: 50_000,
+        occurredAt: "2026-07-12T11:00:00+09:00",
+        payerLabel: "배우자",
+      },
+    ],
+  },
 };
 
 afterEach(() => {
@@ -97,12 +119,18 @@ describe("SpendingStatisticsPanel", () => {
     expect(
       screen.getByText("선택한 기간 구독 지출이 이전 기간보다 5,000원 증가했어요."),
     ).toBeDefined();
+    expect(screen.getByRole("heading", { name: "2026년 7월 돈 어디 갔어?" })).toBeDefined();
+    expect(screen.getByText("식비에 가장 많이 썼어요.")).toBeDefined();
+    expect(screen.getByText("우리동네 마트")).toBeDefined();
+    expect(screen.getByText("75,000원")).toBeDefined();
+    expect(screen.getByText("7월 20일 · 나")).toBeDefined();
 
     await user.click(screen.getByRole("button", { name: "일간" }));
 
     const reloadedTotalCard = (await screen.findByText("총지출")).parentElement;
     expect(within(reloadedTotalCard as HTMLElement).getByText("8,000원")).toBeDefined();
     expect(fetchMock.mock.calls[1][0]).toContain("period=DAY");
+    expect(fetchMock.mock.calls[1][0]).toContain("includeMonthlySummary=true");
   });
 
   test("shows an explicit empty state", async () => {
@@ -121,6 +149,7 @@ describe("SpendingStatisticsPanel", () => {
           categoryComparisons: [],
           tagComparisons: [],
           recurringSpendingChanges: [],
+          monthlySummary: null,
         }),
       ),
     );
