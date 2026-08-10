@@ -119,7 +119,7 @@ household 접근과 부분 실패를 검증한다.
   방법을 함께 검토한다.
 - 비밀값이 노출됐다고 의심되면 값을 폐기·회전한 뒤 로그와 커밋 이력을 별도로 점검한다.
 
-구체적인 운영 절차와 rollback은 `docs/DEPLOYMENT.md`를 따른다.
+구체적인 운영 절차와 rollback은 `docs/operations/DEPLOYMENT.md`를 따른다.
 
 ## 변경 검증 체크리스트
 
