@@ -1,14 +1,44 @@
+/* Hallmark · pre-emit critique: P4 H5 E4 S5 R5 V4 */
+/* Hallmark · genre: modern-minimal · macrostructure: Stat-Led
+ * theme: custom · vibe: "soft, utilitarian, private, domestic" · paper: oklch(97% 0.012 155) · accent: oklch(48% 0.11 155)
+ * display: MaruBuri · body: MaruBuri · outlier: system UI sans for data · axes: light / roman-serif / chromatic-green
+ * studied: no · context: inferred · v1.1.0
+ */
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: oklch(97% 0.012 155);
+  --foreground: oklch(22% 0.016 155);
+  --surface: oklch(99% 0.006 155);
+  --surface-muted: oklch(94% 0.018 155);
+  --border-soft: oklch(84% 0.018 155);
+  --accent: oklch(48% 0.11 155);
+  --accent-strong: oklch(40% 0.105 155);
+  --accent-soft: oklch(92% 0.04 155);
+  --accent-ink: oklch(98% 0.008 155);
+  --focus: oklch(36% 0.11 155);
+  --ui-font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-border-soft: var(--border-soft);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
+  --color-focus: var(--focus);
   --font-sans: var(--font-maru-buri);
+  --font-ui: var(--ui-font-family);
+}
+
+html,
+body {
+  overflow-x: clip;
 }
 
 body {
