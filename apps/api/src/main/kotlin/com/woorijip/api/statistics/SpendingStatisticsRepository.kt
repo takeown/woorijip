@@ -168,6 +168,39 @@ class SpendingStatisticsRepository(
         category: String,
         limit: Int,
     ): List<SpendingEvidenceTransaction> =
+        topTransactions(
+            householdId = householdId,
+            start = start,
+            endExclusive = endExclusive,
+            payerId = payerId,
+            category = category,
+            limit = limit,
+        )
+
+    fun topTransactions(
+        householdId: Long,
+        start: OffsetDateTime,
+        endExclusive: OffsetDateTime,
+        payerId: Long?,
+        limit: Int,
+    ): List<SpendingEvidenceTransaction> =
+        topTransactions(
+            householdId = householdId,
+            start = start,
+            endExclusive = endExclusive,
+            payerId = payerId,
+            category = null,
+            limit = limit,
+        )
+
+    private fun topTransactions(
+        householdId: Long,
+        start: OffsetDateTime,
+        endExclusive: OffsetDateTime,
+        payerId: Long?,
+        category: String?,
+        limit: Int,
+    ): List<SpendingEvidenceTransaction> =
         jdbcTemplate.query(
             """
             SELECT t.id,
@@ -180,13 +213,15 @@ class SpendingStatisticsRepository(
             WHERE t.household_id = :householdId
               AND t.occurred_at >= :start
               AND t.occurred_at < :endExclusive
-              AND t.category = :category
+              ${categoryCondition(category)}
               ${payerCondition("t", payerId)}
             ORDER BY t.amount DESC, t.occurred_at DESC, t.id DESC
             LIMIT :limit
             """.trimIndent(),
             parameters(householdId, start, endExclusive, payerId)
-                .addValue("category", category)
+                .also { parameters ->
+                    if (category != null) parameters.addValue("category", category)
+                }
                 .addValue("limit", limit),
         ) { resultSet, _ ->
             SpendingEvidenceTransaction(
@@ -197,6 +232,9 @@ class SpendingStatisticsRepository(
                 payerLabel = resultSet.getString("payer_label"),
             )
         }
+
+    private fun categoryCondition(category: String?): String =
+        if (category == null) "" else "AND t.category = :category"
 
     private fun parameters(
         householdId: Long,

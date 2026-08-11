@@ -88,6 +88,10 @@ vi ~/woorijip/deploy/.env
 chmod 600 ~/woorijip/deploy/.env
 ```
 
+가계 질문의 사용자별 서울 날짜 일일 한도는 `SPENDING_QUESTION_DAILY_LIMIT`로 설정한다.
+값을 생략하면 기본 20회를 사용한다. 변경 시 예상 사용자 수와 OpenAI 호출 비용을 함께
+확인한다.
+
 서버에서 GHCR에 한 번 로그인한다. 비밀번호 입력에는 GitHub 비밀번호가 아니라
 `read:packages` 권한을 가진 토큰을 사용한다.
 

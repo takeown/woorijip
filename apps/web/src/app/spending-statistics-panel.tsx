@@ -5,6 +5,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { SpendingQuestionPanel } from "./spending-question-panel";
 
 type SpendingPeriod = "DAY" | "WEEK" | "MONTH";
 type SpendingPayer = "ALL" | "ME" | "PARTNER";
@@ -169,6 +170,8 @@ export function SpendingStatisticsPanel({ refreshKey }: SpendingStatisticsPanelP
           우리집 지출이 어디에서 달라졌는지 서울 시간 기준으로 살펴봅니다.
         </p>
       </header>
+
+      <SpendingQuestionPanel />
 
       <div className="mt-6 border-y border-border-soft py-4">
         <div className="grid gap-4 lg:grid-cols-[auto_auto_minmax(0,1fr)] lg:items-end">

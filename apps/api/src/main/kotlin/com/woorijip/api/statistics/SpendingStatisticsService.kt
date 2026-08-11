@@ -175,6 +175,37 @@ class SpendingStatisticsService(
         )
     }
 
+    @Transactional(readOnly = true)
+    fun findEvidence(
+        currentUser: CurrentUser,
+        payer: SpendingPayer,
+        startDate: LocalDate,
+        endDateExclusive: LocalDate,
+        category: TransactionCategory?,
+        limit: Int,
+    ): List<SpendingEvidenceTransaction> {
+        val payerId = resolvePayerId(currentUser, payer)
+        val range = DateRange(startDate, endDateExclusive)
+        return if (category == null) {
+            spendingStatisticsRepository.topTransactions(
+                householdId = currentUser.householdId,
+                start = range.startAt,
+                endExclusive = range.endExclusiveAt,
+                payerId = payerId,
+                limit = limit,
+            )
+        } else {
+            spendingStatisticsRepository.topTransactionsByCategory(
+                householdId = currentUser.householdId,
+                start = range.startAt,
+                endExclusive = range.endExclusiveAt,
+                payerId = payerId,
+                category = category.name,
+                limit = limit,
+            )
+        }
+    }
+
     private fun monthlySummary(
         period: SpendingPeriod,
         included: Boolean,

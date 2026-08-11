@@ -1,8 +1,8 @@
 # 데이터 모델
 
-마지막 수정: 2026-08-04
+마지막 수정: 2026-08-11
 
-현재 기준: Flyway V15
+현재 기준: Flyway V16
 
 이 문서는 데이터 관계, 소유권과 금액 의미를 빠르게 이해하기 위한 안내서다. 실제
 PostgreSQL 스키마의 유일한 기준은 `apps/api/src/main/resources/db/migration`의 Flyway
@@ -24,6 +24,7 @@ migration이다. 모든 컬럼 타입과 인덱스를 이 문서에 복사하지
 erDiagram
     USERS ||--o{ AUTH_IDENTITIES : "로그인 수단"
     USERS ||--o{ HOUSEHOLD_MEMBERSHIPS : "참여"
+    USERS ||--o{ SPENDING_QUESTION_DAILY_USAGE : "질문 횟수"
     HOUSEHOLDS ||--o{ HOUSEHOLD_MEMBERSHIPS : "구성원"
 
     HOUSEHOLD_MEMBERSHIPS ||--o{ TRANSACTIONS : "결제자"
@@ -119,6 +120,11 @@ erDiagram
         bigint approved_amount
         bigint billed_amount
     }
+    SPENDING_QUESTION_DAILY_USAGE {
+        bigint user_id PK,FK
+        date usage_date PK
+        int request_count
+    }
 ```
 
 `spring_session`과 `spring_session_attributes`는 로그인 세션을 저장하는 Spring Session
@@ -160,6 +166,10 @@ erDiagram
 
 `users`는 내부 사용자이고 `auth_identities`는 Google 같은 로그인 제공자 계정이다.
 `(provider, provider_subject)`가 고유하므로 이메일 일치만으로 사용자를 합치지 않는다.
+
+`spending_question_daily_usage`는 household 데이터가 아니라 인증 사용자별 외부 AI 사용량
+상한을 위한 최소 운영 데이터다. 질문·답변 원문이나 토큰은 저장하지 않고 사용자, 서울 날짜와
+누적 요청 횟수만 저장한다.
 
 ## 금액과 잔액 의미
 
@@ -234,6 +244,7 @@ erDiagram
 | 잔액 계정 | 변동과 연결 거래가 모두 없을 때만 직접 삭제, 이력이 있으면 보관 |
 | 가맹점 분류 규칙 | 규칙 태그 삭제 |
 | HTTP 세션 | 세션 속성 삭제 |
+| 사용자별 가계 질문 사용량 | 사용자 삭제 시 모든 날짜의 횟수 삭제 |
 
 보관한 잔액 계정은 목록과 과거 거래에서 유지하지만 새 충전과 새 거래 선택에서는 제외한다.
 기존 거래가 같은 보관 계정을 유지한 채 수정되는 경우에는 잔액 변동을 다시 검증해 저장할
@@ -255,6 +266,7 @@ erDiagram
 | 잔액 | `stored_value_movements` | 충전·지급·사용·조정 이력 |
 | 명세서 | `card_statement_imports` | 월별 명세서 대조 실행 단위 |
 | 명세서 | `card_statement_candidates` | 정규화된 명세서 행과 반영 상태 |
+| AI 사용량 | `spending_question_daily_usage` | 사용자별 서울 날짜 일일 가계 질문 횟수 |
 | 세션 | `spring_session` | 서버 로그인 세션 |
 | 세션 | `spring_session_attributes` | 직렬화된 세션 속성 |
 
@@ -277,6 +289,7 @@ erDiagram
 | V13 | 잔액 계정을 household 구성원별 소유로 전환 |
 | V14 | 잔액 계정 커스텀 생성·분류·자동 연동 키·보관 상태 추가 |
 | V15 | 직접 입력 잔액 종류명 추가 및 기존 `OTHER` 계정 이전 |
+| V16 | 사용자별 일일 가계 질문 사용량 |
 
 이미 적용되거나 커밋된 migration은 수정하지 않는다. 구조를 바꿀 때는 새 번호의
 migration을 추가하고 이 문서에는 변경된 최종 관계와 의미를 반영한다.

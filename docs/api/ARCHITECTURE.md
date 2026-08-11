@@ -89,6 +89,21 @@ AI 자연어 거래 입력은 다음 경로를 지난다.
 설명의 근거로 반환한다. 홈처럼 근거를 사용하지 않는 요청, 일간·주간과 거래가 없는 월에는
 월간 요약을 반환하지 않는다.
 
+자유 형식 가계 질문은 다음 경로를 지난다.
+
+| 순서 | 파일 | 하는 일 |
+| --- | --- | --- |
+| 1 | `statistics/SpendingQuestionController.kt` | 200자 이하 질문을 받고 인증·CSRF 경계를 통과한다 |
+| 2 | `ai/AiSensitiveInputGuard.kt` | 외부 전송 금지 데이터가 있으면 일일 횟수를 쓰기 전에 거부한다 |
+| 3 | `statistics/SpendingQuestionUsageRepository.kt` | 사용자와 서울 날짜 기준 일일 요청 횟수를 원자적으로 예약한다 |
+| 4 | `ai/OpenAiSpendingQuestionInterpreter.kt` | 질문 원문만 허용된 의도, 기간, 결제자와 카테고리로 구조화한다 |
+| 5 | `statistics/SpendingQuestionService.kt` | 모델 출력을 재검증하고 기존 통계 서비스로 결정적인 답변을 만든다 |
+| 6 | `statistics/SpendingStatisticsRepository.kt` | 인증 household 범위에서 집계와 금액순 근거 거래를 최대 세 건 조회한다 |
+
+OpenAI에는 거래 데이터나 household 식별자를 보내지 않는다. `TOTAL`, `CATEGORY`,
+`LARGEST_TRANSACTION` 외 의도는 지원하지 않으며, 답변 문장과 근거 선택은 서버가 소유한다.
+외부 호출 실패도 비용이 발생할 수 있어 예약한 일일 횟수는 되돌리지 않는다.
+
 AI 요청에서 `AiSensitiveInputGuard`는 금지 데이터를 외부 전송 직전에 검사하고,
 `OpenAiSafetyIdentifier`는 내부 사용자 ID를 HMAC 가명 식별자로 바꾼다. 허용 전송
 필드, 저장 금지 데이터와 검증 기준은 `docs/SECURITY.md`를 따른다.

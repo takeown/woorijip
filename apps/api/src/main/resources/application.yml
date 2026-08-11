@@ -33,6 +33,7 @@ app:
     api-key: ${OPENAI_API_KEY:}
     model: ${OPENAI_MODEL:gpt-5.6-luna}
     safety-identifier-secret: ${OPENAI_SAFETY_IDENTIFIER_SECRET:}
+    spending-question-daily-limit: ${SPENDING_QUESTION_DAILY_LIMIT:20}
 
 management:
   endpoints:
