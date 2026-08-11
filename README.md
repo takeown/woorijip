@@ -11,12 +11,15 @@
 ## 요구 사항
 
 - Node.js 24 LTS
-- JDK 21+
+- pnpm 11
+- JDK 21
 - Docker
 
 ## 시작하기
 
 ```bash
+nvm use
+pnpm install
 cp .env.example .env
 docker compose up -d
 pnpm dev:api
@@ -25,6 +28,7 @@ pnpm dev:api
 다른 터미널에서 웹 앱을 실행합니다.
 
 ```bash
+nvm use
 pnpm dev:web
 ```
 
@@ -34,6 +38,7 @@ pnpm dev:web
 ## 확인
 
 ```bash
+nvm use
 pnpm lint:web
 pnpm test:web
 pnpm build:web
@@ -43,10 +48,10 @@ pnpm build:api
 
 ## 문서
 
-- 전체 문서 안내: `docs/README.md`
-- 현재 작업 범위와 백로그: `docs/PLAN.md`
-- 제품·기술 결정: `docs/DECISIONS.md`
-- API 구조와 변경 지점: `docs/api/ARCHITECTURE.md`
-- 데이터 관계, 소유권과 금액 의미: `docs/api/DATA_MODEL.md`
-- 보안 기준: `docs/SECURITY.md`
-- 운영과 배포: `docs/operations/DEPLOYMENT.md`
+- [전체 문서 안내](./docs/README.md)
+- [현재 작업 범위와 백로그](./docs/PLAN.md)
+- [제품·기술 결정](./docs/DECISIONS.md)
+- [API 구조와 변경 지점](./docs/api/ARCHITECTURE.md)
+- [데이터 관계, 소유권과 금액 의미](./docs/api/DATA_MODEL.md)
+- [보안 기준](./docs/SECURITY.md)
+- [운영과 배포](./docs/operations/DEPLOYMENT.md)

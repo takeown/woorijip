@@ -256,8 +256,9 @@ fun create(currentUser: CurrentUser, @Valid @RequestBody request: CreateTransact
 **로그 보기 (운영)**
 
 ```bash
-docker compose -f compose.prod.yaml logs -f api
-docker compose -f compose.prod.yaml ps        # 컨테이너 상태
+cd ~/woorijip
+docker compose --env-file deploy/.env -f compose.prod.yaml logs -f api
+docker compose --env-file deploy/.env -f compose.prod.yaml ps
 ```
 
 **증상별 확인 지점**
