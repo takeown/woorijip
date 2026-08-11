@@ -68,7 +68,7 @@
 | `deploy/**` 또는 `.github/workflows/**` | `docs/operations/DEPLOYMENT.md`와 `docs/SECURITY.md` |
 
 보안 경계를 변경하면 성공 경로뿐 아니라 비인증 요청, 다른 household 접근, 금지 데이터,
-실패 후 데이터 잔존 여부 중 해당하는 음성 테스트를 추가한다.
+실패 후 데이터 잔존 여부 중 해당하는 부정 테스트를 추가한다.
 
 저장소 루트에서 실행한다.
 
