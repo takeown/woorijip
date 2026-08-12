@@ -89,6 +89,21 @@ AI 자연어 거래 입력은 다음 경로를 지난다.
 설명의 근거로 반환한다. 홈처럼 근거를 사용하지 않는 요청, 일간·주간과 거래가 없는 월에는
 월간 요약을 반환하지 않는다.
 
+자유 형식 가계 분석은 다음 경로를 지난다.
+
+| 순서 | 파일 | 하는 일 |
+| --- | --- | --- |
+| 1 | `statistics/SpendingAnalysisController.kt` | 최대 200자의 질문 형식을 검증한다 |
+| 2 | `statistics/SpendingAnalysisService.kt` | 질문의 민감정보를 검사하고 현재 household의 제한된 최근 거래를 조합한다 |
+| 3 | `statistics/SpendingAnalysisRepository.kt` | 최근 거래를 최대 설정 개수만 조회하고 household별 일일 호출량을 원자적으로 차감한다 |
+| 4 | `ai/OpenAiSpendingAnalysisGenerator.kt` | 임시 거래 참조와 최소 필드로 Responses API를 호출한다 |
+| 5 | `statistics/SpendingAnalysisService.kt` | 모델의 근거 참조를 이번 요청의 거래와 대조하고 실제 근거 거래로 변환한다 |
+
+질문과 저장된 가맹점에서 외부 전송 금지 데이터를 검사한다. 가맹점에 금지 데이터가 있으면
+해당 거래를 AI 데이터셋에서 제외한다. 외부 AI에는 내역, 사용자 이름과 내부 거래 ID를
+보내지 않으며, 성공 답변에 유효한 근거가 없으면 응답을 거부한다. 기본 비용 한도는
+household별 하루 20회, 최근 거래 200건, 출력 500토큰이다.
+
 AI 요청에서 `AiSensitiveInputGuard`는 금지 데이터를 외부 전송 직전에 검사하고,
 `OpenAiSafetyIdentifier`는 내부 사용자 ID를 HMAC 가명 식별자로 바꾼다. 허용 전송
 필드, 저장 금지 데이터와 검증 기준은 `docs/SECURITY.md`를 따른다.
@@ -248,6 +263,7 @@ fun create(currentUser: CurrentUser, @Valid @RequestBody request: CreateTransact
 | 로그인 허용 계정 변경 | 코드가 아니라 환경변수 `GOOGLE_ALLOWED_EMAILS` |
 | CORS 허용 주소·메서드 | `config/WebConfig.kt` |
 | AI 프롬프트·모델 | `ai/OpenAiTransactionDraftGenerator.kt`, 모델은 환경변수 `OPENAI_MODEL` |
+| 가계 분석 질문·근거·한도 | `statistics/SpendingAnalysis*`와 `ai/OpenAiSpendingAnalysisGenerator.kt` |
 | AI 외부 전송 금지 데이터 | `ai/AiSensitiveInputGuard.kt` |
 | AI 가명 식별자 | `ai/OpenAiSafetyIdentifier.kt`, 비밀값은 환경변수 `OPENAI_SAFETY_IDENTIFIER_SECRET` |
 

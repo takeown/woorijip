@@ -15,6 +15,8 @@ class AiSensitiveInputGuard {
         }
     }
 
+    fun isSafeForExternalProcessing(value: String): Boolean = !containsSensitiveData(value)
+
     internal fun containsSensitiveData(message: String): Boolean =
         EMAIL.containsMatchIn(message) ||
             PHONE_NUMBER.containsMatchIn(message) ||

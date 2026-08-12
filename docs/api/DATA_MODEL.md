@@ -1,8 +1,8 @@
 # 데이터 모델
 
-마지막 수정: 2026-08-04
+마지막 수정: 2026-08-12
 
-현재 기준: Flyway V15
+현재 기준: Flyway V16
 
 이 문서는 데이터 관계, 소유권과 금액 의미를 빠르게 이해하기 위한 안내서다. 실제
 PostgreSQL 스키마의 유일한 기준은 `apps/api/src/main/resources/db/migration`의 Flyway
@@ -28,6 +28,7 @@ erDiagram
 
     HOUSEHOLD_MEMBERSHIPS ||--o{ TRANSACTIONS : "결제자"
     HOUSEHOLDS ||--o{ TRANSACTIONS : "소유"
+    HOUSEHOLDS ||--o{ AI_DAILY_USAGE : "AI 사용량"
     TRANSACTIONS ||--o{ TRANSACTION_TAGS : "태그"
 
     HOUSEHOLDS ||--o{ MERCHANT_CLASSIFICATION_RULES : "분류 규칙"
@@ -56,6 +57,11 @@ erDiagram
     HOUSEHOLDS {
         bigint id PK
         string name
+    }
+    AI_DAILY_USAGE {
+        bigint household_id PK,FK
+        date usage_date PK
+        int spending_analysis_requests
     }
     HOUSEHOLD_MEMBERSHIPS {
         bigint id PK
@@ -123,6 +129,10 @@ erDiagram
 
 `spring_session`과 `spring_session_attributes`는 로그인 세션을 저장하는 Spring Session
 인프라 테이블이라 제품 데이터 ER 그림에서는 제외했다. 세션 속성은 세션 삭제 시 함께
+삭제된다.
+
+`ai_daily_usage`는 질문이나 답변 내용을 저장하지 않고 household와 서울 날짜별 가계 분석
+호출 횟수만 보존한다. `(household_id, usage_date)`가 한 행이며 household 삭제 시 함께
 삭제된다.
 
 ## 소유권 경계
@@ -228,7 +238,7 @@ erDiagram
 | 대상 삭제 | 연결 데이터 처리 |
 | --- | --- |
 | 사용자 | 인증 수단과 membership은 cascade 대상이지만 거래 등 참조 데이터가 있으면 삭제가 제한될 수 있음 |
-| household | membership, 분류 규칙, 잔액 계정은 cascade 대상이며 거래 참조가 있으면 삭제가 제한될 수 있음 |
+| household | membership, 분류 규칙, 잔액 계정과 AI 사용량은 cascade 대상이며 거래 참조가 있으면 삭제가 제한될 수 있음 |
 | 거래 | 거래 태그와 잔액 `SPEND` 변동 삭제, 명세서 후보의 적용 거래는 `NULL`로 변경 |
 | 카드 명세서 import | 모든 후보 삭제 |
 | 잔액 계정 | 변동과 연결 거래가 모두 없을 때만 직접 삭제, 이력이 있으면 보관 |
@@ -247,6 +257,7 @@ erDiagram
 | 인증 | `auth_identities` | 외부 로그인 제공자와 내부 사용자 연결 |
 | 가구 | `households` | 가계 데이터 격리 단위 |
 | 가구 | `household_memberships` | household와 사용자의 구성원 관계 |
+| AI | `ai_daily_usage` | household·날짜별 가계 분석 호출 횟수 |
 | 거래 | `transactions` | 가맹점 소비와 결제·분류 정보 |
 | 거래 | `transaction_tags` | 거래의 중복 불가 다중 태그 |
 | 분류 | `merchant_classification_rules` | household별 가맹점 기본 분류 |
@@ -277,6 +288,7 @@ erDiagram
 | V13 | 잔액 계정을 household 구성원별 소유로 전환 |
 | V14 | 잔액 계정 커스텀 생성·분류·자동 연동 키·보관 상태 추가 |
 | V15 | 직접 입력 잔액 종류명 추가 및 기존 `OTHER` 계정 이전 |
+| V16 | household·날짜별 가계 분석 호출량 테이블 |
 
 이미 적용되거나 커밋된 migration은 수정하지 않는다. 구조를 바꿀 때는 새 번호의
 migration을 추가하고 이 문서에는 변경된 최종 관계와 의미를 반영한다.
