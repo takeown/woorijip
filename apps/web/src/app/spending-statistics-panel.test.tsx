@@ -249,11 +249,89 @@ describe("SpendingStatisticsPanel", () => {
     expect(fetchMock.mock.calls[1][0]).toContain("payer=PARTNER");
     expect(screen.queryByRole("heading", { name: "결제자" })).toBeNull();
   });
+
+  test("asks a free-form question and shows evidence transactions", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse(monthlyStatistics))
+      .mockResolvedValueOnce(
+        jsonResponse({ token: "csrf-token", headerName: "X-XSRF-TOKEN" }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          status: "ANSWERED",
+          answer: "식비는 동네 마트 지출의 영향이 가장 컸어요.",
+          evidenceTransactions: [
+            {
+              id: 21,
+              merchant: "동네 마트",
+              amount: 48_000,
+              occurredAt: "2026-08-10T18:00:00+09:00",
+              payerLabel: "나",
+            },
+          ],
+          dataLimited: true,
+          remainingRequestsToday: 19,
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<SpendingStatisticsPanel refreshKey={0} />);
+    await screen.findByText("총지출");
+    await user.type(
+      screen.getByRole("textbox", { name: "가계 지출 질문" }),
+      "식비가 왜 늘었어?",
+    );
+    await user.click(screen.getByRole("button", { name: "물어보기" }));
+
+    expect(await screen.findByText("식비는 동네 마트 지출의 영향이 가장 컸어요.")).toBeDefined();
+    expect(screen.getByRole("heading", { name: "이 답변의 근거" })).toBeDefined();
+    expect(screen.getByText("동네 마트")).toBeDefined();
+    expect(screen.getByText("48,000원")).toBeDefined();
+    expect(screen.getByText("오늘 19번 더 물어볼 수 있어요.")).toBeDefined();
+    expect(
+      screen.getByText("최근 거래 일부와 외부 전송에 안전한 거래만 기준으로 살펴봤어요."),
+    ).toBeDefined();
+    expect(fetchMock.mock.calls[2][0]).toContain("/statistics/spending-answers");
+    expect(fetchMock.mock.calls[2][1]).toMatchObject({
+      method: "POST",
+      body: JSON.stringify({ question: "식비가 왜 늘었어?" }),
+    });
+  });
+
+  test("shows the api error when the daily question limit is exhausted", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(jsonResponse(monthlyStatistics))
+        .mockResolvedValueOnce(
+          jsonResponse({ token: "csrf-token", headerName: "X-XSRF-TOKEN" }),
+        )
+        .mockResolvedValueOnce(
+          jsonResponse(
+            { detail: "오늘 사용할 수 있는 가계 분석 횟수를 모두 사용했습니다." },
+            429,
+          ),
+        ),
+    );
+
+    render(<SpendingStatisticsPanel refreshKey={0} />);
+    await screen.findByText("총지출");
+    await user.type(screen.getByRole("textbox", { name: "가계 지출 질문" }), "또 알려줘");
+    await user.click(screen.getByRole("button", { name: "물어보기" }));
+
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "오늘 사용할 수 있는 가계 분석 횟수를 모두 사용했습니다.",
+    );
+  });
 });
 
-function jsonResponse(body: unknown): Response {
+function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     headers: { "Content-Type": "application/json" },
-    status: 200,
+    status,
   });
 }

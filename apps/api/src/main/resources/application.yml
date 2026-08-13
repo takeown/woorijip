@@ -33,6 +33,9 @@ app:
     api-key: ${OPENAI_API_KEY:}
     model: ${OPENAI_MODEL:gpt-5.6-luna}
     safety-identifier-secret: ${OPENAI_SAFETY_IDENTIFIER_SECRET:}
+    analysis-daily-request-limit: ${OPENAI_ANALYSIS_DAILY_REQUEST_LIMIT:20}
+    analysis-transaction-limit: ${OPENAI_ANALYSIS_TRANSACTION_LIMIT:200}
+    analysis-max-output-tokens: ${OPENAI_ANALYSIS_MAX_OUTPUT_TOKENS:500}
 
 management:
   endpoints:

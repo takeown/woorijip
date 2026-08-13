@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 type SpendingPeriod = "DAY" | "WEEK" | "MONTH";
 type SpendingPayer = "ALL" | "ME" | "PARTNER";
@@ -81,6 +81,23 @@ type SpendingStatistics = {
 
 type SpendingStatisticsPanelProps = {
   refreshKey: number;
+};
+
+type SpendingAnalysisAnswer = {
+  status: "ANSWERED" | "NO_DATA" | "UNSUPPORTED";
+  answer: string;
+  evidenceTransactions: SpendingEvidenceTransaction[];
+  dataLimited: boolean;
+  remainingRequestsToday: number;
+};
+
+type CsrfToken = {
+  token: string;
+  headerName: string;
+};
+
+type ApiProblem = {
+  detail?: unknown;
 };
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
@@ -268,6 +285,8 @@ export function SpendingStatisticsPanel({ refreshKey }: SpendingStatisticsPanelP
         </div>
       </div>
 
+      <SpendingQuestion />
+
       {isLoading ? (
         <div className="mt-8 border-y border-border-soft bg-surface-muted px-5 py-12 text-center text-stone-600" role="status">
           통계를 계산하고 있습니다.
@@ -362,6 +381,141 @@ export function SpendingStatisticsPanel({ refreshKey }: SpendingStatisticsPanelP
             </div>
           ) : null}
         </>
+      ) : null}
+    </section>
+  );
+}
+
+function SpendingQuestion() {
+  const [question, setQuestion] = useState("");
+  const [answer, setAnswer] = useState<SpendingAnalysisAnswer | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const value = question.trim();
+    if (!value || isSubmitting) return;
+
+    setIsSubmitting(true);
+    setError(null);
+    setAnswer(null);
+    try {
+      const csrfResponse = await fetch(`${apiUrl}/auth/csrf`, {
+        credentials: "include",
+      });
+      if (!csrfResponse.ok) {
+        throw new Error("질문을 준비하지 못했습니다.");
+      }
+      const csrf: CsrfToken = await csrfResponse.json();
+      const response = await fetch(`${apiUrl}/statistics/spending-answers`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          [csrf.headerName]: csrf.token,
+        },
+        body: JSON.stringify({ question: value }),
+      });
+      if (!response.ok) {
+        const problem: ApiProblem | null = await response.json().catch(() => null);
+        throw new Error(
+          typeof problem?.detail === "string"
+            ? problem.detail
+            : "가계 분석 답변을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.",
+        );
+      }
+      setAnswer(await response.json());
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "가계 분석 답변을 만들지 못했습니다.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <section
+      aria-labelledby="spending-question-title"
+      className="mt-8 border-y border-border-soft bg-surface-muted px-4 py-6 sm:px-5"
+    >
+      <div className="max-w-2xl">
+        <h3 className="text-xl font-semibold text-foreground" id="spending-question-title">
+          우리집 지출에 물어보기
+        </h3>
+        <p className="mt-2 text-sm text-stone-600">
+          저장된 최근 거래내역 안에서 답하고, 확인에 쓴 거래를 함께 보여드려요.
+        </p>
+      </div>
+
+      <form className="mt-5 flex flex-col gap-3 sm:flex-row" onSubmit={submit}>
+        <label className="sr-only" htmlFor="spending-question">
+          가계 지출 질문
+        </label>
+        <input
+          className="min-h-11 min-w-0 flex-1 rounded-xl border border-border-soft bg-surface px-4 text-base outline-2 outline-offset-2 outline-transparent transition-colors duration-150 ease-[var(--ease-out)] hover:bg-accent-soft focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={isSubmitting}
+          id="spending-question"
+          maxLength={200}
+          onChange={(event) => setQuestion(event.target.value)}
+          placeholder="예: 지난달보다 식비가 왜 늘었어?"
+          value={question}
+        />
+        <button
+          className="min-h-11 whitespace-nowrap rounded-xl bg-accent px-5 py-2.5 font-semibold text-accent-ink transition-colors duration-150 ease-[var(--ease-out)] hover:bg-accent-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-accent-ink active:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={isSubmitting || question.trim().length === 0}
+          type="submit"
+        >
+          {isSubmitting ? "살펴보는 중" : "물어보기"}
+        </button>
+      </form>
+
+      {error ? (
+        <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
+          {error}
+        </p>
+      ) : null}
+
+      {answer ? (
+        <div className="mt-5 border-t border-border-soft pt-5" aria-live="polite">
+          <p className="text-base leading-7 text-stone-800">{answer.answer}</p>
+          {answer.dataLimited ? (
+            <p className="mt-2 text-xs text-stone-600">
+              최근 거래 일부와 외부 전송에 안전한 거래만 기준으로 살펴봤어요.
+            </p>
+          ) : null}
+          {answer.evidenceTransactions.length > 0 ? (
+            <div className="mt-5">
+              <h4 className="text-sm font-semibold text-stone-900">이 답변의 근거</h4>
+              <ul className="mt-2 divide-y divide-border-soft">
+                {answer.evidenceTransactions.map((transaction) => (
+                  <li
+                    className="flex items-baseline justify-between gap-4 py-3"
+                    key={transaction.id}
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-stone-800">
+                        {transaction.merchant}
+                      </p>
+                      <p className="mt-1 font-ui text-xs text-stone-600 tabular-nums">
+                        {evidenceDateFormatter.format(new Date(transaction.occurredAt))} · {transaction.payerLabel}
+                      </p>
+                    </div>
+                    <p className="shrink-0 font-ui text-sm font-semibold text-stone-900 tabular-nums">
+                      {amountFormatter.format(transaction.amount)}원
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          <p className="mt-3 font-ui text-xs text-stone-600 tabular-nums">
+            오늘 {amountFormatter.format(answer.remainingRequestsToday)}번 더 물어볼 수 있어요.
+          </p>
+        </div>
       ) : null}
     </section>
   );
