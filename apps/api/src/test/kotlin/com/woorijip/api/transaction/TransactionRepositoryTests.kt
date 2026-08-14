@@ -47,8 +47,13 @@ class TransactionRepositoryTests(
         assertEquals(
             listOf("동네마트", "김밥천국"),
             transactionRepository
-                .findPageByHouseholdId(
+                .findPage(
                     householdId = householdId,
+                    currentUserId = payerId,
+                    payerFilter = PayerFilter.ALL.name,
+                    searchPattern = null,
+                    occurredAtFrom = null,
+                    occurredAtTo = null,
                     cursorOccurredAt = null,
                     cursorId = null,
                     limit = 20,
@@ -71,14 +76,24 @@ class TransactionRepositoryTests(
             transaction(householdId, payerId, "세 번째", occurredAt),
         )
 
-        val firstPage = transactionRepository.findPageByHouseholdId(
+        val firstPage = transactionRepository.findPage(
             householdId = householdId,
+            currentUserId = payerId,
+            payerFilter = PayerFilter.ALL.name,
+            searchPattern = null,
+            occurredAtFrom = null,
+            occurredAtTo = null,
             cursorOccurredAt = null,
             cursorId = null,
             limit = 2,
         )
-        val secondPage = transactionRepository.findPageByHouseholdId(
+        val secondPage = transactionRepository.findPage(
             householdId = householdId,
+            currentUserId = payerId,
+            payerFilter = PayerFilter.ALL.name,
+            searchPattern = null,
+            occurredAtFrom = null,
+            occurredAtTo = null,
             cursorOccurredAt = second.occurredAt,
             cursorId = second.id,
             limit = 2,

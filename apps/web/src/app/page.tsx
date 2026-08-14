@@ -24,6 +24,13 @@ type Transaction = EditableTransaction;
 
 type PayerFilter = "all" | "me" | "partner";
 
+type TransactionFilters = {
+  payer: PayerFilter;
+  query: string;
+  from: string;
+  to: string;
+};
+
 type TransactionPage = {
   items: Transaction[];
   nextCursor: string | null;
@@ -36,6 +43,12 @@ const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
   timeStyle: "short",
   timeZone: "Asia/Seoul",
 });
+const initialFilters: TransactionFilters = {
+  payer: "all",
+  query: "",
+  from: "",
+  to: "",
+};
 
 export default function Home() {
   return (
@@ -50,7 +63,10 @@ export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [storedValueAccounts, setStoredValueAccounts] = useState<StoredValueAccount[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [payerFilter, setPayerFilter] = useState<PayerFilter>("all");
+  const [filters, setFilters] = useState<TransactionFilters>(initialFilters);
+  const [queryInput, setQueryInput] = useState("");
+  const [fromInput, setFromInput] = useState("");
+  const [toInput, setToInput] = useState("");
   const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isChangingFilter, setIsChangingFilter] = useState(false);
@@ -63,10 +79,13 @@ export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) 
   const entryTriggerRef = useRef<HTMLElement | null>(null);
 
   const fetchTransactions = useCallback(async (
-    filter: PayerFilter = "all",
+    nextFilters: TransactionFilters = initialFilters,
     cursor?: string,
   ) => {
-    const searchParams = new URLSearchParams({ payer: filter });
+    const searchParams = new URLSearchParams({ payer: nextFilters.payer });
+    if (nextFilters.query) searchParams.set("q", nextFilters.query);
+    if (nextFilters.from) searchParams.set("from", nextFilters.from);
+    if (nextFilters.to) searchParams.set("to", nextFilters.to);
     if (cursor) searchParams.set("cursor", cursor);
     const response = await fetch(`${apiUrl}/transactions?${searchParams}`, {
       credentials: "include",
@@ -185,12 +204,12 @@ export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) 
     setIsEntryPanelOpen(false);
   }
 
-  async function changePayerFilter(filter: PayerFilter) {
+  async function replaceTransactions(nextFilters: TransactionFilters) {
     setError(null);
     setIsChangingFilter(true);
     try {
-      const page = await fetchTransactions(filter);
-      setPayerFilter(filter);
+      const page = await fetchTransactions(nextFilters);
+      setFilters(nextFilters);
       setTransactions(page.items);
       setNextCursor(page.nextCursor);
       setEditingTransactionId(null);
@@ -205,9 +224,42 @@ export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) 
     }
   }
 
+  async function changePayerFilter(payer: PayerFilter) {
+    await replaceTransactions({ ...filters, payer });
+  }
+
+  async function searchTransactions(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const query = queryInput.trim();
+    setQueryInput(query);
+    await replaceTransactions({ ...filters, query });
+  }
+
+  async function applyDateFilter() {
+    if (fromInput && toInput && fromInput > toInput) {
+      setError("시작 날짜는 종료 날짜보다 늦을 수 없습니다.");
+      return;
+    }
+    await replaceTransactions({ ...filters, from: fromInput, to: toInput });
+  }
+
+  async function applyMonthFilter(monthOffset: -1 | 0) {
+    const range = monthRange(monthOffset);
+    setFromInput(range.from);
+    setToInput(range.to);
+    await replaceTransactions({ ...filters, ...range });
+  }
+
+  async function clearFilters() {
+    setQueryInput("");
+    setFromInput("");
+    setToInput("");
+    await replaceTransactions(initialFilters);
+  }
+
   async function handleTransactionCreated() {
     const [page, accounts] = await Promise.all([
-      fetchTransactions(payerFilter),
+      fetchTransactions(filters),
       fetchStoredValueAccounts(),
     ]);
     setTransactions(page.items);
@@ -219,7 +271,7 @@ export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) 
 
   async function handleTransactionChanged() {
     const [page, accounts] = await Promise.all([
-      fetchTransactions(payerFilter),
+      fetchTransactions(filters),
       fetchStoredValueAccounts(),
     ]);
     setTransactions(page.items);
@@ -234,7 +286,7 @@ export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) 
     setError(null);
     setIsLoadingMore(true);
     try {
-      const page = await fetchTransactions(payerFilter, nextCursor);
+      const page = await fetchTransactions(filters, nextCursor);
       setTransactions((current) => [...current, ...page.items]);
       setNextCursor(page.nextCursor);
     } catch {
@@ -325,21 +377,52 @@ export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) 
         </div>
       </section>
 
-      <section className="border-t border-border-soft pt-6 lg:col-start-2 lg:row-start-1 lg:rounded-3xl lg:border lg:border-stone-200 lg:bg-white lg:p-7 lg:shadow-sm">
+      <section
+        aria-busy={isChangingFilter || isLoadingMore}
+        className="border-t border-border-soft pt-6 lg:col-start-2 lg:row-start-1 lg:rounded-3xl lg:border lg:border-stone-200 lg:bg-white lg:p-7 lg:shadow-sm"
+      >
         <div className="flex flex-wrap items-end justify-between gap-4">
           <h2 className="min-w-0 text-2xl font-semibold tracking-tight [overflow-wrap:anywhere] lg:text-3xl">거래 내역</h2>
-          <p className="font-ui text-sm text-stone-500 tabular-nums">{transactions.length}건 표시</p>
+          <p aria-live="polite" className="font-ui text-sm text-stone-500 tabular-nums">{transactions.length}건 표시</p>
         </div>
 
-        <div className="mt-6 flex gap-2" aria-label="결제자 필터">
+        <form
+          aria-label="거래 검색"
+          className="mt-5 flex items-end gap-2"
+          onSubmit={searchTransactions}
+        >
+          <label className="min-w-0 flex-1 text-sm font-medium text-stone-700" htmlFor="transaction-query">
+            가맹점·내역 검색
+            <input
+              className="mt-2 min-h-11 w-full min-w-0 rounded-xl border border-border-soft bg-surface px-4 font-ui text-base outline-2 outline-offset-2 outline-transparent transition-colors duration-150 ease-[var(--ease-out)] placeholder:text-stone-500 hover:bg-surface-muted focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={isChangingFilter || isLoadingMore}
+              id="transaction-query"
+              maxLength={100}
+              onChange={(event) => setQueryInput(event.target.value)}
+              placeholder="예: 쿠팡, 기저귀"
+              type="search"
+              value={queryInput}
+            />
+          </label>
+          <button
+            className="min-h-11 shrink-0 whitespace-nowrap rounded-xl bg-accent px-5 py-2 font-medium text-accent-ink transition-[background-color,transform] duration-150 ease-[var(--ease-out)] hover:bg-accent-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={isChangingFilter || isLoadingMore}
+            type="submit"
+          >
+            {isChangingFilter ? "조회 중…" : "검색"}
+          </button>
+        </form>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2" aria-label="결제자 필터">
           {([
             ["all", "전체"],
             ["me", "내 결제"],
             ["partner", "배우자"],
           ] as const).map(([filter, label]) => (
             <button
+              aria-pressed={filters.payer === filter}
               className={`min-h-11 whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-colors duration-150 ease-[var(--ease-out)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 ${
-                payerFilter === filter
+                filters.payer === filter
                   ? "bg-accent text-accent-ink"
                   : "bg-surface-muted text-stone-700 hover:bg-accent-soft"
               }`}
@@ -351,7 +434,81 @@ export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) 
               {label}
             </button>
           ))}
+          {hasActiveFilters(filters) ? (
+            <button
+              className="min-h-11 whitespace-nowrap px-2 text-sm font-medium text-accent-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={isChangingFilter || isLoadingMore}
+              onClick={() => void clearFilters()}
+              type="button"
+            >
+              전체 초기화
+            </button>
+          ) : null}
         </div>
+
+        <details className="mt-3 border-y border-border-soft py-1">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 py-2 text-sm font-medium text-stone-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus [&::-webkit-details-marker]:hidden">
+            <span>기간</span>
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="min-w-0 truncate font-ui text-stone-500 tabular-nums">
+                {dateFilterLabel(filters)}
+              </span>
+              <span className="shrink-0 text-accent-strong">선택</span>
+            </span>
+          </summary>
+          <div className="grid gap-4 pb-4 pt-2">
+            <div className="flex flex-wrap gap-2">
+              <button
+                className="min-h-11 whitespace-nowrap rounded-xl bg-surface-muted px-4 text-sm font-medium text-stone-700 transition-colors duration-150 ease-[var(--ease-out)] hover:bg-accent-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus active:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={isChangingFilter || isLoadingMore}
+                onClick={() => void applyMonthFilter(0)}
+                type="button"
+              >
+                이번 달
+              </button>
+              <button
+                className="min-h-11 whitespace-nowrap rounded-xl bg-surface-muted px-4 text-sm font-medium text-stone-700 transition-colors duration-150 ease-[var(--ease-out)] hover:bg-accent-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus active:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={isChangingFilter || isLoadingMore}
+                onClick={() => void applyMonthFilter(-1)}
+                type="button"
+              >
+                지난달
+              </button>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="min-w-0 text-sm font-medium text-stone-700" htmlFor="transaction-from">
+                시작 날짜
+                <input
+                  className="mt-2 min-h-11 w-full min-w-0 rounded-xl border border-border-soft bg-surface px-3 font-ui text-base tabular-nums outline-2 outline-offset-2 outline-transparent transition-colors duration-150 ease-[var(--ease-out)] hover:bg-surface-muted focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={isChangingFilter || isLoadingMore}
+                  id="transaction-from"
+                  onChange={(event) => setFromInput(event.target.value)}
+                  type="date"
+                  value={fromInput}
+                />
+              </label>
+              <label className="min-w-0 text-sm font-medium text-stone-700" htmlFor="transaction-to">
+                종료 날짜
+                <input
+                  className="mt-2 min-h-11 w-full min-w-0 rounded-xl border border-border-soft bg-surface px-3 font-ui text-base tabular-nums outline-2 outline-offset-2 outline-transparent transition-colors duration-150 ease-[var(--ease-out)] hover:bg-surface-muted focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={isChangingFilter || isLoadingMore}
+                  id="transaction-to"
+                  onChange={(event) => setToInput(event.target.value)}
+                  type="date"
+                  value={toInput}
+                />
+              </label>
+            </div>
+            <button
+              className="min-h-11 w-full whitespace-nowrap rounded-xl border border-border-soft bg-surface px-4 text-sm font-medium text-stone-700 transition-[background-color,transform] duration-150 ease-[var(--ease-out)] hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 sm:w-fit"
+              disabled={isChangingFilter || isLoadingMore}
+              onClick={() => void applyDateFilter()}
+              type="button"
+            >
+              기간 적용
+            </button>
+          </div>
+        </details>
 
         {error ? (
           <p className="mt-8 rounded-2xl bg-amber-50 px-5 py-4 text-sm text-amber-800" role="alert">
@@ -361,8 +518,12 @@ export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) 
 
         {transactions.length === 0 && !error ? (
           <div className="mt-8 border-y border-border-soft py-12 text-left">
-            <p className="font-medium text-stone-700">아직 기록한 거래가 없습니다.</p>
-            <p className="mt-2 text-sm text-stone-500">거래 추가 버튼으로 첫 기록을 남겨 보세요.</p>
+            <p className="font-medium text-stone-700">
+              {hasActiveFilters(filters) ? "조건에 맞는 거래가 없습니다." : "아직 기록한 거래가 없습니다."}
+            </p>
+            <p className="mt-2 text-sm text-stone-500">
+              {hasActiveFilters(filters) ? "검색어나 기간을 바꿔 보세요." : "거래 추가 버튼으로 첫 기록을 남겨 보세요."}
+            </p>
           </div>
         ) : transactions.length > 0 ? (
           <>
@@ -457,4 +618,36 @@ export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) 
       </button>
     </div>
   );
+}
+
+function hasActiveFilters(filters: TransactionFilters): boolean {
+  return filters.payer !== "all" || Boolean(filters.query || filters.from || filters.to);
+}
+
+function dateFilterLabel(filters: TransactionFilters): string {
+  if (!filters.from && !filters.to) return "전체 기간";
+  if (filters.from && filters.to) return `${filters.from} – ${filters.to}`;
+  if (filters.from) return `${filters.from}부터`;
+  return `${filters.to}까지`;
+}
+
+function monthRange(offset: -1 | 0): Pick<TransactionFilters, "from" | "to"> {
+  const [year, month] = seoulToday().split("-").map(Number);
+  const firstDay = new Date(Date.UTC(year, month - 1 + offset, 1));
+  const lastDay = new Date(Date.UTC(year, month + offset, 0));
+  return {
+    from: firstDay.toISOString().slice(0, 10),
+    to: lastDay.toISOString().slice(0, 10),
+  };
+}
+
+function seoulToday(): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+  }).formatToParts(new Date());
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
 }

@@ -104,6 +104,62 @@ class TransactionControllerTests(
     }
 
     @Test
+    fun `searches transaction text within a Seoul date range and payer filter`() {
+        val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
+        val partnerId = createMember(currentUser.householdId, "배우자")
+        val otherHouseholdId = createHousehold("다른 집")
+        val otherUserId = createMember(otherHouseholdId, "다른 사용자")
+
+        createTransaction(currentUser.id, "쿠팡", occurredAt = "2026-08-15T12:00:00+09:00")
+        createTransaction(partnerId, "동네마트", "쿠팡 기저귀", "2026-08-01T00:00:00+09:00")
+        createTransaction(partnerId, "쿠팡", occurredAt = "2026-07-31T23:59:59+09:00")
+        createTransaction(partnerId, "쿠팡", occurredAt = "2026-09-01T00:00:00+09:00")
+        createTransaction(partnerId, "100% 할인점", occurredAt = "2026-08-20T12:00:00+09:00")
+        transactionRepository.save(
+            Transaction(
+                householdId = otherHouseholdId,
+                payerId = otherUserId,
+                merchant = "쿠팡 다른 집",
+                description = null,
+                amount = 10_000,
+                category = TransactionCategory.FOOD,
+                paymentMethod = PaymentMethod.CARD,
+                cardIssuer = CardIssuer.SHINHAN,
+                occurredAt = OffsetDateTime.parse("2026-08-15T12:00:00+09:00"),
+                createdAt = now,
+            ),
+        )
+
+        mockMvc
+            .get("/transactions") {
+                param("payer", "partner")
+                param("q", " 쿠팡 ")
+                param("from", "2026-08-01")
+                param("to", "2026-08-31")
+                with(allowedOidcLogin())
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.items", hasSize<Any>(1))
+                jsonPath("$.items[0].merchant") { value("동네마트") }
+                jsonPath("$.items[0].description") { value("쿠팡 기저귀") }
+                jsonPath("$.items[0].payerId") { value(partnerId) }
+            }
+
+        mockMvc
+            .get("/transactions") {
+                param("payer", "partner")
+                param("q", "%")
+                param("from", "2026-08-01")
+                param("to", "2026-08-31")
+                with(allowedOidcLogin())
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.items", hasSize<Any>(1))
+                jsonPath("$.items[0].merchant") { value("100% 할인점") }
+            }
+    }
+
+    @Test
     fun `paginates transactions with a stable cursor when occurred times are equal`() {
         val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
         createTransaction(currentUser.id, "첫 번째")
@@ -164,6 +220,27 @@ class TransactionControllerTests(
                     jsonPath("$.code") { value("INVALID_REQUEST") }
                 }
         }
+
+        mockMvc
+            .get("/transactions") {
+                param("q", "가".repeat(101))
+                with(allowedOidcLogin())
+            }.andExpect {
+                status { isBadRequest() }
+                jsonPath("$.code") { value("INVALID_REQUEST") }
+                jsonPath("$.detail") { value("검색어는 100자 이하로 입력해 주세요.") }
+            }
+
+        mockMvc
+            .get("/transactions") {
+                param("from", "2026-08-02")
+                param("to", "2026-08-01")
+                with(allowedOidcLogin())
+            }.andExpect {
+                status { isBadRequest() }
+                jsonPath("$.code") { value("INVALID_REQUEST") }
+                jsonPath("$.detail") { value("시작 날짜는 종료 날짜보다 늦을 수 없습니다.") }
+            }
     }
 
     @Test
@@ -875,13 +952,19 @@ class TransactionControllerTests(
         payerId: Long,
         merchant: String,
         description: String? = null,
+        occurredAt: String = "2026-07-15T12:30:00+09:00",
     ) {
         mockMvc
             .post("/transactions") {
                 with(allowedOidcLogin())
                 with(csrf())
                 contentType = MediaType.APPLICATION_JSON
-                content = transactionJson(payerId, merchant, description = description)
+                content = transactionJson(
+                    payerId = payerId,
+                    merchant = merchant,
+                    description = description,
+                    occurredAt = occurredAt,
+                )
             }.andExpect {
                 status { isCreated() }
                 jsonPath("$.payerId") { value(payerId) }
@@ -907,6 +990,7 @@ class TransactionControllerTests(
         tags: String = """["SUBSCRIPTION", "RECURRING_PAYMENT"]""",
         amount: Long = 8_000,
         storedValueAccountId: Long? = null,
+        occurredAt: String = "2026-07-15T12:30:00+09:00",
     ) =
         """
         {
@@ -922,7 +1006,7 @@ class TransactionControllerTests(
           "paymentMethod": "$paymentMethod",
           "cardIssuer": ${cardIssuer?.let { "\"$it\"" } ?: "null"},
           "storedValueAccountId": ${storedValueAccountId ?: "null"},
-          "occurredAt": "2026-07-15T12:30:00+09:00"
+          "occurredAt": "$occurredAt"
         }
         """.trimIndent()
 
