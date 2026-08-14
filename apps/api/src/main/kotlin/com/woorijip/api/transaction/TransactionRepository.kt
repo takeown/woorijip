@@ -16,6 +16,18 @@ interface TransactionRepository : CrudRepository<Transaction, Long> {
         SELECT *
         FROM transactions
         WHERE household_id = :householdId
+          AND (
+              :payerFilter = 'ALL'
+              OR (:payerFilter = 'ME' AND payer_id = :currentUserId)
+              OR (:payerFilter = 'PARTNER' AND payer_id != :currentUserId)
+          )
+          AND (
+              CAST(:searchPattern AS TEXT) IS NULL
+              OR merchant ILIKE :searchPattern ESCAPE '\'
+              OR description ILIKE :searchPattern ESCAPE '\'
+          )
+          AND (CAST(:occurredAtFrom AS TIMESTAMPTZ) IS NULL OR occurred_at >= :occurredAtFrom)
+          AND (CAST(:occurredAtTo AS TIMESTAMPTZ) IS NULL OR occurred_at < :occurredAtTo)
           AND (occurred_at, id) < (
               COALESCE(:cursorOccurredAt, 'infinity'::timestamptz),
               COALESCE(:cursorId, 9223372036854775807)
@@ -24,52 +36,13 @@ interface TransactionRepository : CrudRepository<Transaction, Long> {
         LIMIT :limit
         """,
     )
-    fun findPageByHouseholdId(
+    fun findPage(
         householdId: Long,
-        cursorOccurredAt: OffsetDateTime?,
-        cursorId: Long?,
-        limit: Int,
-    ): List<Transaction>
-
-    @Query(
-        """
-        SELECT *
-        FROM transactions
-        WHERE household_id = :householdId
-          AND payer_id = :payerId
-          AND (occurred_at, id) < (
-              COALESCE(:cursorOccurredAt, 'infinity'::timestamptz),
-              COALESCE(:cursorId, 9223372036854775807)
-          )
-        ORDER BY occurred_at DESC, id DESC
-        LIMIT :limit
-        """,
-    )
-    fun findPageByHouseholdIdAndPayerId(
-        householdId: Long,
-        payerId: Long,
-        cursorOccurredAt: OffsetDateTime?,
-        cursorId: Long?,
-        limit: Int,
-    ): List<Transaction>
-
-    @Query(
-        """
-        SELECT *
-        FROM transactions
-        WHERE household_id = :householdId
-          AND payer_id != :payerId
-          AND (occurred_at, id) < (
-              COALESCE(:cursorOccurredAt, 'infinity'::timestamptz),
-              COALESCE(:cursorId, 9223372036854775807)
-          )
-        ORDER BY occurred_at DESC, id DESC
-        LIMIT :limit
-        """,
-    )
-    fun findPageByHouseholdIdAndPayerIdNot(
-        householdId: Long,
-        payerId: Long,
+        currentUserId: Long,
+        payerFilter: String,
+        searchPattern: String?,
+        occurredAtFrom: OffsetDateTime?,
+        occurredAtTo: OffsetDateTime?,
         cursorOccurredAt: OffsetDateTime?,
         cursorId: Long?,
         limit: Int,

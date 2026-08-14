@@ -192,6 +192,84 @@ describe("TransactionsPage", () => {
     ).toBe(true);
   });
 
+  test("searches by text and date range while preserving filters across cursor pages", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn<typeof fetch>(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/households/current/members")) {
+        return jsonResponse([
+          { userId: 1, displayName: "나" },
+          { userId: 2, displayName: "배우자" },
+        ]);
+      }
+      if (url.endsWith("/stored-value-accounts")) return jsonResponse([]);
+      if (url.includes("cursor=filtered-next")) {
+        return jsonResponse({ items: [transaction(3, "쿠팡 이전 거래")], nextCursor: null });
+      }
+      if (url.includes("q=%EC%BF%A0%ED%8C%A1")) {
+        return jsonResponse({ items: [transaction(2, "쿠팡 최근 거래")], nextCursor: "filtered-next" });
+      }
+      return jsonResponse({ items: [transaction(1, "최근 거래")], nextCursor: null });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <TransactionsPage
+        currentUser={{ id: 1, displayName: "나", householdId: 10 }}
+      />,
+    );
+
+    expect(await screen.findByText("최근 거래")).toBeDefined();
+    await user.type(screen.getByLabelText("가맹점·내역 검색"), "쿠팡");
+    await user.click(screen.getByRole("button", { name: "검색" }));
+    expect(await screen.findByText("쿠팡 최근 거래")).toBeDefined();
+
+    await user.click(screen.getByText("기간"));
+    await user.type(screen.getByLabelText("시작 날짜"), "2026-08-01");
+    await user.type(screen.getByLabelText("종료 날짜"), "2026-08-31");
+    await user.click(screen.getByRole("button", { name: "기간 적용" }));
+
+    await waitFor(() => {
+      const request = latestTransactionRequest(fetchMock);
+      expect(request.searchParams.get("q")).toBe("쿠팡");
+      expect(request.searchParams.get("from")).toBe("2026-08-01");
+      expect(request.searchParams.get("to")).toBe("2026-08-31");
+      expect(request.searchParams.has("cursor")).toBe(false);
+    });
+
+    await user.click(screen.getByRole("button", { name: "더 보기" }));
+    expect(await screen.findByText("쿠팡 이전 거래")).toBeDefined();
+    const nextPageRequest = latestTransactionRequest(fetchMock);
+    expect(nextPageRequest.searchParams.get("q")).toBe("쿠팡");
+    expect(nextPageRequest.searchParams.get("from")).toBe("2026-08-01");
+    expect(nextPageRequest.searchParams.get("to")).toBe("2026-08-31");
+    expect(nextPageRequest.searchParams.get("cursor")).toBe("filtered-next");
+  });
+
+  test("validates the date range before requesting filtered transactions", async () => {
+    const user = userEvent.setup();
+    const fetchMock = createInitialFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <TransactionsPage
+        currentUser={{ id: 1, displayName: "나", householdId: 10 }}
+      />,
+    );
+
+    await screen.findByText("아직 기록한 거래가 없습니다.");
+    const initialRequestCount = fetchMock.mock.calls.length;
+    await user.click(screen.getByText("기간"));
+    await user.type(screen.getByLabelText("시작 날짜"), "2026-08-02");
+    await user.type(screen.getByLabelText("종료 날짜"), "2026-08-01");
+    await user.click(screen.getByRole("button", { name: "기간 적용" }));
+
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "시작 날짜는 종료 날짜보다 늦을 수 없습니다.",
+    );
+    expect(fetchMock.mock.calls).toHaveLength(initialRequestCount);
+  });
+
   test("keeps loaded transactions visible when loading the next page fails", async () => {
     const user = userEvent.setup();
     const fetchMock = vi.fn<typeof fetch>(async (input) => {
@@ -250,6 +328,15 @@ function jsonResponse(body: unknown): Response {
     headers: { "Content-Type": "application/json" },
     status: 200,
   });
+}
+
+function latestTransactionRequest(fetchMock: ReturnType<typeof vi.fn<typeof fetch>>): URL {
+  const request = [...fetchMock.mock.calls]
+    .reverse()
+    .map(([input]) => String(input))
+    .find((url) => url.includes("/transactions?"));
+  if (!request) throw new Error("거래 조회 요청이 없습니다.");
+  return new URL(request);
 }
 
 function createInitialFetchMock() {

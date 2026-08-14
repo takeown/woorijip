@@ -7,7 +7,9 @@ import com.woorijip.api.household.HouseholdMembershipRepository
 import com.woorijip.api.storedvalue.StoredValueAccountService
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.LocalDate
 import java.time.OffsetDateTime
+import java.time.ZoneId
 
 enum class PayerFilter {
     ALL,
@@ -37,6 +39,13 @@ data class TransactionCursor(
 data class TransactionPage(
     val items: List<Transaction>,
     val nextCursor: TransactionCursor?,
+)
+
+data class TransactionFilters(
+    val payer: PayerFilter,
+    val query: String?,
+    val fromDate: LocalDate?,
+    val toDate: LocalDate?,
 )
 
 @Service
@@ -109,35 +118,21 @@ class TransactionService(
     @Transactional(readOnly = true)
     fun findPage(
         currentUser: CurrentUser,
-        payerFilter: PayerFilter,
+        filters: TransactionFilters,
         cursor: TransactionCursor?,
         size: Int,
     ): TransactionPage {
-        val transactions = when (payerFilter) {
-            PayerFilter.ALL ->
-                transactionRepository.findPageByHouseholdId(
-                    householdId = currentUser.householdId,
-                    cursorOccurredAt = cursor?.occurredAt,
-                    cursorId = cursor?.id,
-                    limit = size + 1,
-                )
-            PayerFilter.ME ->
-                transactionRepository.findPageByHouseholdIdAndPayerId(
-                    householdId = currentUser.householdId,
-                    payerId = currentUser.id,
-                    cursorOccurredAt = cursor?.occurredAt,
-                    cursorId = cursor?.id,
-                    limit = size + 1,
-                )
-            PayerFilter.PARTNER ->
-                transactionRepository.findPageByHouseholdIdAndPayerIdNot(
-                    householdId = currentUser.householdId,
-                    payerId = currentUser.id,
-                    cursorOccurredAt = cursor?.occurredAt,
-                    cursorId = cursor?.id,
-                    limit = size + 1,
-                )
-        }
+        val transactions = transactionRepository.findPage(
+            householdId = currentUser.householdId,
+            currentUserId = currentUser.id,
+            payerFilter = filters.payer.name,
+            searchPattern = filters.query?.let(::containsPattern),
+            occurredAtFrom = filters.fromDate?.atStartOfDay(SEOUL_ZONE)?.toOffsetDateTime(),
+            occurredAtTo = filters.toDate?.plusDays(1)?.atStartOfDay(SEOUL_ZONE)?.toOffsetDateTime(),
+            cursorOccurredAt = cursor?.occurredAt,
+            cursorId = cursor?.id,
+            limit = size + 1,
+        )
         val items = withTags(transactions.take(size))
         val nextCursor = if (transactions.size > size) {
             val last = items.last()
@@ -146,6 +141,13 @@ class TransactionService(
             null
         }
         return TransactionPage(items, nextCursor)
+    }
+
+    private fun containsPattern(query: String): String =
+        "%${query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")}%"
+
+    private companion object {
+        val SEOUL_ZONE: ZoneId = ZoneId.of("Asia/Seoul")
     }
 
     @Transactional
