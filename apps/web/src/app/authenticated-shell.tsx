@@ -164,7 +164,7 @@ export function AuthenticatedShell({ children }: AuthenticatedShellProps) {
             <NavigationLink active={pathname === "/"} href="/">
               거래
             </NavigationLink>
-            <NavigationLink active={pathname === "/stats"} href="/stats">
+            <NavigationLink active={pathname.startsWith("/stats")} href="/stats">
               통계
             </NavigationLink>
             <NavigationLink active={pathname === "/statements"} href="/statements">
@@ -191,7 +191,7 @@ export function AuthenticatedShell({ children }: AuthenticatedShellProps) {
         <MobileNavigationLink active={pathname === "/"} href="/" icon="transaction">
           거래
         </MobileNavigationLink>
-        <MobileNavigationLink active={pathname === "/stats"} href="/stats" icon="stats">
+        <MobileNavigationLink active={pathname.startsWith("/stats")} href="/stats" icon="stats">
           통계
         </MobileNavigationLink>
         <MobileNavigationLink

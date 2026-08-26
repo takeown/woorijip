@@ -19,6 +19,8 @@ class SpendingStatisticsController(
         @RequestParam(defaultValue = "ALL") payer: String,
         @RequestParam(required = false) date: LocalDate?,
         @RequestParam(defaultValue = "false") includeMonthlySummary: Boolean,
+        @RequestParam(defaultValue = "false") includeDailyBreakdown: Boolean,
+        @RequestParam(defaultValue = "false") includeDailyTransactions: Boolean,
     ): SpendingStatistics {
         val spendingPeriod = try {
             SpendingPeriod.valueOf(period.uppercase())
@@ -36,6 +38,8 @@ class SpendingStatisticsController(
                 spendingPeriod,
                 spendingPayer,
                 includeMonthlySummary = includeMonthlySummary,
+                includeDailyBreakdown = includeDailyBreakdown,
+                includeDailyTransactions = includeDailyTransactions,
             )
         } else {
             spendingStatisticsService.find(
@@ -44,6 +48,8 @@ class SpendingStatisticsController(
                 spendingPayer,
                 referenceDate = date,
                 includeMonthlySummary = includeMonthlySummary,
+                includeDailyBreakdown = includeDailyBreakdown,
+                includeDailyTransactions = includeDailyTransactions,
             )
         }
     }
