@@ -87,6 +87,7 @@ class SpendingStatisticsControllerTests(
                 param("period", "month")
                 param("date", "2026-07-26")
                 param("includeMonthlySummary", "true")
+                param("includeDailyBreakdown", "true")
                 with(allowedOidcLogin())
             }.andExpect {
                 status { isOk() }
@@ -119,6 +120,12 @@ class SpendingStatisticsControllerTests(
                 jsonPath("$.monthlySummary.evidenceTransactions[0].amount") { value(12_000) }
                 jsonPath("$.monthlySummary.evidenceTransactions[0].payerLabel") { value("첫 번째 사용자") }
                 jsonPath("$.monthlySummary.evidenceTransactions[1].merchant") { value("시장 반찬가게") }
+                jsonPath("$.dailyBreakdown", hasSize<Any>(2))
+                jsonPath("$.dailyBreakdown[0].date") { value("2026-07-01") }
+                jsonPath("$.dailyBreakdown[0].totalAmount") { value(12_000) }
+                jsonPath("$.dailyBreakdown[0].transactionCount") { value(1) }
+                jsonPath("$.dailyBreakdown[1].date") { value("2026-07-15") }
+                jsonPath("$.dailyBreakdown[1].totalAmount") { value(8_000) }
             }
     }
 
@@ -126,14 +133,35 @@ class SpendingStatisticsControllerTests(
     fun `uses Seoul day and Monday based week boundaries`() {
         val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
         saveTransaction(currentUser.householdId, currentUser.id, 5_000, "식비", "2026-07-12T23:59:59+09:00")
-        saveTransaction(currentUser.householdId, currentUser.id, 8_000, "식비", "2026-07-15T00:00:00+09:00")
-        saveTransaction(currentUser.householdId, currentUser.id, 3_000, "교통", "2026-07-15T23:59:59+09:00")
+        saveTransaction(
+            currentUser.householdId,
+            currentUser.id,
+            8_000,
+            "식비",
+            "2026-07-15T00:00:00+09:00",
+            merchant = "새벽 식당",
+            description = "야식",
+            tags = setOf(TransactionTag.SUBSCRIPTION),
+        )
+        saveTransaction(
+            currentUser.householdId,
+            currentUser.id,
+            3_000,
+            "교통",
+            "2026-07-15T23:59:59+09:00",
+            PaymentMethod.CASH,
+            merchant = "심야 버스",
+        )
         saveTransaction(currentUser.householdId, currentUser.id, 7_000, "식비", "2026-07-20T00:00:00+09:00")
+        val otherHouseholdId = createHousehold("다른 집")
+        val otherUserId = createMember(otherHouseholdId, "다른 사용자")
+        saveTransaction(otherHouseholdId, otherUserId, 999_000, "식비", "2026-07-15T12:00:00+09:00")
 
         mockMvc
             .get("/statistics/spending") {
                 param("period", "day")
                 param("date", "2026-07-15")
+                param("includeDailyTransactions", "true")
                 with(allowedOidcLogin())
             }.andExpect {
                 status { isOk() }
@@ -142,12 +170,24 @@ class SpendingStatisticsControllerTests(
                 jsonPath("$.current.totalAmount") { value(11_000) }
                 jsonPath("$.current.transactionCount") { value(2) }
                 jsonPath("$.monthlySummary") { doesNotExist() }
+                jsonPath("$.dailyBreakdown") { doesNotExist() }
+                jsonPath("$.dailyTransactions", hasSize<Any>(2))
+                jsonPath("$.dailyTransactions[0].merchant") { value("새벽 식당") }
+                jsonPath("$.dailyTransactions[0].description") { value("야식") }
+                jsonPath("$.dailyTransactions[0].payerLabel") { value("첫 번째 사용자") }
+                jsonPath("$.dailyTransactions[0].paymentMethodLabel") { value("카드") }
+                jsonPath("$.dailyTransactions[0].categoryLabel") { value("식비") }
+                jsonPath("$.dailyTransactions[0].tagLabels[0]") { value("구독") }
+                jsonPath("$.dailyTransactions[1].merchant") { value("심야 버스") }
+                jsonPath("$.dailyTransactions[1].paymentMethodLabel") { value("현금") }
+                jsonPath("$.dailyTransactions[1].categoryLabel") { value("교통") }
             }
 
         mockMvc
             .get("/statistics/spending") {
                 param("period", "week")
                 param("date", "2026-07-16")
+                param("includeDailyTransactions", "true")
                 with(allowedOidcLogin())
             }.andExpect {
                 status { isOk() }
@@ -155,6 +195,7 @@ class SpendingStatisticsControllerTests(
                 jsonPath("$.endDateExclusive") { value("2026-07-20") }
                 jsonPath("$.current.totalAmount") { value(11_000) }
                 jsonPath("$.current.transactionCount") { value(2) }
+                jsonPath("$.dailyTransactions") { doesNotExist() }
             }
     }
 
@@ -312,6 +353,7 @@ class SpendingStatisticsControllerTests(
                 param("payer", "me")
                 param("date", "2026-07-26")
                 param("includeMonthlySummary", "true")
+                param("includeDailyBreakdown", "true")
                 with(allowedOidcLogin())
             }.andExpect {
                 status { isOk() }
@@ -334,6 +376,9 @@ class SpendingStatisticsControllerTests(
                 jsonPath("$.monthlySummary.topCategory.key") { value("FOOD") }
                 jsonPath("$.monthlySummary.evidenceTransactions", hasSize<Any>(1))
                 jsonPath("$.monthlySummary.evidenceTransactions[0].payerLabel") { value("첫 번째 사용자") }
+                jsonPath("$.dailyBreakdown", hasSize<Any>(1))
+                jsonPath("$.dailyBreakdown[0].date") { value("2026-07-10") }
+                jsonPath("$.dailyBreakdown[0].totalAmount") { value(12_000) }
             }
 
         mockMvc
@@ -342,6 +387,7 @@ class SpendingStatisticsControllerTests(
                 param("payer", "partner")
                 param("date", "2026-07-26")
                 param("includeMonthlySummary", "true")
+                param("includeDailyBreakdown", "true")
                 with(allowedOidcLogin())
             }.andExpect {
                 status { isOk() }
@@ -361,6 +407,9 @@ class SpendingStatisticsControllerTests(
                 jsonPath("$.monthlySummary.topCategory.key") { value("LIVING") }
                 jsonPath("$.monthlySummary.evidenceTransactions", hasSize<Any>(1))
                 jsonPath("$.monthlySummary.evidenceTransactions[0].payerLabel") { value("배우자") }
+                jsonPath("$.dailyBreakdown", hasSize<Any>(1))
+                jsonPath("$.dailyBreakdown[0].date") { value("2026-07-15") }
+                jsonPath("$.dailyBreakdown[0].totalAmount") { value(8_000) }
             }
     }
 
@@ -372,6 +421,7 @@ class SpendingStatisticsControllerTests(
             .get("/statistics/spending") {
                 param("period", "month")
                 param("date", "2026-10-01")
+                param("includeDailyBreakdown", "true")
                 with(allowedOidcLogin())
             }.andExpect {
                 status { isOk() }
@@ -382,6 +432,7 @@ class SpendingStatisticsControllerTests(
                 jsonPath("$.byPayer", hasSize<Any>(0))
                 jsonPath("$.recurringSpendingChanges", hasSize<Any>(0))
                 jsonPath("$.monthlySummary") { doesNotExist() }
+                jsonPath("$.dailyBreakdown", hasSize<Any>(0))
             }
 
         mockMvc
@@ -417,6 +468,7 @@ class SpendingStatisticsControllerTests(
         tags: Set<TransactionTag> = emptySet(),
         classificationConfirmedAt: OffsetDateTime? = now,
         merchant: String = "테스트 가맹점",
+        description: String? = null,
     ) {
         val transactionId = assertNotNull(
             transactionRepository.save(
@@ -424,7 +476,7 @@ class SpendingStatisticsControllerTests(
                     householdId = householdId,
                     payerId = payerId,
                     merchant = merchant,
-                    description = null,
+                    description = description,
                     amount = amount,
                     category = TransactionCategory.entries.single { it.label == category },
                     classificationConfirmedAt = classificationConfirmedAt,

@@ -72,9 +72,9 @@ AI 자연어 거래 입력은 다음 경로를 지난다.
 
 | 순서 | 파일 | 하는 일 |
 | --- | --- | --- |
-| 1 | `statistics/SpendingStatisticsController.kt` | 기간, 기준 날짜와 결제자 필터를 받는다 |
-| 2 | `statistics/SpendingStatisticsService.kt` | 서울 시간 범위와 이전 비교 기간을 정하고 집계를 조합한다 |
-| 3 | `statistics/SpendingStatisticsRepository.kt` | household와 결제자 범위 안에서 합계, 카테고리와 태그를 집계하고 가장 큰 카테고리의 근거 거래를 제한 조회한다 |
+| 1 | `statistics/SpendingStatisticsController.kt` | 기간, 기준 날짜, 결제자와 선택적 월간 요약·일별 집계·일간 거래 상세 필터를 받는다 |
+| 2 | `statistics/SpendingStatisticsService.kt` | 서울 시간 범위와 이전 비교 기간을 정하고 요청한 월간·일간 부가 데이터를 조합한다 |
+| 3 | `statistics/SpendingStatisticsRepository.kt` | household와 결제자 범위 안에서 합계, 카테고리, 태그와 서울 날짜별 금액·건수를 집계하고 월간 근거 거래 또는 일간 전체 거래를 조회한다 |
 | 4 | `statistics/SpendingStatisticsService.kt` | 월간 통계에서 가장 큰 카테고리, 총지출 비중과 금액순 상위 근거 거래 세 건을 조합한다 |
 | 5 | `statistics/RecurringSpendingChangeExplainer.kt` | 확정 태그의 신규·증가·감소·종료를 결정적인 문장으로 만든다 |
 
@@ -88,6 +88,15 @@ AI 자연어 거래 입력은 다음 경로를 지난다.
 카테고리를 고르고, 같은 조건과 카테고리에 속한 거래를 금액순으로 최대 세 건만 조회해
 설명의 근거로 반환한다. 홈처럼 근거를 사용하지 않는 요청, 일간·주간과 거래가 없는 월에는
 월간 요약을 반환하지 않는다.
+
+소비 캘린더의 일별 집계는 통계 화면이 `includeDailyBreakdown=true`로 요청한 월간 통계에서만
+반환한다. 저장된 timezone을 서울 날짜로 명시적으로 변환해 금액과 거래 건수를 묶으며,
+지출이 없는 날짜는 웹이 월 시작일과 종료일로 채운다. 날짜를 선택하면 웹의
+`/stats/daily/{date}` 상세 라우트가 같은 결제자 조건으로 기존 일간 통계를 조회한다. 이때
+`includeDailyTransactions=true`인 일간 응답에만 해당 날짜의 가맹점, 내역, 금액, 시간,
+결제자, 결제수단, 카테고리와 태그를 시간순으로 모두 반환한다.
+조회 SQL에도 household, 결제자와 서울 날짜 경계를 함께 적용하며 월간·주간 응답에는 거래
+상세를 포함하지 않는다.
 
 자유 형식 가계 분석은 다음 경로를 지난다.
 

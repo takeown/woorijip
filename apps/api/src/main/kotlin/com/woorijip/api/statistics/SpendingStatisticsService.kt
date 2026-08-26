@@ -32,6 +32,24 @@ data class SpendingPeriodSummary(
     val transactionCount: Long,
 )
 
+data class DailySpendingBreakdown(
+    val date: LocalDate,
+    val totalAmount: Long,
+    val transactionCount: Long,
+)
+
+data class DailySpendingTransaction(
+    val id: Long,
+    val merchant: String,
+    val description: String?,
+    val amount: Long,
+    val occurredAt: OffsetDateTime,
+    val payerLabel: String,
+    val paymentMethodLabel: String,
+    val categoryLabel: String,
+    val tagLabels: List<String>,
+)
+
 data class SpendingComparisonBreakdown(
     val key: String,
     val label: String,
@@ -68,6 +86,8 @@ data class SpendingStatistics(
     val tagComparisons: List<SpendingComparisonBreakdown>,
     val recurringSpendingChanges: List<RecurringSpendingChange>,
     val monthlySummary: MonthlySpendingSummary?,
+    val dailyBreakdown: List<DailySpendingBreakdown>?,
+    val dailyTransactions: List<DailySpendingTransaction>?,
 )
 
 @Service
@@ -83,6 +103,8 @@ class SpendingStatisticsService(
         payer: SpendingPayer = SpendingPayer.ALL,
         referenceDate: LocalDate = LocalDate.now(SEOUL),
         includeMonthlySummary: Boolean = false,
+        includeDailyBreakdown: Boolean = false,
+        includeDailyTransactions: Boolean = false,
     ): SpendingStatistics {
         val currentRange = range(period, referenceDate)
         val previousRange = previousRange(period, currentRange.start)
@@ -172,6 +194,40 @@ class SpendingStatisticsService(
                 currentCategories = currentCategories,
                 categoryComparisons = categoryComparisons,
             ),
+            dailyBreakdown = if (includeDailyBreakdown && period == SpendingPeriod.MONTH) {
+                spendingStatisticsRepository.byDay(
+                    currentUser.householdId,
+                    currentRange.startAt,
+                    currentRange.endExclusiveAt,
+                    payerId,
+                )
+            } else {
+                null
+            },
+            dailyTransactions = if (includeDailyTransactions && period == SpendingPeriod.DAY) {
+                spendingStatisticsRepository.transactions(
+                    currentUser.householdId,
+                    currentRange.startAt,
+                    currentRange.endExclusiveAt,
+                    payerId,
+                ).map { transaction ->
+                    DailySpendingTransaction(
+                        id = transaction.id,
+                        merchant = transaction.merchant,
+                        description = transaction.description,
+                        amount = transaction.amount,
+                        occurredAt = transaction.occurredAt,
+                        payerLabel = transaction.payerLabel,
+                        paymentMethodLabel = paymentMethodLabel(transaction.paymentMethod),
+                        categoryLabel = TransactionCategory.valueOf(transaction.category).label,
+                        tagLabels = transaction.tags.map { tag ->
+                            tagLabel(TransactionTag.valueOf(tag))
+                        },
+                    )
+                }
+            } else {
+                null
+            },
         )
     }
 

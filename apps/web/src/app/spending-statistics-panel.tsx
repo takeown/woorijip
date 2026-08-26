@@ -4,6 +4,7 @@
  */
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 
 type SpendingPeriod = "DAY" | "WEEK" | "MONTH";
@@ -13,6 +14,12 @@ type PeriodSummary = {
   totalAmount: number;
   coupleLivingAmount: number;
   childcareAmount: number;
+  transactionCount: number;
+};
+
+type DailySpendingBreakdown = {
+  date: string;
+  totalAmount: number;
   transactionCount: number;
 };
 
@@ -77,6 +84,7 @@ type SpendingStatistics = {
   tagComparisons: ComparisonBreakdownItem[];
   recurringSpendingChanges?: RecurringSpendingChange[];
   monthlySummary?: MonthlySpendingSummary | null;
+  dailyBreakdown?: DailySpendingBreakdown[];
 };
 
 type SpendingStatisticsPanelProps = {
@@ -116,13 +124,24 @@ const evidenceDateFormatter = new Intl.DateTimeFormat("ko-KR", {
   month: "long",
   timeZone: "Asia/Seoul",
 });
+const calendarDateFormatter = new Intl.DateTimeFormat("ko-KR", {
+  day: "numeric",
+  month: "long",
+  timeZone: "UTC",
+});
+const compactAmountFormatter = new Intl.NumberFormat("ko-KR", {
+  maximumFractionDigits: 0,
+  notation: "compact",
+});
+const WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"] as const;
 
 export function SpendingStatisticsPanel({ refreshKey }: SpendingStatisticsPanelProps) {
   const [period, setPeriod] = useState<SpendingPeriod>("MONTH");
   const [payer, setPayer] = useState<SpendingPayer>("ALL");
   const [referenceDate, setReferenceDate] = useState(seoulToday);
+  const [isCalendarExpanded, setIsCalendarExpanded] = useState(false);
   const requestKey = `${period}:${payer}:${referenceDate}:${refreshKey}`;
-  const requestUrl = `${apiUrl}/statistics/spending?period=${period}&payer=${payer}&date=${referenceDate}&includeMonthlySummary=true`;
+  const requestUrl = `${apiUrl}/statistics/spending?period=${period}&payer=${payer}&date=${referenceDate}&includeMonthlySummary=true&includeDailyBreakdown=true`;
   const [loadResult, setLoadResult] = useState<{
     requestKey: string;
     statistics: SpendingStatistics | null;
@@ -334,6 +353,17 @@ export function SpendingStatisticsPanel({ refreshKey }: SpendingStatisticsPanelP
             </dl>
           </div>
 
+          {statistics.period === "MONTH" && statistics.dailyBreakdown ? (
+            <MonthlySpendingCalendar
+              dailyBreakdown={statistics.dailyBreakdown}
+              endDateExclusive={statistics.endDateExclusive}
+              isExpanded={isCalendarExpanded}
+              onToggle={() => setIsCalendarExpanded((expanded) => !expanded)}
+              payer={payer}
+              startDate={statistics.startDate}
+            />
+          ) : null}
+
           {statistics.period === "MONTH" && statistics.monthlySummary ? (
             <MonthlySummary startDate={statistics.startDate} summary={statistics.monthlySummary} />
           ) : null}
@@ -381,6 +411,139 @@ export function SpendingStatisticsPanel({ refreshKey }: SpendingStatisticsPanelP
             </div>
           ) : null}
         </>
+      ) : null}
+    </section>
+  );
+}
+
+function MonthlySpendingCalendar({
+  dailyBreakdown,
+  endDateExclusive,
+  isExpanded,
+  onToggle,
+  payer,
+  startDate,
+}: {
+  dailyBreakdown: DailySpendingBreakdown[];
+  endDateExclusive: string;
+  isExpanded: boolean;
+  onToggle: () => void;
+  payer: SpendingPayer;
+  startDate: string;
+}) {
+  const spendingByDate = new Map(dailyBreakdown.map((item) => [item.date, item]));
+  const weeks = calendarWeeks(startDate, endDateExclusive);
+  const highestSpending = dailyBreakdown.reduce<DailySpendingBreakdown | null>(
+    (highest, item) =>
+      highest === null || item.totalAmount > highest.totalAmount ? item : highest,
+    null,
+  );
+
+  return (
+    <section aria-labelledby="monthly-spending-calendar-title" className="mt-8">
+      <div className="flex flex-col gap-4 border-y border-border-soft py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h3 className="text-xl font-semibold text-foreground" id="monthly-spending-calendar-title">
+            날짜별 지출
+          </h3>
+          <p className="mt-1 text-sm text-stone-600">
+            {highestSpending ? (
+              <>
+                가장 많이 쓴 날 {calendarDateFormatter.format(parseDate(highestSpending.date))} ·{" "}
+                <span className="font-ui tabular-nums">
+                  {amountFormatter.format(highestSpending.totalAmount)}원
+                </span>
+              </>
+            ) : (
+              "이달에는 기록된 지출이 없습니다."
+            )}
+          </p>
+        </div>
+        <button
+          aria-controls="monthly-spending-calendar"
+          aria-expanded={isExpanded}
+          className="min-h-11 shrink-0 self-start whitespace-nowrap rounded-xl border border-border-soft bg-surface px-4 py-2 text-sm font-medium text-accent-strong transition-colors duration-150 ease-[var(--ease-out)] hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-accent-ink active:bg-accent-soft sm:self-auto"
+          onClick={onToggle}
+          type="button"
+        >
+          {isExpanded ? "달력 접기" : "달력 펼치기"}
+        </button>
+      </div>
+
+      {isExpanded ? (
+        <div className="overflow-hidden" id="monthly-spending-calendar">
+          <p className="py-3 text-sm text-stone-600">
+            날짜를 누르면 그날의 통계로 이동합니다.
+          </p>
+          <table className="w-full table-fixed border-collapse border-t border-border-soft">
+            <caption className="sr-only">
+              {monthFormatter.format(parseDate(startDate))} 날짜별 지출 달력
+            </caption>
+            <thead>
+              <tr>
+                {WEEKDAYS.map((weekday) => (
+                  <th
+                    className="border-b border-border-soft py-2 font-ui text-xs font-medium text-stone-600"
+                    key={weekday}
+                    scope="col"
+                  >
+                    {weekday}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {weeks.map((week, weekIndex) => (
+                <tr key={weekIndex}>
+                  {week.map((date, dayIndex) => {
+                    if (date === null) {
+                      return (
+                        <td
+                          aria-hidden="true"
+                          className="h-16 border-b border-r border-border-soft bg-surface-muted last:border-r-0 sm:h-20"
+                          key={`empty-${dayIndex}`}
+                        />
+                      );
+                    }
+                    const spending = spendingByDate.get(date);
+                    const label = spending
+                      ? `${calendarDateFormatter.format(parseDate(date))}, ${amountFormatter.format(spending.totalAmount)}원, ${amountFormatter.format(spending.transactionCount)}건`
+                      : `${calendarDateFormatter.format(parseDate(date))}, 지출 없음`;
+
+                    return (
+                      <td
+                        className="border-b border-r border-border-soft p-0 last:border-r-0"
+                        key={date}
+                      >
+                        <Link
+                          aria-label={label}
+                          className="flex min-h-16 w-full min-w-0 flex-col items-start justify-between px-1 py-2 text-left transition-colors duration-150 ease-[var(--ease-out)] hover:bg-accent-soft focus-visible:relative focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus active:bg-accent-soft sm:min-h-20 sm:px-2"
+                          href={{
+                            pathname: `/stats/daily/${date}`,
+                            query: { payer },
+                          }}
+                        >
+                          <span className="font-ui text-xs font-medium text-stone-700 tabular-nums">
+                            {Number(date.slice(-2))}
+                          </span>
+                          <span
+                            className={`min-w-0 max-w-full truncate font-ui text-xs font-semibold tabular-nums ${
+                              spending ? "text-stone-900" : "text-stone-500"
+                            }`}
+                          >
+                            {spending
+                              ? `${compactAmountFormatter.format(spending.totalAmount)}원`
+                              : "—"}
+                          </span>
+                        </Link>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : null}
     </section>
   );
@@ -765,4 +928,19 @@ function parseDate(value: string): Date {
 
 function toDateInputValue(date: Date): string {
   return date.toISOString().slice(0, 10);
+}
+
+function calendarWeeks(startDate: string, endDateExclusive: string): Array<Array<string | null>> {
+  const start = parseDate(startDate);
+  const end = parseDate(endDateExclusive);
+  const dates: Array<string | null> = Array((start.getUTCDay() + 6) % 7).fill(null);
+
+  for (const current = new Date(start); current < end; current.setUTCDate(current.getUTCDate() + 1)) {
+    dates.push(toDateInputValue(current));
+  }
+  while (dates.length % 7 !== 0) dates.push(null);
+
+  return Array.from({ length: dates.length / 7 }, (_, index) =>
+    dates.slice(index * 7, index * 7 + 7),
+  );
 }

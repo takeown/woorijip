@@ -53,6 +53,11 @@ const monthlyStatistics = {
       message: "선택한 기간 구독 지출이 이전 기간보다 5,000원 증가했어요.",
     },
   ],
+  dailyBreakdown: [
+    { date: "2026-07-01", totalAmount: 12_000, transactionCount: 1 },
+    { date: "2026-07-12", totalAmount: 50_000, transactionCount: 1 },
+    { date: "2026-07-20", totalAmount: 63_000, transactionCount: 2 },
+  ],
   monthlySummary: {
     topCategory: { key: "FOOD", label: "식비", amount: 125_000, transactionCount: 4 },
     sharePercent: 100,
@@ -124,6 +129,20 @@ describe("SpendingStatisticsPanel", () => {
     expect(screen.getByText("우리동네 마트")).toBeDefined();
     expect(screen.getByText("75,000원")).toBeDefined();
     expect(screen.getByText("7월 20일 · 나")).toBeDefined();
+    expect(screen.getByRole("heading", { name: "날짜별 지출" })).toBeDefined();
+    expect(
+      screen.getByText((_, element) =>
+        element?.tagName === "P" &&
+        element.textContent === "가장 많이 쓴 날 7월 20일 · 63,000원",
+      ),
+    ).toBeDefined();
+    expect(screen.queryByRole("link", { name: "7월 20일, 63,000원, 2건" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "달력 펼치기" }));
+    expect(screen.getByRole("button", { name: "달력 접기" }).getAttribute("aria-expanded")).toBe(
+      "true",
+    );
+    expect(screen.getByRole("link", { name: "7월 20일, 63,000원, 2건" })).toBeDefined();
+    expect(screen.getByRole("link", { name: "7월 2일, 지출 없음" })).toBeDefined();
 
     await user.click(screen.getByRole("button", { name: "일간" }));
 
@@ -131,6 +150,47 @@ describe("SpendingStatisticsPanel", () => {
     expect(within(reloadedTotalCard as HTMLElement).getByText("8,000원")).toBeDefined();
     expect(fetchMock.mock.calls[1][0]).toContain("period=DAY");
     expect(fetchMock.mock.calls[1][0]).toContain("includeMonthlySummary=true");
+    expect(fetchMock.mock.calls[1][0]).toContain("includeDailyBreakdown=true");
+  });
+
+  test("links a calendar date to its detail route with the selected payer", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse(monthlyStatistics))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          ...monthlyStatistics,
+          payer: "PARTNER",
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<SpendingStatisticsPanel refreshKey={0} />);
+    await screen.findByRole("button", { name: "달력 펼치기" });
+    await user.click(screen.getByRole("button", { name: "달력 펼치기" }));
+    await user.click(screen.getByRole("button", { name: "배우자" }));
+    expect(await screen.findByRole("button", { name: "달력 접기" })).toBeDefined();
+    const dateLink = await screen.findByRole("link", { name: "7월 20일, 63,000원, 2건" });
+    expect(dateLink.getAttribute("href")).toBe("/stats/daily/2026-07-20?payer=PARTNER");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("hides the calendar when an older api response has no daily breakdown", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>().mockResolvedValueOnce(
+        jsonResponse({
+          ...monthlyStatistics,
+          dailyBreakdown: undefined,
+        }),
+      ),
+    );
+
+    render(<SpendingStatisticsPanel refreshKey={0} />);
+
+    expect(await screen.findByText("총지출")).toBeDefined();
+    expect(screen.queryByRole("heading", { name: "날짜별 지출" })).toBeNull();
   });
 
   test("shows an explicit empty state", async () => {
@@ -149,6 +209,7 @@ describe("SpendingStatisticsPanel", () => {
           categoryComparisons: [],
           tagComparisons: [],
           recurringSpendingChanges: [],
+          dailyBreakdown: [],
           monthlySummary: null,
         }),
       ),
@@ -160,6 +221,7 @@ describe("SpendingStatisticsPanel", () => {
       await screen.findByText("이 기간에는 기록된 지출이 없습니다."),
     ).toBeDefined();
     expect(screen.getByText("변화 없음")).toBeDefined();
+    expect(screen.getByText("이달에는 기록된 지출이 없습니다.")).toBeDefined();
     expect(screen.getByText("이전 기간과 달라진 반복 지출이 없습니다.")).toBeDefined();
   });
 
