@@ -1,12 +1,11 @@
-"use client";
+import { normalizeStatsUrlState, todayInSeoul } from "../stats-url-state";
+import { StatsPageContent } from "./stats-page-content";
 
-import { AuthenticatedShell } from "../authenticated-shell";
-import { SpendingStatisticsPanel } from "../spending-statistics-panel";
-
-export default function StatsPage() {
-  return (
-    <AuthenticatedShell>
-      {() => <SpendingStatisticsPanel refreshKey={0} />}
-    </AuthenticatedShell>
-  );
+export default async function StatsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const initialState = normalizeStatsUrlState(await searchParams, todayInSeoul());
+  return <StatsPageContent initialState={initialState} />;
 }
