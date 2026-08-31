@@ -45,7 +45,13 @@ describe("DailySpendingDetailsPanel", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<DailySpendingDetailsPanel date="2026-07-20" payer="PARTNER" />);
+    render(
+      <DailySpendingDetailsPanel
+        date="2026-07-20"
+        payer="PARTNER"
+        statsDate="2026-07-26"
+      />,
+    );
 
     expect(await screen.findByRole("heading", { name: "2026년 7월 20일 월요일 지출" })).toBeDefined();
     expect(screen.getByText("배우자 결제 내역입니다.")).toBeDefined();
@@ -56,10 +62,15 @@ describe("DailySpendingDetailsPanel", () => {
     expect(within(table).getByText("45,000원")).toBeDefined();
     expect(within(table).getByText("정기결제")).toBeDefined();
     expect(screen.getByRole("link", { name: "이전 날짜" }).getAttribute("href")).toBe(
-      "/stats/daily/2026-07-19?payer=PARTNER",
+      "/stats/daily/2026-07-19?payer=PARTNER&statsDate=2026-07-26",
     );
     expect(screen.getByRole("link", { name: "다음 날짜" }).getAttribute("href")).toBe(
-      "/stats/daily/2026-07-21?payer=PARTNER",
+      "/stats/daily/2026-07-21?payer=PARTNER&statsDate=2026-07-26",
+    );
+    expect(
+      screen.getByRole("link", { name: "← 소비 캘린더로 돌아가기" }).getAttribute("href"),
+    ).toBe(
+      "/stats?period=MONTH&payer=PARTNER&date=2026-07-26&calendar=open",
     );
     expect(fetchMock.mock.calls[0][0]).toContain("period=DAY");
     expect(fetchMock.mock.calls[0][0]).toContain("payer=PARTNER");
@@ -83,7 +94,9 @@ describe("DailySpendingDetailsPanel", () => {
       ),
     );
 
-    render(<DailySpendingDetailsPanel date="2026-07-20" payer="ALL" />);
+    render(
+      <DailySpendingDetailsPanel date="2026-07-20" payer="ALL" statsDate="2026-07-20" />,
+    );
 
     expect(await screen.findByText("이날에는 기록된 거래가 없습니다.")).toBeDefined();
     expect(screen.getByText("0건 모두 표시")).toBeDefined();

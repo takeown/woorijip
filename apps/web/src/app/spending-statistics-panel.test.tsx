@@ -85,6 +85,7 @@ const monthlyStatistics = {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  window.history.replaceState(null, "", "/");
 });
 
 describe("SpendingStatisticsPanel", () => {
@@ -106,7 +107,17 @@ describe("SpendingStatisticsPanel", () => {
       );
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<SpendingStatisticsPanel refreshKey={0} />);
+    render(
+      <SpendingStatisticsPanel
+        initialState={{
+          calendarExpanded: false,
+          payer: "ALL",
+          period: "MONTH",
+          referenceDate: "2026-07-26",
+        }}
+        refreshKey={0}
+      />,
+    );
 
     const totalCard = (await screen.findByText("총지출")).parentElement;
     expect(totalCard).not.toBeNull();
@@ -166,14 +177,59 @@ describe("SpendingStatisticsPanel", () => {
       );
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<SpendingStatisticsPanel refreshKey={0} />);
+    render(
+      <SpendingStatisticsPanel
+        initialState={{
+          calendarExpanded: false,
+          payer: "ALL",
+          period: "MONTH",
+          referenceDate: "2026-07-26",
+        }}
+        refreshKey={0}
+      />,
+    );
     await screen.findByRole("button", { name: "달력 펼치기" });
     await user.click(screen.getByRole("button", { name: "달력 펼치기" }));
     await user.click(screen.getByRole("button", { name: "배우자" }));
     expect(await screen.findByRole("button", { name: "달력 접기" })).toBeDefined();
     const dateLink = await screen.findByRole("link", { name: "7월 20일, 63,000원, 2건" });
-    expect(dateLink.getAttribute("href")).toBe("/stats/daily/2026-07-20?payer=PARTNER");
+    expect(dateLink.getAttribute("href")).toBe(
+      "/stats/daily/2026-07-20?payer=PARTNER&statsDate=2026-07-26",
+    );
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(`${window.location.pathname}${window.location.search}`).toBe(
+      "/stats?period=MONTH&payer=PARTNER&date=2026-07-26&calendar=open",
+    );
+  });
+
+  test("restores the selected statistics state from the URL", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>().mockResolvedValueOnce(
+        jsonResponse({
+          ...monthlyStatistics,
+          payer: "ME",
+        }),
+      ),
+    );
+
+    render(
+      <SpendingStatisticsPanel
+        initialState={{
+          calendarExpanded: true,
+          payer: "ME",
+          period: "MONTH",
+          referenceDate: "2026-07-26",
+        }}
+        refreshKey={0}
+      />,
+    );
+
+    expect(await screen.findByRole("button", { name: "달력 접기" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "나" }).getAttribute("aria-pressed")).toBe("true");
+    expect((screen.getByLabelText("통계 기준 날짜") as HTMLInputElement).value).toBe(
+      "2026-07-26",
+    );
   });
 
   test("hides the calendar when an older api response has no daily breakdown", async () => {

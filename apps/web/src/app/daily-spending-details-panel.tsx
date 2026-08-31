@@ -7,8 +7,11 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AuthenticatedShell } from "./authenticated-shell";
-
-export type SpendingPayer = "ALL" | "ME" | "PARTNER";
+import {
+  calendarReturnUrl,
+  dailyStatsUrl,
+  type SpendingPayer,
+} from "./stats-url-state";
 
 type DailySpendingTransaction = {
   id: number;
@@ -48,13 +51,15 @@ const transactionTimeFormatter = new Intl.DateTimeFormat("ko-KR", {
 export function DailySpendingDetailsPage({
   date,
   payer,
+  statsDate,
 }: {
   date: string;
   payer: SpendingPayer;
+  statsDate: string;
 }) {
   return (
     <AuthenticatedShell>
-      {() => <DailySpendingDetailsPanel date={date} payer={payer} />}
+      {() => <DailySpendingDetailsPanel date={date} payer={payer} statsDate={statsDate} />}
     </AuthenticatedShell>
   );
 }
@@ -62,9 +67,11 @@ export function DailySpendingDetailsPage({
 export function DailySpendingDetailsPanel({
   date,
   payer,
+  statsDate,
 }: {
   date: string;
   payer: SpendingPayer;
+  statsDate: string;
 }) {
   const requestKey = `${date}:${payer}`;
   const [loadResult, setLoadResult] = useState<{
@@ -112,7 +119,7 @@ export function DailySpendingDetailsPanel({
     <section className="mx-auto mb-8 w-full max-w-6xl">
       <Link
         className="inline-flex min-h-11 items-center whitespace-nowrap text-sm font-medium text-accent-strong transition-colors duration-150 ease-[var(--ease-out)] hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-accent-ink active:text-accent"
-        href="/stats"
+        href={calendarReturnUrl(payer, statsDate)}
       >
         ← 소비 캘린더로 돌아가기
       </Link>
@@ -128,14 +135,14 @@ export function DailySpendingDetailsPanel({
           <Link
             aria-label="이전 날짜"
             className="flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-border-soft bg-surface text-stone-700 transition-colors duration-150 ease-[var(--ease-out)] hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-accent-ink active:bg-surface-muted"
-            href={dailyHref(previousDate, payer)}
+            href={dailyStatsUrl(previousDate, payer, statsDate)}
           >
             ←
           </Link>
           <Link
             aria-label="다음 날짜"
             className="flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-border-soft bg-surface text-stone-700 transition-colors duration-150 ease-[var(--ease-out)] hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-accent-ink active:bg-surface-muted"
-            href={dailyHref(nextDate, payer)}
+            href={dailyStatsUrl(nextDate, payer, statsDate)}
           >
             →
           </Link>
@@ -252,10 +259,6 @@ function DailyTransactionDetails({ transactions }: { transactions: DailySpending
       )}
     </section>
   );
-}
-
-function dailyHref(date: string, payer: SpendingPayer) {
-  return { pathname: `/stats/daily/${date}`, query: { payer } };
 }
 
 function moveDate(value: string, days: number): string {

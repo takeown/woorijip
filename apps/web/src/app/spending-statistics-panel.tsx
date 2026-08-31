@@ -6,9 +6,14 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
-
-type SpendingPeriod = "DAY" | "WEEK" | "MONTH";
-type SpendingPayer = "ALL" | "ME" | "PARTNER";
+import {
+  dailyStatsUrl,
+  statsUrl,
+  todayInSeoul,
+  type SpendingPayer,
+  type SpendingPeriod,
+  type StatsUrlState,
+} from "./stats-url-state";
 
 type PeriodSummary = {
   totalAmount: number;
@@ -88,6 +93,7 @@ type SpendingStatistics = {
 };
 
 type SpendingStatisticsPanelProps = {
+  initialState?: StatsUrlState;
   refreshKey: number;
 };
 
@@ -135,11 +141,21 @@ const compactAmountFormatter = new Intl.NumberFormat("ko-KR", {
 });
 const WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"] as const;
 
-export function SpendingStatisticsPanel({ refreshKey }: SpendingStatisticsPanelProps) {
-  const [period, setPeriod] = useState<SpendingPeriod>("MONTH");
-  const [payer, setPayer] = useState<SpendingPayer>("ALL");
-  const [referenceDate, setReferenceDate] = useState(seoulToday);
-  const [isCalendarExpanded, setIsCalendarExpanded] = useState(false);
+export function SpendingStatisticsPanel({ initialState, refreshKey }: SpendingStatisticsPanelProps) {
+  const [viewState, setViewState] = useState<StatsUrlState>(() =>
+    initialState ?? {
+      calendarExpanded: false,
+      payer: "ALL",
+      period: "MONTH",
+      referenceDate: todayInSeoul(),
+    },
+  );
+  const {
+    calendarExpanded: isCalendarExpanded,
+    payer,
+    period,
+    referenceDate,
+  } = viewState;
   const requestKey = `${period}:${payer}:${referenceDate}:${refreshKey}`;
   const requestUrl = `${apiUrl}/statistics/spending?period=${period}&payer=${payer}&date=${referenceDate}&includeMonthlySummary=true&includeDailyBreakdown=true`;
   const [loadResult, setLoadResult] = useState<{
@@ -184,6 +200,11 @@ export function SpendingStatisticsPanel({ refreshKey }: SpendingStatisticsPanelP
     return () => controller.abort();
   }, [requestKey, requestUrl]);
 
+  function updateViewState(nextState: StatsUrlState) {
+    setViewState(nextState);
+    window.history.replaceState(null, "", statsUrl(nextState));
+  }
+
   function movePeriod(direction: -1 | 1) {
     const date = parseDate(referenceDate);
     if (period === "DAY") date.setUTCDate(date.getUTCDate() + direction);
@@ -192,7 +213,7 @@ export function SpendingStatisticsPanel({ refreshKey }: SpendingStatisticsPanelP
       date.setUTCDate(1);
       date.setUTCMonth(date.getUTCMonth() + direction);
     }
-    setReferenceDate(toDateInputValue(date));
+    updateViewState({ ...viewState, referenceDate: toDateInputValue(date) });
   }
 
   return (
@@ -228,7 +249,7 @@ export function SpendingStatisticsPanel({ refreshKey }: SpendingStatisticsPanelP
                       : "text-stone-700 hover:bg-accent-soft active:bg-accent-soft"
                   }`}
                   key={value}
-                  onClick={() => setPeriod(value)}
+                  onClick={() => updateViewState({ ...viewState, period: value })}
                   type="button"
                 >
                   {label}
@@ -257,7 +278,7 @@ export function SpendingStatisticsPanel({ refreshKey }: SpendingStatisticsPanelP
                       : "text-stone-700 hover:bg-accent-soft active:bg-accent-soft"
                   }`}
                   key={value}
-                  onClick={() => setPayer(value)}
+                  onClick={() => updateViewState({ ...viewState, payer: value })}
                   type="button"
                 >
                   {label}
@@ -280,7 +301,9 @@ export function SpendingStatisticsPanel({ refreshKey }: SpendingStatisticsPanelP
               <input
                 aria-label="통계 기준 날짜"
                 className="min-h-11 min-w-0 rounded-xl border border-border-soft bg-surface px-3 font-ui text-sm tabular-nums outline-2 outline-offset-2 outline-transparent transition-colors duration-150 ease-[var(--ease-out)] hover:bg-surface-muted focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-50"
-                onChange={(event) => setReferenceDate(event.target.value)}
+                onChange={(event) =>
+                  updateViewState({ ...viewState, referenceDate: event.target.value })
+                }
                 type="date"
                 value={referenceDate}
               />
@@ -294,7 +317,9 @@ export function SpendingStatisticsPanel({ refreshKey }: SpendingStatisticsPanelP
               </button>
               <button
                 className="min-h-11 whitespace-nowrap rounded-xl px-3 text-sm font-medium text-accent-strong transition-colors duration-150 ease-[var(--ease-out)] hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-accent-ink active:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
-                onClick={() => setReferenceDate(seoulToday())}
+                onClick={() =>
+                  updateViewState({ ...viewState, referenceDate: todayInSeoul() })
+                }
                 type="button"
               >
                 오늘
@@ -358,8 +383,14 @@ export function SpendingStatisticsPanel({ refreshKey }: SpendingStatisticsPanelP
               dailyBreakdown={statistics.dailyBreakdown}
               endDateExclusive={statistics.endDateExclusive}
               isExpanded={isCalendarExpanded}
-              onToggle={() => setIsCalendarExpanded((expanded) => !expanded)}
+              onToggle={() =>
+                updateViewState({
+                  ...viewState,
+                  calendarExpanded: !isCalendarExpanded,
+                })
+              }
               payer={payer}
+              statsDate={referenceDate}
               startDate={statistics.startDate}
             />
           ) : null}
@@ -422,6 +453,7 @@ function MonthlySpendingCalendar({
   isExpanded,
   onToggle,
   payer,
+  statsDate,
   startDate,
 }: {
   dailyBreakdown: DailySpendingBreakdown[];
@@ -429,6 +461,7 @@ function MonthlySpendingCalendar({
   isExpanded: boolean;
   onToggle: () => void;
   payer: SpendingPayer;
+  statsDate: string;
   startDate: string;
 }) {
   const spendingByDate = new Map(dailyBreakdown.map((item) => [item.date, item]));
@@ -518,10 +551,7 @@ function MonthlySpendingCalendar({
                         <Link
                           aria-label={label}
                           className="flex min-h-16 w-full min-w-0 flex-col items-start justify-between px-1 py-2 text-left transition-colors duration-150 ease-[var(--ease-out)] hover:bg-accent-soft focus-visible:relative focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus active:bg-accent-soft sm:min-h-20 sm:px-2"
-                          href={{
-                            pathname: `/stats/daily/${date}`,
-                            query: { payer },
-                          }}
+                          href={dailyStatsUrl(date, payer, statsDate)}
                         >
                           <span className="font-ui text-xs font-medium text-stone-700 tabular-nums">
                             {Number(date.slice(-2))}
@@ -730,7 +760,7 @@ function MonthlySummary({
 }
 
 function monthlyQuestionLabel(startDate: string): string {
-  if (startDate.slice(0, 7) === seoulToday().slice(0, 7)) {
+  if (startDate.slice(0, 7) === todayInSeoul().slice(0, 7)) {
     return "이번 달 돈 어디 갔어?";
   }
   return `${monthFormatter.format(parseDate(startDate))} 돈 어디 갔어?`;
@@ -909,17 +939,6 @@ function periodLabel(statistics: SpendingStatistics): string {
   const end = parseDate(statistics.endDateExclusive);
   end.setUTCDate(end.getUTCDate() - 1);
   return `${dateFormatter.format(parseDate(statistics.startDate))} – ${dateFormatter.format(end)}`;
-}
-
-function seoulToday(): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-  }).formatToParts(new Date());
-  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${value.year}-${value.month}-${value.day}`;
 }
 
 function parseDate(value: string): Date {
