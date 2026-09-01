@@ -1,4 +1,5 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { DailySpendingDetailsPanel } from "./daily-spending-details-panel";
 
@@ -20,10 +21,18 @@ describe("DailySpendingDetailsPanel", () => {
         dailyTransactions: [
           {
             id: 20,
+            payerId: 2,
             merchant: "우리동네 마트",
             description: "저녁 장보기",
             amount: 45_000,
+            category: "LIVING",
+            tags: ["RECURRING_PAYMENT"],
+            paymentMethod: "CARD",
+            cardIssuer: "SHINHAN",
+            storedValueAccountId: null,
             occurredAt: "2026-07-20T13:40:00+09:00",
+            createdAt: "2026-07-20T13:40:00+09:00",
+            updatedAt: "2026-07-20T13:40:00+09:00",
             payerLabel: "배우자",
             paymentMethodLabel: "카드",
             categoryLabel: "생활",
@@ -31,10 +40,18 @@ describe("DailySpendingDetailsPanel", () => {
           },
           {
             id: 21,
+            payerId: 1,
             merchant: "아이사랑 약국",
             description: null,
             amount: 18_000,
+            category: "CHILDCARE",
+            tags: [],
+            paymentMethod: "CASH",
+            cardIssuer: null,
+            storedValueAccountId: null,
             occurredAt: "2026-07-20T18:20:00+09:00",
+            createdAt: "2026-07-20T18:20:00+09:00",
+            updatedAt: "2026-07-20T18:20:00+09:00",
             payerLabel: "나",
             paymentMethodLabel: "현금",
             categoryLabel: "육아",
@@ -100,6 +117,163 @@ describe("DailySpendingDetailsPanel", () => {
 
     expect(await screen.findByText("이날에는 기록된 거래가 없습니다.")).toBeDefined();
     expect(screen.getByText("0건 모두 표시")).toBeDefined();
+  });
+
+  test("opens and cancels the existing transaction edit form", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({
+        current: {
+          totalAmount: 45_000,
+          coupleLivingAmount: 45_000,
+          childcareAmount: 0,
+          transactionCount: 1,
+        },
+        dailyTransactions: [{
+          id: 20,
+          payerId: 2,
+          merchant: "우리동네 마트",
+          description: "저녁 장보기",
+          amount: 45_000,
+          category: "LIVING",
+          tags: ["RECURRING_PAYMENT"],
+          paymentMethod: "CARD",
+          cardIssuer: "SHINHAN",
+          storedValueAccountId: null,
+          occurredAt: "2026-07-20T13:40:00+09:00",
+          createdAt: "2026-07-20T13:40:00+09:00",
+          updatedAt: "2026-07-20T13:40:00+09:00",
+          payerLabel: "배우자",
+          paymentMethodLabel: "카드",
+          categoryLabel: "생활",
+          tagLabels: ["정기결제"],
+        }],
+      }))
+      .mockResolvedValueOnce(jsonResponse([
+        { userId: 1, displayName: "나" },
+        { userId: 2, displayName: "배우자" },
+      ]))
+      .mockResolvedValueOnce(jsonResponse([]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <DailySpendingDetailsPanel date="2026-07-20" payer="ALL" statsDate="2026-07-20" />,
+    );
+
+    await screen.findByText("1건 모두 표시");
+    await user.click(screen.getByRole("button", { name: "거래 수정" }));
+
+    expect(await screen.findByDisplayValue("우리동네 마트")).toBeDefined();
+    expect(fetchMock.mock.calls[1][0]).toBe(
+      "http://localhost:8080/households/current/members",
+    );
+    expect(fetchMock.mock.calls[2][0]).toBe(
+      "http://localhost:8080/stored-value-accounts",
+    );
+
+    await user.click(screen.getByRole("button", { name: "취소" }));
+    expect(screen.queryByRole("button", { name: "수정 저장" })).toBeNull();
+    expect(screen.getByRole("button", { name: "거래 수정" })).toBeDefined();
+  });
+
+  test("refreshes the same daily details after editing a transaction", async () => {
+    const user = userEvent.setup();
+    const transaction = {
+      id: 20,
+      payerId: 2,
+      merchant: "우리동네 마트",
+      description: "저녁 장보기",
+      amount: 45_000,
+      category: "LIVING",
+      tags: ["RECURRING_PAYMENT"],
+      paymentMethod: "CARD",
+      cardIssuer: "SHINHAN",
+      storedValueAccountId: null,
+      occurredAt: "2026-07-20T13:40:00+09:00",
+      createdAt: "2026-07-20T13:40:00+09:00",
+      updatedAt: "2026-07-20T13:40:00+09:00",
+      payerLabel: "배우자",
+      paymentMethodLabel: "카드",
+      categoryLabel: "생활",
+      tagLabels: ["정기결제"],
+    };
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({
+        current: {
+          totalAmount: 45_000,
+          coupleLivingAmount: 45_000,
+          childcareAmount: 0,
+          transactionCount: 1,
+        },
+        dailyTransactions: [transaction],
+      }))
+      .mockResolvedValueOnce(jsonResponse([
+        { userId: 1, displayName: "나" },
+        { userId: 2, displayName: "배우자" },
+      ]))
+      .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValueOnce(jsonResponse({
+        token: "csrf-token",
+        headerName: "X-XSRF-TOKEN",
+      }))
+      .mockResolvedValueOnce(jsonResponse({}))
+      .mockResolvedValueOnce(jsonResponse({
+        current: {
+          totalAmount: 46_000,
+          coupleLivingAmount: 46_000,
+          childcareAmount: 0,
+          transactionCount: 1,
+        },
+        dailyTransactions: [{
+          ...transaction,
+          amount: 46_000,
+          updatedAt: "2026-07-20T14:00:00+09:00",
+        }],
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <DailySpendingDetailsPanel date="2026-07-20" payer="ALL" statsDate="2026-07-20" />,
+    );
+
+    await screen.findByText("1건 모두 표시");
+    await user.click(screen.getByRole("button", { name: "거래 수정" }));
+    const amount = await screen.findByLabelText("금액");
+    await user.clear(amount);
+    await user.type(amount, "46000");
+    await user.click(screen.getByRole("button", { name: "수정 저장" }));
+
+    expect((await screen.findAllByText("46,000원")).length).toBeGreaterThanOrEqual(3);
+    expect(fetchMock.mock.calls[5][0]).toContain(
+      "/statistics/spending?period=DAY&payer=ALL&date=2026-07-20",
+    );
+  });
+
+  test("does not describe a missing daily transaction payload as an empty day", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>().mockResolvedValueOnce(
+        jsonResponse({
+          current: {
+            totalAmount: 45_000,
+            coupleLivingAmount: 45_000,
+            childcareAmount: 0,
+            transactionCount: 1,
+          },
+        }),
+      ),
+    );
+
+    render(
+      <DailySpendingDetailsPanel date="2026-07-20" payer="ALL" statsDate="2026-07-20" />,
+    );
+
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "이날 거래 상세를 불러오지 못했습니다.",
+    );
+    expect(screen.queryByText("이날에는 기록된 거래가 없습니다.")).toBeNull();
   });
 });
 

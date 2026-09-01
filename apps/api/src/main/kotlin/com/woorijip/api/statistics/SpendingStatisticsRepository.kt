@@ -30,14 +30,19 @@ data class SpendingEvidenceTransaction(
 
 data class SpendingDetailTransaction(
     val id: Long,
+    val payerId: Long,
     val merchant: String,
     val description: String?,
     val amount: Long,
     val occurredAt: OffsetDateTime,
     val payerLabel: String,
     val paymentMethod: String,
+    val cardIssuer: String?,
+    val storedValueAccountId: Long?,
     val category: String,
     val tags: List<String>,
+    val createdAt: OffsetDateTime,
+    val updatedAt: OffsetDateTime,
 )
 
 @Repository
@@ -210,14 +215,19 @@ class SpendingStatisticsRepository(
         jdbcTemplate.query(
             """
             SELECT t.id,
+                   t.payer_id,
                    t.merchant,
                    t.description,
                    t.amount,
                    t.occurred_at,
                    users.display_name AS payer_label,
                    t.payment_method,
+                   t.card_issuer,
+                   t.stored_value_account_id,
                    t.category,
-                   string_agg(transaction_tags.tag, ',' ORDER BY transaction_tags.tag) AS tags
+                   string_agg(transaction_tags.tag, ',' ORDER BY transaction_tags.tag) AS tags,
+                   t.created_at,
+                   t.updated_at
             FROM transactions AS t
             JOIN users ON users.id = t.payer_id
             LEFT JOIN transaction_tags ON transaction_tags.transaction_id = t.id
@@ -232,14 +242,19 @@ class SpendingStatisticsRepository(
         ) { resultSet, _ ->
             SpendingDetailTransaction(
                 id = resultSet.getLong("id"),
+                payerId = resultSet.getLong("payer_id"),
                 merchant = resultSet.getString("merchant"),
                 description = resultSet.getString("description"),
                 amount = resultSet.getLong("amount"),
                 occurredAt = resultSet.getObject("occurred_at", OffsetDateTime::class.java),
                 payerLabel = resultSet.getString("payer_label"),
                 paymentMethod = resultSet.getString("payment_method"),
+                cardIssuer = resultSet.getString("card_issuer"),
+                storedValueAccountId = resultSet.getObject("stored_value_account_id", Long::class.javaObjectType),
                 category = resultSet.getString("category"),
                 tags = resultSet.getString("tags")?.split(",") ?: emptyList(),
+                createdAt = resultSet.getObject("created_at", OffsetDateTime::class.java),
+                updatedAt = resultSet.getObject("updated_at", OffsetDateTime::class.java),
             )
         }
 
