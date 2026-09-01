@@ -174,6 +174,12 @@ class SpendingStatisticsControllerTests(
                 jsonPath("$.dailyTransactions", hasSize<Any>(2))
                 jsonPath("$.dailyTransactions[0].merchant") { value("새벽 식당") }
                 jsonPath("$.dailyTransactions[0].description") { value("야식") }
+                jsonPath("$.dailyTransactions[0].payerId") { value(currentUser.id) }
+                jsonPath("$.dailyTransactions[0].category") { value("FOOD") }
+                jsonPath("$.dailyTransactions[0].tags[0]") { value("SUBSCRIPTION") }
+                jsonPath("$.dailyTransactions[0].paymentMethod") { value("CARD") }
+                jsonPath("$.dailyTransactions[0].cardIssuer") { value("SHINHAN") }
+                jsonPath("$.dailyTransactions[0].updatedAt") { exists() }
                 jsonPath("$.dailyTransactions[0].payerLabel") { value("첫 번째 사용자") }
                 jsonPath("$.dailyTransactions[0].paymentMethodLabel") { value("카드") }
                 jsonPath("$.dailyTransactions[0].categoryLabel") { value("식비") }

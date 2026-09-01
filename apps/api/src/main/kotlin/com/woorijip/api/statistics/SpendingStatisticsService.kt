@@ -2,6 +2,8 @@ package com.woorijip.api.statistics
 
 import com.woorijip.api.auth.CurrentUser
 import com.woorijip.api.household.HouseholdMembershipRepository
+import com.woorijip.api.transaction.CardIssuer
+import com.woorijip.api.transaction.PaymentMethod
 import com.woorijip.api.transaction.TransactionCategory
 import com.woorijip.api.transaction.TransactionTag
 import org.springframework.stereotype.Service
@@ -40,10 +42,18 @@ data class DailySpendingBreakdown(
 
 data class DailySpendingTransaction(
     val id: Long,
+    val payerId: Long,
     val merchant: String,
     val description: String?,
     val amount: Long,
     val occurredAt: OffsetDateTime,
+    val category: TransactionCategory,
+    val tags: List<TransactionTag>,
+    val paymentMethod: PaymentMethod,
+    val cardIssuer: CardIssuer?,
+    val storedValueAccountId: Long?,
+    val createdAt: OffsetDateTime,
+    val updatedAt: OffsetDateTime,
     val payerLabel: String,
     val paymentMethodLabel: String,
     val categoryLabel: String,
@@ -213,10 +223,18 @@ class SpendingStatisticsService(
                 ).map { transaction ->
                     DailySpendingTransaction(
                         id = transaction.id,
+                        payerId = transaction.payerId,
                         merchant = transaction.merchant,
                         description = transaction.description,
                         amount = transaction.amount,
                         occurredAt = transaction.occurredAt,
+                        category = TransactionCategory.valueOf(transaction.category),
+                        tags = transaction.tags.map(TransactionTag::valueOf),
+                        paymentMethod = PaymentMethod.valueOf(transaction.paymentMethod),
+                        cardIssuer = transaction.cardIssuer?.let(CardIssuer::valueOf),
+                        storedValueAccountId = transaction.storedValueAccountId,
+                        createdAt = transaction.createdAt,
+                        updatedAt = transaction.updatedAt,
                         payerLabel = transaction.payerLabel,
                         paymentMethodLabel = paymentMethodLabel(transaction.paymentMethod),
                         categoryLabel = TransactionCategory.valueOf(transaction.category).label,

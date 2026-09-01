@@ -7,18 +7,19 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AuthenticatedShell } from "./authenticated-shell";
+import type { StoredValueAccount } from "./stored-value-account-panel";
 import {
   calendarReturnUrl,
   dailyStatsUrl,
   type SpendingPayer,
 } from "./stats-url-state";
+import {
+  TransactionEditForm,
+  type EditableTransaction,
+} from "./transaction-edit-form";
+import type { HouseholdMember } from "./transaction-form";
 
-type DailySpendingTransaction = {
-  id: number;
-  merchant: string;
-  description: string | null;
-  amount: number;
-  occurredAt: string;
+type DailySpendingTransaction = EditableTransaction & {
   payerLabel: string;
   paymentMethodLabel: string;
   categoryLabel: string;
@@ -32,7 +33,7 @@ type DailySpendingStatistics = {
     childcareAmount: number;
     transactionCount: number;
   };
-  dailyTransactions?: DailySpendingTransaction[];
+  dailyTransactions?: DailySpendingTransaction[] | null;
 };
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
@@ -79,6 +80,14 @@ export function DailySpendingDetailsPanel({
     statistics: DailySpendingStatistics | null;
     error: string | null;
   }>({ requestKey: "", statistics: null, error: null });
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
+  const [editorResources, setEditorResources] = useState<{
+    householdMembers: HouseholdMember[];
+    storedValueAccounts: StoredValueAccount[];
+  } | null>(null);
+  const [editorError, setEditorError] = useState<string | null>(null);
+  const [isEditorLoading, setIsEditorLoading] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -108,12 +117,62 @@ export function DailySpendingDetailsPanel({
       });
 
     return () => controller.abort();
-  }, [date, payer, requestKey]);
+  }, [date, payer, refreshKey, requestKey]);
 
   const previousDate = moveDate(date, -1);
   const nextDate = moveDate(date, 1);
   const statistics = loadResult.requestKey === requestKey ? loadResult.statistics : null;
   const error = loadResult.requestKey === requestKey ? loadResult.error : null;
+  const editingTransaction = statistics?.dailyTransactions?.find(
+    (transaction) => transaction.id === editingTransactionId,
+  );
+
+  async function startEditing(transactionId: number) {
+    setEditingTransactionId(transactionId);
+    setEditorError(null);
+    if (editorResources) return;
+
+    setIsEditorLoading(true);
+    try {
+      const [membersResponse, accountsResponse] = await Promise.all([
+        fetch(`${apiUrl}/households/current/members`, {
+          cache: "no-store",
+          credentials: "include",
+        }),
+        fetch(`${apiUrl}/stored-value-accounts`, {
+          cache: "no-store",
+          credentials: "include",
+        }),
+      ]);
+      if (!membersResponse.ok || !accountsResponse.ok) {
+        throw new Error("거래 수정 정보를 불러오지 못했습니다.");
+      }
+      setEditorResources({
+        householdMembers: await membersResponse.json(),
+        storedValueAccounts: await accountsResponse.json(),
+      });
+    } catch (caughtError) {
+      setEditorError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "거래 수정 정보를 불러오지 못했습니다.",
+      );
+    } finally {
+      setIsEditorLoading(false);
+    }
+  }
+
+  function cancelEditing() {
+    setEditingTransactionId(null);
+    setEditorError(null);
+  }
+
+  function handleTransactionChanged() {
+    setEditingTransactionId(null);
+    setEditorResources(null);
+    setLoadResult({ requestKey, statistics: null, error: null });
+    setRefreshKey((current) => current + 1);
+  }
 
   return (
     <section className="mx-auto mb-8 w-full max-w-6xl">
@@ -160,7 +219,22 @@ export function DailySpendingDetailsPanel({
       ) : (
         <>
           <DailySummary statistics={statistics} />
-          <DailyTransactionDetails transactions={statistics.dailyTransactions ?? []} />
+          {statistics.dailyTransactions == null ? (
+            <p className="mt-8 rounded-xl bg-red-50 px-5 py-4 text-sm text-red-700" role="alert">
+              이날 거래 상세를 불러오지 못했습니다.
+            </p>
+          ) : (
+            <DailyTransactionDetails
+              editorError={editorError}
+              editorResources={editorResources}
+              editingTransaction={editingTransaction ?? null}
+              isEditorLoading={isEditorLoading}
+              onCancelEdit={cancelEditing}
+              onChanged={handleTransactionChanged}
+              onEdit={(transactionId) => void startEditing(transactionId)}
+              transactions={statistics.dailyTransactions}
+            />
+          )}
         </>
       )}
     </section>
@@ -187,7 +261,28 @@ function DailySummaryFact({ label, value }: { label: string; value: string }) {
   );
 }
 
-function DailyTransactionDetails({ transactions }: { transactions: DailySpendingTransaction[] }) {
+function DailyTransactionDetails({
+  transactions,
+  editingTransaction,
+  editorResources,
+  editorError,
+  isEditorLoading,
+  onEdit,
+  onCancelEdit,
+  onChanged,
+}: {
+  transactions: DailySpendingTransaction[];
+  editingTransaction: DailySpendingTransaction | null;
+  editorResources: {
+    householdMembers: HouseholdMember[];
+    storedValueAccounts: StoredValueAccount[];
+  } | null;
+  editorError: string | null;
+  isEditorLoading: boolean;
+  onEdit: (transactionId: number) => void;
+  onCancelEdit: () => void;
+  onChanged: () => void;
+}) {
   return (
     <section aria-labelledby="daily-transaction-details-title" className="mt-8 border-y border-border-soft">
       <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-4">
@@ -199,7 +294,37 @@ function DailyTransactionDetails({ transactions }: { transactions: DailySpending
         </p>
       </header>
 
-      {transactions.length === 0 ? (
+      {editingTransaction ? (
+        <div className="border-t border-border-soft py-5">
+          {isEditorLoading ? (
+            <p className="py-8 text-sm text-stone-600" role="status">
+              거래 수정 정보를 불러오고 있습니다.
+            </p>
+          ) : editorError ? (
+            <div className="rounded-xl bg-red-50 px-5 py-4 text-sm text-red-700" role="alert">
+              <p>{editorError}</p>
+              <button
+                className="mt-3 min-h-11 whitespace-nowrap font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus active:text-red-900"
+                onClick={() => onEdit(editingTransaction.id)}
+                type="button"
+              >
+                다시 시도
+              </button>
+            </div>
+          ) : editorResources ? (
+            <>
+              <h4 className="mb-4 text-lg font-semibold text-foreground">거래 수정</h4>
+              <TransactionEditForm
+                householdMembers={editorResources.householdMembers}
+                onCancel={onCancelEdit}
+                onChanged={onChanged}
+                storedValueAccounts={editorResources.storedValueAccounts}
+                transaction={editingTransaction}
+              />
+            </>
+          ) : null}
+        </div>
+      ) : transactions.length === 0 ? (
         <p className="border-t border-border-soft py-8 text-sm text-stone-600">
           이날에는 기록된 거래가 없습니다.
         </p>
@@ -216,6 +341,7 @@ function DailyTransactionDetails({ transactions }: { transactions: DailySpending
                   <th className="whitespace-nowrap px-3 py-3 font-medium" scope="col">결제수단</th>
                   <th className="px-3 py-3 font-medium" scope="col">분류</th>
                   <th className="whitespace-nowrap px-3 py-3 text-right font-medium" scope="col">금액</th>
+                  <th className="px-3 py-3" scope="col"><span className="sr-only">작업</span></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-soft">
@@ -233,6 +359,16 @@ function DailyTransactionDetails({ transactions }: { transactions: DailySpending
                       {transaction.tagLabels.length > 0 ? <p className="mt-1 text-xs text-stone-600">{transaction.tagLabels.join(" · ")}</p> : null}
                     </td>
                     <td className="whitespace-nowrap px-3 py-4 text-right align-top font-ui font-semibold text-stone-900 tabular-nums">{amountFormatter.format(transaction.amount)}원</td>
+                    <td className="px-3 py-2 text-right align-top">
+                      <button
+                        aria-label={`${transaction.merchant} 거래 수정`}
+                        className="min-h-11 whitespace-nowrap px-2 text-sm font-medium text-accent-strong hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus active:text-accent"
+                        onClick={() => onEdit(transaction.id)}
+                        type="button"
+                      >
+                        수정
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -243,7 +379,7 @@ function DailyTransactionDetails({ transactions }: { transactions: DailySpending
             {transactions.map((transaction) => (
               <li className="py-4" key={transaction.id}>
                 <div className="flex min-w-0 items-baseline justify-between gap-4">
-                  <p className="min-w-0 truncate font-medium text-stone-900">{transaction.merchant}</p>
+                  <p className="min-w-0 font-medium text-stone-900 [overflow-wrap:anywhere]">{transaction.merchant}</p>
                   <p className="shrink-0 font-ui font-semibold text-stone-900 tabular-nums">{amountFormatter.format(transaction.amount)}원</p>
                 </div>
                 {transaction.description ? <p className="mt-1 text-sm text-stone-700 [overflow-wrap:anywhere]">{transaction.description}</p> : null}
@@ -252,6 +388,13 @@ function DailyTransactionDetails({ transactions }: { transactions: DailySpending
                   · {transaction.payerLabel} · {transaction.paymentMethodLabel} · {transaction.categoryLabel}
                   {transaction.tagLabels.length > 0 ? ` · ${transaction.tagLabels.join(" · ")}` : ""}
                 </p>
+                <button
+                  className="mt-2 min-h-11 whitespace-nowrap px-2 text-sm font-medium text-accent-strong hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus active:text-accent"
+                  onClick={() => onEdit(transaction.id)}
+                  type="button"
+                >
+                  거래 수정
+                </button>
               </li>
             ))}
           </ul>
