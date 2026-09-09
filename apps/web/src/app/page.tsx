@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AiTransactionDraftForm } from "./ai-transaction-draft-form";
+import { AiConsentNotice } from "./ai-consent-notice";
 import {
   AuthenticatedShell,
   type CurrentUser,
@@ -346,11 +347,13 @@ export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) 
             카드 내역 캡처로 여러 건 입력
           </Link>
           <div className="mt-7">
-            <AiTransactionDraftForm
-              householdMembers={householdMembers}
-              onCreated={handleTransactionCreated}
-              storedValueAccounts={storedValueAccounts}
-            />
+            {currentUser.privacyConsent.aiOverseasTransferAgreed ? (
+              <AiTransactionDraftForm
+                householdMembers={householdMembers}
+                onCreated={handleTransactionCreated}
+                storedValueAccounts={storedValueAccounts}
+              />
+            ) : <AiConsentNotice />}
           </div>
           <div className="hidden lg:block">
             <StoredValueAccountPanel

@@ -5,6 +5,7 @@ import com.woorijip.api.ai.OpenAiProperties
 import com.woorijip.api.auth.CurrentUser
 import com.woorijip.api.error.ApiException
 import com.woorijip.api.error.ErrorCode
+import com.woorijip.api.privacy.PrivacyConsentService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.time.OffsetDateTime
@@ -38,17 +39,22 @@ class SpendingAnalysisService(
     private val generator: SpendingAnalysisGenerator,
     private val sensitiveInputGuard: AiSensitiveInputGuard,
     private val properties: OpenAiProperties,
+    private val privacyConsentService: PrivacyConsentService,
 ) {
     fun answer(
         currentUser: CurrentUser,
         question: String,
     ): SpendingAnalysisAnswer {
+        privacyConsentService.requireAiOverseasTransfer(currentUser.id)
         sensitiveInputGuard.requireSafe(listOf(question))
         val transactionLimit = properties.analysisTransactionLimit.coerceAtLeast(1)
         val loaded = repository.recentTransactions(currentUser.householdId, transactionLimit + 1)
         val safeTransactions = loaded
             .take(transactionLimit)
-            .filter { transaction -> sensitiveInputGuard.isSafeForExternalProcessing(transaction.merchant) }
+            .filter { transaction ->
+                privacyConsentService.hasAiOverseasTransfer(transaction.payerId) &&
+                    sensitiveInputGuard.isSafeForExternalProcessing(transaction.merchant)
+            }
         val dataLimited = loaded.size > transactionLimit || safeTransactions.size < loaded.take(transactionLimit).size
         val dailyLimit = properties.analysisDailyRequestLimit.coerceAtLeast(1)
         val now = OffsetDateTime.now(SEOUL)

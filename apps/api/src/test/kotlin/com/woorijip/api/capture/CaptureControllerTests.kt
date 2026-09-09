@@ -3,6 +3,8 @@ package com.woorijip.api.capture
 import com.woorijip.api.TestcontainersConfiguration
 import com.woorijip.api.auth.GoogleAccountService
 import com.woorijip.api.auth.TestOidcUsers
+import com.woorijip.api.auth.CurrentUser
+import com.woorijip.api.privacy.PrivacyConsentService
 import com.woorijip.api.transaction.TransactionCategory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -34,11 +36,12 @@ class CaptureControllerTests(
     @Autowired private val accounts: GoogleAccountService,
     @Autowired private val mapper: ObjectMapper,
     @Autowired private val generator: StubCaptureGenerator,
+    @Autowired private val privacyConsentService: PrivacyConsentService,
 ) {
 
     @Test
     fun `applies a batch once and marks later duplicates`() {
-        val user = accounts.provision(TestOidcUsers.allowed())
+        val user = provisionAllowed()
         val body = request(user.id)
         repeat(2) { post("apply", body).andExpect { status { isOk() }; jsonPath("$.savedCount") { value(1) } } }
         post("check", request(user.id)).andExpect { status { isOk() }; jsonPath("$[0].duplicate") { value(true) } }
@@ -48,7 +51,7 @@ class CaptureControllerTests(
 
     @Test
     fun `requires authentication csrf household ownership and valid nested candidates`() {
-        val user = accounts.provision(TestOidcUsers.allowed())
+        val user = provisionAllowed()
         mvc.post("/transaction-captures/apply") { contentType = MediaType.APPLICATION_JSON; content = request(user.id); with(csrf()) }.andExpect { status { isUnauthorized() } }
         mvc.post("/transaction-captures/apply") { contentType = MediaType.APPLICATION_JSON; content = request(user.id); with(oidcLogin().oidcUser(TestOidcUsers.allowed())) }.andExpect { status { isForbidden() } }
         post("apply", request(Long.MAX_VALUE)).andExpect { status { isBadRequest() } }
@@ -60,7 +63,7 @@ class CaptureControllerTests(
 
     @Test
     fun `checks safety before analysis and rejects invalid images without invoking AI`() {
-        accounts.provision(TestOidcUsers.allowed())
+        provisionAllowed()
         val callsBeforeTest = generator.calls
         val invalid = MockMultipartFile("file", "capture.png", "image/png", byteArrayOf(1, 2, 3))
         mvc.perform(multipart("/transaction-captures/analyze").file(invalid).param("cardIssuer", "SHINHAN").param("year", "2026").with(csrf()).with(oidcLogin().oidcUser(TestOidcUsers.allowed()))).andExpect(status().isBadRequest)
@@ -76,6 +79,11 @@ class CaptureControllerTests(
     private fun post(action: String, body: String) = mvc.post("/transaction-captures/$action") {
         contentType = MediaType.APPLICATION_JSON; content = body; with(csrf()); with(oidcLogin().oidcUser(TestOidcUsers.allowed()))
     }
+
+    private fun provisionAllowed(): CurrentUser =
+        accounts.provision(TestOidcUsers.allowed()).also { user ->
+            privacyConsentService.update(user.id, privacyPolicyAgreed = true, aiOverseasTransferAgreed = true)
+        }
 
     private fun request(payer: Long): String = mapper.writeValueAsString(mapOf(
         "requestId" to UUID.randomUUID(), "payerId" to payer, "cardIssuer" to "SHINHAN",

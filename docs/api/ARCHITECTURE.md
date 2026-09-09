@@ -43,6 +43,20 @@ Spring API ──▶ PostgreSQL
 
 중간에 문제가 생기면 `error/ApiExceptionHandler.kt`가 받아서 오류 JSON을 만든다.
 
+로그인 후 개인정보 동의는 다음 경로를 지난다.
+
+| 순서 | 파일 | 하는 일 |
+| --- | --- | --- |
+| 1 | `auth/AuthController.kt` | 현재 사용자와 현재 방침 버전별 동의 상태를 함께 반환한다 |
+| 2 | `privacy/PrivacyConsentController.kt` | 필수 개인정보 처리 동의와 선택 AI 국외 이전 동의를 분리해 받는다 |
+| 3 | `privacy/PrivacyConsentService.kt` | 현재 버전 동의 여부를 판단하고 AI 기능 실행 전 선택 동의를 검사한다 |
+| 4 | `privacy/PrivacyConsentRepository.kt` | 사용자별 동의·철회 이벤트를 시각순으로 저장하고 최신 상태를 조회한다 |
+| 5 | `V18__create_privacy_consent_events.sql` | 버전별 동의 이력을 사용자 소유 데이터로 보존한다 |
+
+웹은 필수 동의 전 앱 내용을 렌더링하지 않는다. AI 거래 초안, 자유 형식 가계 분석과
+카드 캡처 분석 Service는 OpenAI 호출 전에 선택 동의를 다시 검사한다. 가계 분석은
+동의하지 않은 household 구성원의 거래도 외부 전송 목록에서 제외한다.
+
 읽는 순서를 하나만 고르라면 **Controller → Service → Repository**다. 이 세 개만
 따라가면 대부분의 기능을 이해할 수 있다.
 
@@ -63,10 +77,11 @@ AI 자연어 거래 입력은 다음 경로를 지난다.
 | 순서 | 파일 | 하는 일 |
 | --- | --- | --- |
 | 1 | `ai/AiTransactionDraftController.kt` | 최대 세 개의 사용자 메시지 형식과 길이를 검증한다 |
-| 2 | `ai/AiSensitiveInputGuard.kt` | 외부 전송 금지 데이터가 있으면 요청을 400으로 거부한다 |
-| 3 | `ai/AiTransactionDraftService.kt` | 메시지를 한 거래 문맥으로 합치고 현재 시각과 내부 사용자 ID를 생성 문맥에 넣는다 |
-| 4 | `ai/OpenAiTransactionDraftGenerator.kt` | 프롬프트와 응답 스키마를 만들고 Responses API를 호출한다 |
-| 5 | `ai/AiTransactionDraftService.kt` | 모델 출력을 서버 규칙으로 검증하고 household 구성원 결제자로 변환한다 |
+| 2 | `privacy/PrivacyConsentService.kt` | 현재 OpenAI 국외 이전 동의가 없으면 요청을 403으로 거부한다 |
+| 3 | `ai/AiSensitiveInputGuard.kt` | 외부 전송 금지 데이터가 있으면 요청을 400으로 거부한다 |
+| 4 | `ai/AiTransactionDraftService.kt` | 메시지를 한 거래 문맥으로 합치고 현재 시각과 내부 사용자 ID를 생성 문맥에 넣는다 |
+| 5 | `ai/OpenAiTransactionDraftGenerator.kt` | 프롬프트와 응답 스키마를 만들고 Responses API를 호출한다 |
+| 6 | `ai/AiTransactionDraftService.kt` | 모델 출력을 서버 규칙으로 검증하고 household 구성원 결제자로 변환한다 |
 
 기간별 지출 통계와 반복 지출 설명은 다음 경로를 지난다.
 

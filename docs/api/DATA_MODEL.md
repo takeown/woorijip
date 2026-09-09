@@ -2,7 +2,7 @@
 
 마지막 수정: 2026-09-09
 
-현재 기준: Flyway V17
+현재 기준: Flyway V18
 
 이 문서는 데이터 관계, 소유권과 금액 의미를 빠르게 이해하기 위한 안내서다. 실제
 PostgreSQL 스키마의 유일한 기준은 `apps/api/src/main/resources/db/migration`의 Flyway
@@ -23,6 +23,7 @@ migration이다. 모든 컬럼 타입과 인덱스를 이 문서에 복사하지
 ```mermaid
 erDiagram
     USERS ||--o{ AUTH_IDENTITIES : "로그인 수단"
+    USERS ||--o{ PRIVACY_CONSENT_EVENTS : "동의 이력"
     USERS ||--o{ HOUSEHOLD_MEMBERSHIPS : "참여"
     HOUSEHOLDS ||--o{ HOUSEHOLD_MEMBERSHIPS : "구성원"
 
@@ -54,6 +55,14 @@ erDiagram
         bigint user_id FK
         string provider
         string provider_subject
+    }
+    PRIVACY_CONSENT_EVENTS {
+        bigint id PK
+        bigint user_id FK
+        string consent_type
+        string policy_version
+        boolean agreed
+        datetime created_at
     }
     HOUSEHOLDS {
         bigint id PK
@@ -146,6 +155,11 @@ erDiagram
 `capture_batches`는 사용자가 확인한 캡처 후보 묶음을 같은 요청 UUID로 두 번 저장하지 않기
 위한 기록이다. 원본 이미지나 OCR 결과, 거래 후보 원문은 저장하지 않고 요청 내용의 SHA-256
 fingerprint와 실제 저장 건수만 보존한다.
+
+`privacy_consent_events`는 사용자별 필수 개인정보 처리방침과 선택 AI 국외 이전의 동의·철회
+이력을 버전과 시각과 함께 보존한다. 현재 상태는 동의 종류별 최신 이벤트가 현재 방침 버전과
+일치하는지로 판단한다. 기존 사용자를 자동으로 동의 처리하지 않으며 사용자 삭제 시 이력도
+함께 삭제된다.
 
 ## 소유권 경계
 

@@ -4,11 +4,22 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ReactNode, useEffect, useState } from "react";
 import { BrandLogo } from "./brand-logo";
+import { PrivacyConsentForm } from "./privacy-consent-form";
+
+export type PrivacyConsentStatus = {
+  privacyPolicyVersion: string;
+  privacyPolicyAgreed: boolean;
+  privacyPolicyAgreedAt: string | null;
+  aiOverseasTransferVersion: string;
+  aiOverseasTransferAgreed: boolean;
+  aiOverseasTransferAgreedAt: string | null;
+};
 
 export type CurrentUser = {
   id: number;
   displayName: string;
   householdId: number;
+  privacyConsent: PrivacyConsentStatus;
 };
 
 type CsrfToken = {
@@ -124,6 +135,28 @@ export function AuthenticatedShell({ children }: AuthenticatedShellProps) {
           >
             Google 계정으로 로그인
           </a>
+          <Link className="mt-5 inline-block text-sm text-stone-600 underline underline-offset-4" href="/privacy">
+            개인정보 처리방침
+          </Link>
+        </section>
+      </main>
+    );
+  }
+
+  if (!currentUser.privacyConsent.privacyPolicyAgreed) {
+    return (
+      <main className="min-h-screen bg-stone-100 px-4 py-8 text-stone-900 sm:px-6">
+        <section className="mx-auto max-w-xl rounded-3xl border border-stone-200 bg-stone-50 p-5 shadow-sm sm:p-8">
+          <p className="text-sm font-medium text-emerald-700">처음 한 번만 확인해 주세요</p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight">개인정보 동의</h1>
+          <p className="mt-3 text-sm leading-6 text-stone-600">필수 동의와 선택 동의를 구분해 저장합니다.</p>
+          <div className="mt-6">
+            <PrivacyConsentForm
+              initialStatus={currentUser.privacyConsent}
+              onSaved={(privacyConsent) => setCurrentUser({ ...currentUser, privacyConsent })}
+            />
+          </div>
+          <button className="mt-5 min-h-11 text-sm font-medium text-stone-600 underline underline-offset-4" onClick={logout} type="button">로그아웃</button>
         </section>
       </main>
     );
@@ -140,6 +173,7 @@ export function AuthenticatedShell({ children }: AuthenticatedShellProps) {
           <span>우리집</span>
         </Link>
         <div className="flex items-center gap-3 text-sm text-stone-600">
+          <Link className="min-h-11 content-center px-1" href="/privacy/settings" aria-label="개인정보 설정">설정</Link>
           <span className="max-w-28 truncate">{currentUser.displayName}</span>
           <button
             className="min-h-11 px-2 font-medium text-emerald-700 hover:text-emerald-800"
@@ -173,6 +207,7 @@ export function AuthenticatedShell({ children }: AuthenticatedShellProps) {
           </nav>
         </div>
         <div className="flex items-center gap-4 text-sm text-stone-600">
+          <Link className="hover:text-stone-900" href="/privacy/settings">개인정보 설정</Link>
           <span>{currentUser.displayName}</span>
           <button
             className="font-medium text-emerald-700 hover:text-emerald-800"

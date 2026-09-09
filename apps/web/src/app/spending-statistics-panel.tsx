@@ -5,6 +5,7 @@
 "use client";
 
 import Link from "next/link";
+import { AiConsentNotice } from "./ai-consent-notice";
 import { FormEvent, useEffect, useState } from "react";
 import {
   dailyStatsUrl,
@@ -93,6 +94,7 @@ type SpendingStatistics = {
 };
 
 type SpendingStatisticsPanelProps = {
+  aiEnabled?: boolean;
   initialState?: StatsUrlState;
   refreshKey: number;
 };
@@ -141,7 +143,7 @@ const compactAmountFormatter = new Intl.NumberFormat("ko-KR", {
 });
 const WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"] as const;
 
-export function SpendingStatisticsPanel({ initialState, refreshKey }: SpendingStatisticsPanelProps) {
+export function SpendingStatisticsPanel({ aiEnabled = true, initialState, refreshKey }: SpendingStatisticsPanelProps) {
   const [viewState, setViewState] = useState<StatsUrlState>(() =>
     initialState ?? {
       calendarExpanded: false,
@@ -329,7 +331,7 @@ export function SpendingStatisticsPanel({ initialState, refreshKey }: SpendingSt
         </div>
       </div>
 
-      <SpendingQuestion />
+      {aiEnabled ? <SpendingQuestion /> : <div className="mt-8"><AiConsentNotice /></div>}
 
       {isLoading ? (
         <div className="mt-8 border-y border-border-soft bg-surface-muted px-5 py-12 text-center text-stone-600" role="status">

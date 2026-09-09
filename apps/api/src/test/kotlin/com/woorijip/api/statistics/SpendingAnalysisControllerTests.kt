@@ -2,6 +2,7 @@ package com.woorijip.api.statistics
 
 import com.woorijip.api.TestcontainersConfiguration
 import com.woorijip.api.auth.GoogleAccountService
+import com.woorijip.api.auth.CurrentUser
 import com.woorijip.api.auth.TestOidcUsers
 import com.woorijip.api.household.Household
 import com.woorijip.api.household.HouseholdMembership
@@ -9,6 +10,7 @@ import com.woorijip.api.household.HouseholdMembershipRepository
 import com.woorijip.api.household.HouseholdRepository
 import com.woorijip.api.identity.AppUser
 import com.woorijip.api.identity.AppUserRepository
+import com.woorijip.api.privacy.PrivacyConsentService
 import com.woorijip.api.transaction.CardIssuer
 import com.woorijip.api.transaction.PaymentMethod
 import com.woorijip.api.transaction.Transaction
@@ -51,10 +53,31 @@ class SpendingAnalysisControllerTests(
     @Autowired private val householdRepository: HouseholdRepository,
     @Autowired private val householdMembershipRepository: HouseholdMembershipRepository,
     @Autowired private val transactionRepository: TransactionRepository,
+    @Autowired private val privacyConsentService: PrivacyConsentService,
 ) {
     @Test
+    fun `excludes transactions of a household member without AI consent`() {
+        val currentUser = provisionAllowed()
+        val partnerId = createMember(currentUser.householdId, "배우자")
+        saveTransaction(currentUser.householdId, partnerId, "배우자 고액 결제", 200_000)
+        saveTransaction(currentUser.householdId, currentUser.id, "내 결제", 10_000)
+
+        mockMvc
+            .post("/statistics/spending-answers") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"question":"어디에 가장 많이 썼어?"}"""
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.answer") { value("내 결제 지출이 가장 컸어요.") }
+                jsonPath("$.dataLimited") { value(true) }
+            }
+    }
+
+    @Test
     fun `answers from current household records and returns validated evidence`() {
-        val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
+        val currentUser = provisionAllowed()
         saveTransaction(currentUser.householdId, currentUser.id, "동네 마트", 32_000)
         saveTransaction(currentUser.householdId, currentUser.id, "빵집", 8_000)
         val otherHouseholdId = createHousehold("다른 집")
@@ -80,7 +103,7 @@ class SpendingAnalysisControllerTests(
 
     @Test
     fun `returns no data without consuming the daily limit`() {
-        googleAccountService.provision(TestOidcUsers.allowed())
+        provisionAllowed()
 
         mockMvc
             .post("/statistics/spending-answers") {
@@ -98,7 +121,7 @@ class SpendingAnalysisControllerTests(
 
     @Test
     fun `removes sensitive stored merchants and reports a limited dataset`() {
-        val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
+        val currentUser = provisionAllowed()
         saveTransaction(currentUser.householdId, currentUser.id, "카드번호 4111-1111-1111-1111", 10_000)
         saveTransaction(currentUser.householdId, currentUser.id, "안전한 가맹점", 8_000)
 
@@ -118,7 +141,7 @@ class SpendingAnalysisControllerTests(
 
     @Test
     fun `rejects unsafe questions before consuming usage`() {
-        val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
+        val currentUser = provisionAllowed()
         saveTransaction(currentUser.householdId, currentUser.id, "동네 마트", 32_000)
 
         mockMvc
@@ -138,7 +161,7 @@ class SpendingAnalysisControllerTests(
 
     @Test
     fun `enforces the household daily request limit`() {
-        val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
+        val currentUser = provisionAllowed()
         saveTransaction(currentUser.householdId, currentUser.id, "동네 마트", 32_000)
 
         askSuccessfully()
@@ -157,7 +180,7 @@ class SpendingAnalysisControllerTests(
 
     @Test
     fun `validates evidence references and requires authentication`() {
-        val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
+        val currentUser = provisionAllowed()
         saveTransaction(currentUser.householdId, currentUser.id, "동네 마트", 32_000)
 
         mockMvc
@@ -242,6 +265,11 @@ class SpendingAnalysisControllerTests(
     }
 
     private fun allowedOidcLogin() = oidcLogin().oidcUser(TestOidcUsers.allowed())
+
+    private fun provisionAllowed(): CurrentUser =
+        googleAccountService.provision(TestOidcUsers.allowed()).also { user ->
+            privacyConsentService.update(user.id, privacyPolicyAgreed = true, aiOverseasTransferAgreed = true)
+        }
 
     private companion object {
         val now: OffsetDateTime = OffsetDateTime.parse("2026-08-12T12:00:00+09:00")

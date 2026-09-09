@@ -80,6 +80,8 @@ lightsail:CloseInstancePublicPorts
 ## 서버 초기 설정
 
 저장소의 `deploy/.env.example`을 참고해 서버에 운영 환경변수를 만든다.
+`PRIVACY_CONTROLLER_NAME`과 `PRIVACY_CONTACT_EMAIL`에는 공개 처리방침에 표시할 실제
+운영자 이름과 문의 이메일을 넣는다.
 
 ```bash
 mkdir -p ~/woorijip/deploy

@@ -4,6 +4,7 @@ import com.woorijip.api.ai.AiSensitiveInputGuard
 import com.woorijip.api.auth.CurrentUser
 import com.woorijip.api.error.ApiException
 import com.woorijip.api.error.ErrorCode
+import com.woorijip.api.privacy.PrivacyConsentService
 import com.woorijip.api.transaction.CardIssuer
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Service
@@ -18,10 +19,12 @@ class CaptureService(
     private val generator: CaptureGenerator,
     private val guard: AiSensitiveInputGuard,
     private val jdbc: NamedParameterJdbcTemplate,
+    private val privacyConsentService: PrivacyConsentService,
 ) {
     private val slot = Semaphore(1)
 
     fun analyze(user: CurrentUser, image: ByteArray, issuer: CardIssuer, year: Int): GeneratedCapture {
+        privacyConsentService.requireAiOverseasTransfer(user.id)
         if (!slot.tryAcquire()) throw ApiException(ErrorCode.AI_USAGE_LIMIT_EXCEEDED, "다른 캡처를 처리하고 있습니다. 잠시 후 다시 시도해 주세요.")
         try {
             safetyGate.validate(image)

@@ -2,11 +2,13 @@ package com.woorijip.api.ai
 
 import com.woorijip.api.TestcontainersConfiguration
 import com.woorijip.api.auth.GoogleAccountService
+import com.woorijip.api.auth.CurrentUser
 import com.woorijip.api.auth.TestOidcUsers
 import com.woorijip.api.household.HouseholdMembership
 import com.woorijip.api.household.HouseholdMembershipRepository
 import com.woorijip.api.identity.AppUser
 import com.woorijip.api.identity.AppUserRepository
+import com.woorijip.api.privacy.PrivacyConsentService
 import com.woorijip.api.storedvalue.StoredValueAutomationKey
 import com.woorijip.api.transaction.TransactionRepository
 import com.woorijip.api.transaction.CardIssuer
@@ -46,10 +48,27 @@ class AiTransactionDraftControllerTests(
     @Autowired private val appUserRepository: AppUserRepository,
     @Autowired private val householdMembershipRepository: HouseholdMembershipRepository,
     @Autowired private val transactionRepository: TransactionRepository,
+    @Autowired private val privacyConsentService: PrivacyConsentService,
 ) {
     @Test
+    fun `requires separate OpenAI overseas transfer consent`() {
+        googleAccountService.provision(TestOidcUsers.allowed())
+
+        mockMvc
+            .post("/ai/transaction-drafts") {
+                with(allowedOidcLogin())
+                with(csrf())
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"messages":["김밥천국 8천원"]}"""
+            }.andExpect {
+                status { isForbidden() }
+                jsonPath("$.code") { value("AI_OVERSEAS_TRANSFER_CONSENT_REQUIRED") }
+            }
+    }
+
+    @Test
     fun `creates a draft without saving a transaction`() {
-        val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
+        val currentUser = provisionAllowed()
 
         mockMvc
             .post("/ai/transaction-drafts") {
@@ -74,7 +93,7 @@ class AiTransactionDraftControllerTests(
 
     @Test
     fun `creates an Onnuri QR draft without asking whether it is card or cash`() {
-        googleAccountService.provision(TestOidcUsers.allowed())
+        provisionAllowed()
 
         mockMvc
             .post("/ai/transaction-drafts") {
@@ -95,7 +114,7 @@ class AiTransactionDraftControllerTests(
 
     @Test
     fun `keeps the card issuer and Onnuri balance separate for a linked card draft`() {
-        googleAccountService.provision(TestOidcUsers.allowed())
+        provisionAllowed()
 
         mockMvc
             .post("/ai/transaction-drafts") {
@@ -114,7 +133,7 @@ class AiTransactionDraftControllerTests(
 
     @Test
     fun `maps a partner payer within the current household`() {
-        val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
+        val currentUser = provisionAllowed()
         val partnerId = createMember(currentUser.householdId, "배우자")
 
         mockMvc
@@ -134,7 +153,7 @@ class AiTransactionDraftControllerTests(
 
     @Test
     fun `rejects unsupported and incomplete generated drafts`() {
-        googleAccountService.provision(TestOidcUsers.allowed())
+        provisionAllowed()
 
         mockMvc
             .post("/ai/transaction-drafts") {
@@ -162,7 +181,7 @@ class AiTransactionDraftControllerTests(
 
     @Test
     fun `combines follow-up answers into a completed draft`() {
-        googleAccountService.provision(TestOidcUsers.allowed())
+        provisionAllowed()
 
         mockMvc
             .post("/ai/transaction-drafts") {
@@ -181,7 +200,7 @@ class AiTransactionDraftControllerTests(
 
     @Test
     fun `asks for clarification when generated payment details are incomplete`() {
-        googleAccountService.provision(TestOidcUsers.allowed())
+        provisionAllowed()
 
         mockMvc
             .post("/ai/transaction-drafts") {
@@ -198,7 +217,7 @@ class AiTransactionDraftControllerTests(
 
     @Test
     fun `validates the request and requires authentication`() {
-        googleAccountService.provision(TestOidcUsers.allowed())
+        provisionAllowed()
 
         mockMvc
             .post("/ai/transaction-drafts") {
@@ -232,7 +251,7 @@ class AiTransactionDraftControllerTests(
 
     @Test
     fun `rejects sensitive data before generating a draft`() {
-        googleAccountService.provision(TestOidcUsers.allowed())
+        provisionAllowed()
 
         mockMvc
             .post("/ai/transaction-drafts") {
@@ -267,6 +286,11 @@ class AiTransactionDraftControllerTests(
     }
 
     private fun allowedOidcLogin() = oidcLogin().oidcUser(TestOidcUsers.allowed())
+
+    private fun provisionAllowed(): CurrentUser =
+        googleAccountService.provision(TestOidcUsers.allowed()).also { user ->
+            privacyConsentService.update(user.id, privacyPolicyAgreed = true, aiOverseasTransferAgreed = true)
+        }
 
     private companion object {
         val now: OffsetDateTime = OffsetDateTime.parse("2026-07-21T12:30:00+09:00")
