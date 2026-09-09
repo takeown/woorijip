@@ -114,6 +114,22 @@ AI 자연어 거래 입력은 다음 경로를 지난다.
 보내지 않으며, 성공 답변에 유효한 근거가 없으면 응답을 거부한다. 기본 비용 한도는
 household별 하루 20회, 최근 거래 200건, 출력 500토큰이다.
 
+카드 앱 이용내역 캡처는 다음 경로를 지난다.
+
+| 순서 | 파일 | 하는 일 |
+| --- | --- | --- |
+| 1 | capture/CaptureController.kt | 인증, 카드사·연도와 multipart 파일 한도를 검증한다 |
+| 2 | capture/CaptureImageSafetyGate.kt | 실제 이미지 형식과 크기를 확인하고 로컬 Tesseract OCR로 외부 전송 금지정보를 검사한다 |
+| 3 | capture/CaptureService.kt | household별 일일 사용량과 동시 처리를 제한한 뒤 안전검사를 통과한 원본을 generator에 전달한다 |
+| 4 | capture/OpenAiCaptureGenerator.kt | store false, HMAC safety identifier와 strict JSON Schema로 Responses API를 호출한다 |
+| 5 | capture/CaptureBatchService.kt | 후보의 결제자 소유권·중복·분류 추천을 확인하고 기존 TransactionService로 한 묶음 저장한다 |
+| 6 | V17__create_capture_batches.sql | 묶음 저장의 UUID·내용 fingerprint·저장 건수와 캡처 일일 사용량을 보존한다 |
+
+OCR은 거래를 추출하지 않고 민감정보 차단에만 사용한다. 전체 카드번호·계좌번호·개인정보가
+감지되거나 OCR이 실패하면 외부 요청을 보내지 않는다. 통과한 원본 이미지와 OCR 결과는
+저장하거나 로그에 남기지 않는다. 사용자가 선택한 후보만 저장하며 저장 직전에 기존 거래와
+같은 묶음 내부의 중복을 다시 확인한다.
+
 AI 요청에서 `AiSensitiveInputGuard`는 금지 데이터를 외부 전송 직전에 검사하고,
 `OpenAiSafetyIdentifier`는 내부 사용자 ID를 HMAC 가명 식별자로 바꾼다. 허용 전송
 필드, 저장 금지 데이터와 검증 기준은 `docs/SECURITY.md`를 따른다.
@@ -273,6 +289,7 @@ fun create(currentUser: CurrentUser, @Valid @RequestBody request: CreateTransact
 | 카테고리 목록 변경 | `transaction/TransactionClassification.kt` + 새 Flyway 파일(CHECK 제약도 함께) |
 | 상품권·바우처 잔액 변경 | `storedvalue/StoredValueAccountController.kt` → `StoredValueAccountService.kt` → `StoredValueAccountRepository.kt` |
 | 카드사 명세서 형식 추가 | `statement/CardStatementParser.kt` 구현 → parser 테스트 → 공통 대조·반영 테스트 |
+| 카드 앱 캡처 지원 변경 | `capture/CaptureController.kt` → `CaptureImageSafetyGate.kt` → `OpenAiCaptureGenerator.kt` → `CaptureBatchService.kt` |
 | 가맹점 분류 추천 변경 | `transaction/MerchantClassificationRuleController.kt` → `MerchantClassificationRuleService.kt` → `MerchantClassificationRuleRepository.kt` |
 | 새 API 주소 추가 | 해당 도메인 폴더에 Controller 함수 추가 |
 | 검증 규칙 변경 | 단순 형식이면 요청 클래스의 `@field:` 표시, 판단이 필요하면 Service |

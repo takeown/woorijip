@@ -1,8 +1,8 @@
 # 데이터 모델
 
-마지막 수정: 2026-08-12
+마지막 수정: 2026-09-09
 
-현재 기준: Flyway V16
+현재 기준: Flyway V17
 
 이 문서는 데이터 관계, 소유권과 금액 의미를 빠르게 이해하기 위한 안내서다. 실제
 PostgreSQL 스키마의 유일한 기준은 `apps/api/src/main/resources/db/migration`의 Flyway
@@ -29,6 +29,7 @@ erDiagram
     HOUSEHOLD_MEMBERSHIPS ||--o{ TRANSACTIONS : "결제자"
     HOUSEHOLDS ||--o{ TRANSACTIONS : "소유"
     HOUSEHOLDS ||--o{ AI_DAILY_USAGE : "AI 사용량"
+    HOUSEHOLDS ||--o{ CAPTURE_BATCHES : "캡처 저장 묶음"
     TRANSACTIONS ||--o{ TRANSACTION_TAGS : "태그"
 
     HOUSEHOLDS ||--o{ MERCHANT_CLASSIFICATION_RULES : "분류 규칙"
@@ -62,6 +63,13 @@ erDiagram
         bigint household_id PK,FK
         date usage_date PK
         int spending_analysis_requests
+        int capture_requests
+    }
+    CAPTURE_BATCHES {
+        bigint household_id PK,FK
+        uuid request_id PK
+        string fingerprint
+        int saved_count
     }
     HOUSEHOLD_MEMBERSHIPS {
         bigint id PK
@@ -131,9 +139,13 @@ erDiagram
 인프라 테이블이라 제품 데이터 ER 그림에서는 제외했다. 세션 속성은 세션 삭제 시 함께
 삭제된다.
 
-`ai_daily_usage`는 질문이나 답변 내용을 저장하지 않고 household와 서울 날짜별 가계 분석
-호출 횟수만 보존한다. `(household_id, usage_date)`가 한 행이며 household 삭제 시 함께
-삭제된다.
+`ai_daily_usage`는 질문, 답변, 이미지 내용을 저장하지 않고 household와 서울 날짜별 가계
+분석 및 캡처 분석 호출 횟수만 보존한다. `(household_id, usage_date)`가 한 행이며 household
+삭제 시 함께 삭제된다.
+
+`capture_batches`는 사용자가 확인한 캡처 후보 묶음을 같은 요청 UUID로 두 번 저장하지 않기
+위한 기록이다. 원본 이미지나 OCR 결과, 거래 후보 원문은 저장하지 않고 요청 내용의 SHA-256
+fingerprint와 실제 저장 건수만 보존한다.
 
 ## 소유권 경계
 
@@ -142,7 +154,7 @@ erDiagram
 `household_id`가 가계 데이터의 접근 제어 경계다. API는 요청에서 household ID를 받지
 않고 인증된 `CurrentUser`에서 결정한다.
 
-- 거래, 카드 명세서, 가맹점 분류 규칙과 잔액 계정은 household 범위에 속한다.
+- 거래, 카드 명세서, 캡처 저장 묶음, 가맹점 분류 규칙과 잔액 계정은 household 범위에 속한다.
 - `(household_id, user_id)`는 반드시 `household_memberships`에 존재해야 한다.
 - 다른 household의 객체 ID를 전달해도 Repository 조회에 `household_id`가 함께 들어간다.
 
@@ -241,6 +253,7 @@ erDiagram
 | household | membership, 분류 규칙, 잔액 계정과 AI 사용량은 cascade 대상이며 거래 참조가 있으면 삭제가 제한될 수 있음 |
 | 거래 | 거래 태그와 잔액 `SPEND` 변동 삭제, 명세서 후보의 적용 거래는 `NULL`로 변경 |
 | 카드 명세서 import | 모든 후보 삭제 |
+| 캡처 저장 묶음 | household 삭제 시 함께 삭제 |
 | 잔액 계정 | 변동과 연결 거래가 모두 없을 때만 직접 삭제, 이력이 있으면 보관 |
 | 가맹점 분류 규칙 | 규칙 태그 삭제 |
 | HTTP 세션 | 세션 속성 삭제 |
@@ -257,7 +270,8 @@ erDiagram
 | 인증 | `auth_identities` | 외부 로그인 제공자와 내부 사용자 연결 |
 | 가구 | `households` | 가계 데이터 격리 단위 |
 | 가구 | `household_memberships` | household와 사용자의 구성원 관계 |
-| AI | `ai_daily_usage` | household·날짜별 가계 분석 호출 횟수 |
+| AI | `ai_daily_usage` | household·날짜별 가계 분석·캡처 분석 호출 횟수 |
+| 캡처 | `capture_batches` | 확인된 캡처 후보 묶음의 멱등 저장 기록 |
 | 거래 | `transactions` | 가맹점 소비와 결제·분류 정보 |
 | 거래 | `transaction_tags` | 거래의 중복 불가 다중 태그 |
 | 분류 | `merchant_classification_rules` | household별 가맹점 기본 분류 |
@@ -289,6 +303,7 @@ erDiagram
 | V14 | 잔액 계정 커스텀 생성·분류·자동 연동 키·보관 상태 추가 |
 | V15 | 직접 입력 잔액 종류명 추가 및 기존 `OTHER` 계정 이전 |
 | V16 | household·날짜별 가계 분석 호출량 테이블 |
+| V17 | 캡처 묶음 멱등 기록과 household·날짜별 캡처 분석 호출량 |
 
 이미 적용되거나 커밋된 migration은 수정하지 않는다. 구조를 바꿀 때는 새 번호의
 migration을 추가하고 이 문서에는 변경된 최종 관계와 의미를 반영한다.

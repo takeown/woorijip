@@ -342,6 +342,9 @@ export function TransactionsPage({ currentUser }: { currentUser: CurrentUser }) 
           <p className="mt-3 text-sm leading-6 text-stone-600">
             짧게 말하면 AI가 거래 초안을 만들어 드립니다.
           </p>
+          <Link href="/captures" className="mt-5 flex min-h-11 items-center justify-between rounded-xl bg-accent-soft px-4 py-3 text-sm font-medium text-accent-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus">
+            카드 내역 캡처로 여러 건 입력
+          </Link>
           <div className="mt-7">
             <AiTransactionDraftForm
               householdMembers={householdMembers}

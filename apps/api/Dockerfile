@@ -8,6 +8,8 @@ RUN ./gradlew bootJar --no-daemon
 
 FROM eclipse-temurin:21-jre-jammy
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-kor \
+    && rm -rf /var/lib/apt/lists/*
 RUN useradd --system --uid 10001 --create-home --user-group app
 COPY --from=build --chown=app:app /src/build/libs/app.jar app.jar
 

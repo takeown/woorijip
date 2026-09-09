@@ -129,6 +129,11 @@ IPv4 방화벽을 확인한다. 관리자 주소가 아닌 배포 시각에 추�
 Flyway migration은 API 시작 과정에서 실행된다. migration 실패 시 API healthcheck가
 실패하고 배포 workflow도 실패한다.
 
+API 운영 이미지는 카드 앱 캡처의 외부 전송 전 안전검사를 위해 `tesseract-ocr`와
+한국어 언어 데이터를 포함한다. 캡처 분석이 모두 실패하면 API 컨테이너 안에서
+`tesseract --version`과 한국어 데이터 설치 여부를 먼저 확인한다. OCR 임시 파일은 요청
+처리 중에만 생성되고 성공·실패와 관계없이 삭제된다.
+
 ## 상태와 로그 확인
 
 서버에서 운영 컨테이너 상태를 확인한다.
@@ -160,6 +165,7 @@ migration이 이전 애플리케이션과 호환되는지 먼저 확인한다.
 - [x] 운영 도메인의 Google 로그인과 수동 거래 등록 smoke test
 - [x] AWS 월 USD 20 예산과 비용 알림 설정
 - [ ] AI 거래 초안 생성·저장 smoke test
+- [ ] 카드 앱 캡처 안전검사·OpenAI 분석·후보 저장 smoke test
 - [ ] 로그아웃 후 거래 API 접근 차단 검증
 - [ ] Lightsail 일일 자동 스냅샷 활성화
 - [ ] PostgreSQL 논리 백업을 서버 외부에 보관

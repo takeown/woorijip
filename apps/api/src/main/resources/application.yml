@@ -19,8 +19,8 @@ spring:
       initialize-schema: never
   servlet:
     multipart:
-      max-file-size: 2MB
-      max-request-size: 2MB
+      max-file-size: 4MB
+      max-request-size: 5MB
 
 app:
   auth:
