@@ -25,6 +25,7 @@ class WebConfig(
             "/ai/**",
             "/statistics/**",
             "/card-statements/**",
+            "/transaction-captures/**",
             "/merchant-classification-rules/**",
             "/stored-value-accounts/**",
         ).forEach { path ->

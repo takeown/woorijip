@@ -6,6 +6,7 @@ import com.woorijip.api.auth.TestOidcUsers
 import com.woorijip.api.auth.CurrentUser
 import com.woorijip.api.privacy.PrivacyConsentService
 import com.woorijip.api.transaction.TransactionCategory
+import org.hamcrest.Matchers.containsString
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
@@ -18,6 +19,7 @@ import org.springframework.mock.web.MockMultipartFile
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.oidcLogin
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.options
 import org.springframework.test.web.servlet.post
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
@@ -74,6 +76,19 @@ class CaptureControllerTests(
         assertEquals(callsBeforeTest + 1, generator.calls)
         val image = javax.imageio.ImageIO.read(java.io.ByteArrayInputStream(requireNotNull(generator.lastImage)))
         assertEquals(java.awt.Color.BLACK.rgb, image.getRGB(10, 10))
+    }
+
+    @Test
+    fun `allows browser preflight for capture analysis`() {
+        mvc
+            .options("/transaction-captures/analyze") {
+                header("Origin", "http://localhost:3100")
+                header("Access-Control-Request-Method", "POST")
+            }.andExpect {
+                status { isOk() }
+                header { string("Access-Control-Allow-Origin", "http://localhost:3100") }
+                header { string("Access-Control-Allow-Methods", containsString("POST")) }
+            }
     }
 
     private fun post(action: String, body: String) = mvc.post("/transaction-captures/$action") {
