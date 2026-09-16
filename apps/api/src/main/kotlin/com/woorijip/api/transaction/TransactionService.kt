@@ -46,6 +46,7 @@ data class TransactionFilters(
     val query: String?,
     val fromDate: LocalDate?,
     val toDate: LocalDate?,
+    val category: TransactionCategory? = null,
 )
 
 @Service
@@ -126,6 +127,7 @@ class TransactionService(
             householdId = currentUser.householdId,
             currentUserId = currentUser.id,
             payerFilter = filters.payer.name,
+            category = filters.category?.name,
             searchPattern = filters.query?.let(::containsPattern),
             occurredAtFrom = filters.fromDate?.atStartOfDay(SEOUL_ZONE)?.toOffsetDateTime(),
             occurredAtTo = filters.toDate?.plusDays(1)?.atStartOfDay(SEOUL_ZONE)?.toOffsetDateTime(),

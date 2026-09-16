@@ -26,6 +26,7 @@ interface TransactionRepository : CrudRepository<Transaction, Long> {
               OR merchant ILIKE :searchPattern ESCAPE '\'
               OR description ILIKE :searchPattern ESCAPE '\'
           )
+          AND (CAST(:category AS TEXT) IS NULL OR category = :category)
           AND (CAST(:occurredAtFrom AS TIMESTAMPTZ) IS NULL OR occurred_at >= :occurredAtFrom)
           AND (CAST(:occurredAtTo AS TIMESTAMPTZ) IS NULL OR occurred_at < :occurredAtTo)
           AND (occurred_at, id) < (
@@ -46,6 +47,7 @@ interface TransactionRepository : CrudRepository<Transaction, Long> {
         cursorOccurredAt: OffsetDateTime?,
         cursorId: Long?,
         limit: Int,
+        category: String? = null,
     ): List<Transaction>
 
     @Query(

@@ -453,3 +453,30 @@ function jsonResponse(body: unknown, status = 200): Response {
     status,
   });
 }
+
+test("opens category details using the displayed week and payer without changing the stats URL", async () => {
+  Object.defineProperty(HTMLDialogElement.prototype, "showModal", { configurable: true, value: function (this: HTMLDialogElement) { this.open = true; } });
+  Object.defineProperty(HTMLDialogElement.prototype, "close", { configurable: true, value: function (this: HTMLDialogElement) { this.open = false; } });
+  const user = userEvent.setup();
+  const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+    const url = String(input);
+    if (url.includes("/members")) return jsonResponse([]);
+    if (url.includes("/transactions?")) return jsonResponse({ items: [], nextCursor: null });
+    return jsonResponse({ ...monthlyStatistics, period: "WEEK", payer: "ME", startDate: "2026-07-27", endDateExclusive: "2026-08-03" });
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  render(<SpendingStatisticsPanel refreshKey={0} initialState={{ period: "WEEK", payer: "ME", referenceDate: "2026-07-31", calendarExpanded: false }} />);
+  const trigger = await screen.findByRole("button", { name: "식비 거래내역 보기" });
+  const urlBefore = window.location.href;
+  await user.click(trigger);
+  expect(await screen.findByText("이 기간에는 기록된 식비 거래가 없습니다.")).toBeDefined();
+  const request = fetchMock.mock.calls.map(([input]) => String(input)).find((url) => url.includes("/transactions?"));
+  expect(request).toContain("category=FOOD");
+  expect(request).toContain("payer=ME");
+  expect(request).toContain("from=2026-07-27");
+  expect(request).toContain("to=2026-08-02");
+  await user.click(screen.getByRole("button", { name: "닫기" }));
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(document.activeElement).toBe(trigger);
+  expect(window.location.href).toBe(urlBefore);
+});
