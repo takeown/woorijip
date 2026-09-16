@@ -863,7 +863,7 @@ function ComparisonBreakdown({
                     aria-haspopup="dialog"
                     aria-label={`${item.label} 거래내역 보기`}
                     id={`stats-category-${item.key}`}
-                    className="min-h-11 min-w-0 rounded-lg px-2 text-left font-medium text-accent-strong underline decoration-border-soft underline-offset-4 hover:bg-accent-soft focus-visible:outline-2 focus-visible:outline-focus active:bg-accent-soft"
+                    className="min-h-11 min-w-0 rounded-lg text-left font-medium text-accent-strong underline decoration-border-soft underline-offset-4 hover:bg-accent-soft focus-visible:outline-2 focus-visible:outline-focus active:bg-accent-soft"
                     onClick={() => onSelect(item)}
                     type="button"
                   >{item.label}</button>
