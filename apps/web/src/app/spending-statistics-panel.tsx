@@ -5,6 +5,7 @@
 "use client";
 
 import Link from "next/link";
+import { CategoryTransactionsDialog } from "./category-transactions-dialog";
 import { FormEvent, useEffect, useState } from "react";
 import {
   dailyStatsUrl,
@@ -156,7 +157,9 @@ export function SpendingStatisticsPanel({ initialState, refreshKey }: SpendingSt
     period,
     referenceDate,
   } = viewState;
-  const requestKey = `${period}:${payer}:${referenceDate}:${refreshKey}`;
+  const [detailRefreshKey, setDetailRefreshKey] = useState(0);
+  const [selectedCategory, setSelectedCategory] = useState<BreakdownItem | null>(null);
+  const requestKey = `${period}:${payer}:${referenceDate}:${refreshKey}:${detailRefreshKey}`;
   const requestUrl = `${apiUrl}/statistics/spending?period=${period}&payer=${payer}&date=${referenceDate}&includeMonthlySummary=true&includeDailyBreakdown=true`;
   const [loadResult, setLoadResult] = useState<{
     requestKey: string;
@@ -201,6 +204,7 @@ export function SpendingStatisticsPanel({ initialState, refreshKey }: SpendingSt
   }, [requestKey, requestUrl]);
 
   function updateViewState(nextState: StatsUrlState) {
+    setSelectedCategory(null);
     setViewState(nextState);
     window.history.replaceState(null, "", statsUrl(nextState));
   }
@@ -396,7 +400,7 @@ export function SpendingStatisticsPanel({ initialState, refreshKey }: SpendingSt
           ) : null}
 
           {statistics.period === "MONTH" && statistics.monthlySummary ? (
-            <MonthlySummary startDate={statistics.startDate} summary={statistics.monthlySummary} />
+            <MonthlySummary startDate={statistics.startDate} summary={statistics.monthlySummary} onSelect={setSelectedCategory} />
           ) : null}
 
           {statistics.current.transactionCount === 0 ? (
@@ -431,6 +435,8 @@ export function SpendingStatisticsPanel({ initialState, refreshKey }: SpendingSt
             <div className="mt-8 grid gap-8 lg:grid-cols-2">
               <ComparisonBreakdown
                 items={statistics.categoryComparisons}
+                onSelect={(item) => setSelectedCategory({ key: item.key, label: item.label, amount: item.currentAmount, transactionCount: item.currentTransactionCount })}
+                description="카테고리를 누르면 현재 기간의 거래내역을 볼 수 있습니다."
                 title="카테고리 비교"
               />
               <ComparisonBreakdown
@@ -442,6 +448,20 @@ export function SpendingStatisticsPanel({ initialState, refreshKey }: SpendingSt
             </div>
           ) : null}
         </>
+      ) : null}
+      {selectedCategory && loadResult.statistics ? (
+        <CategoryTransactionsDialog
+          category={selectedCategory.key}
+          label={selectedCategory.label}
+          periodLabel={periodLabel(loadResult.statistics)}
+          from={loadResult.statistics.startDate}
+          to={toDateInputValue(new Date(parseDate(loadResult.statistics.endDateExclusive).getTime() - 86_400_000))}
+          payer={payer}
+          amount={loadResult.statistics.categoryComparisons.find((item) => item.key === selectedCategory.key)?.currentAmount ?? 0}
+          count={loadResult.statistics.categoryComparisons.find((item) => item.key === selectedCategory.key)?.currentTransactionCount ?? 0}
+          onClose={() => setSelectedCategory(null)}
+          onChanged={() => setDetailRefreshKey((value) => value + 1)}
+        />
       ) : null}
     </section>
   );
@@ -717,9 +737,11 @@ function SpendingQuestion() {
 function MonthlySummary({
   startDate,
   summary,
+  onSelect,
 }: {
   startDate: string;
   summary: MonthlySpendingSummary;
+  onSelect: (category: BreakdownItem) => void;
 }) {
   return (
     <section
@@ -729,9 +751,15 @@ function MonthlySummary({
       <h3 className="text-xl font-semibold text-foreground" id="monthly-spending-summary-title">
         {monthlyQuestionLabel(startDate)}
       </h3>
-      <p className="mt-3 text-lg font-semibold text-stone-900">
+      <button
+        aria-haspopup="dialog"
+        className="mt-3 min-h-11 rounded-lg text-left text-lg font-semibold text-accent-strong underline decoration-border-soft underline-offset-4 hover:bg-surface focus-visible:outline-2 focus-visible:outline-focus active:bg-surface"
+        id="monthly-top-category"
+        onClick={() => onSelect(summary.topCategory)}
+        type="button"
+      >
         {summary.topCategory.label}에 가장 많이 썼어요.
-      </p>
+      </button>
       <p className="mt-1 font-ui text-sm text-stone-700 tabular-nums">
         {amountFormatter.format(summary.topCategory.amount)}원 · 전체의 {summary.sharePercent}%
       </p>
@@ -811,11 +839,13 @@ function ComparisonBreakdown({
   items,
   description,
   emptyMessage = "비교할 지출이 없습니다.",
+  onSelect,
 }: {
   title: string;
   items: ComparisonBreakdownItem[];
   description?: string;
   emptyMessage?: string;
+  onSelect?: (item: ComparisonBreakdownItem) => void;
 }) {
   return (
     <section className="border-t border-border-soft pt-5">
@@ -828,9 +858,16 @@ function ComparisonBreakdown({
           {items.map((item) => (
             <li className="py-3 first:pt-0 last:pb-0" key={item.key}>
               <div className="flex items-baseline justify-between gap-3">
-                <span className="min-w-0 [overflow-wrap:anywhere] font-medium text-stone-700">
-                  {item.label}
-                </span>
+                {onSelect ? (
+                  <button
+                    aria-haspopup="dialog"
+                    aria-label={`${item.label} 거래내역 보기`}
+                    id={`stats-category-${item.key}`}
+                    className="min-h-11 min-w-0 rounded-lg text-left font-medium text-accent-strong underline decoration-border-soft underline-offset-4 hover:bg-accent-soft focus-visible:outline-2 focus-visible:outline-focus active:bg-accent-soft"
+                    onClick={() => onSelect(item)}
+                    type="button"
+                  >{item.label}</button>
+                ) : <span className="min-w-0 [overflow-wrap:anywhere] font-medium text-stone-700">{item.label}</span>}
                 <span className="shrink-0 font-ui font-semibold text-stone-900 tabular-nums">
                   {amountFormatter.format(item.currentAmount)}원
                 </span>

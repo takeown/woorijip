@@ -160,6 +160,66 @@ class TransactionControllerTests(
     }
 
     @Test
+    fun `filters category with Seoul dates payer household and pagination`() {
+        val user = googleAccountService.provision(TestOidcUsers.allowed())
+        val partner = createMember(user.householdId, "배우자")
+        val otherHousehold = createHousehold("다른 집")
+        val outsider = createMember(otherHousehold, "다른 사용자")
+        fun save(householdId: Long, payerId: Long, category: TransactionCategory, date: String) =
+            transactionRepository.save(
+                Transaction(
+                    householdId = householdId, payerId = payerId, merchant = category.name,
+                    description = null, amount = 1000, category = category,
+                    paymentMethod = PaymentMethod.CASH, cardIssuer = null,
+                    occurredAt = OffsetDateTime.parse(date), createdAt = now,
+                ),
+            )
+        save(user.householdId, partner, TransactionCategory.FOOD, "2026-08-01T00:00:00+09:00")
+        save(user.householdId, partner, TransactionCategory.FOOD, "2026-08-31T23:59:59+09:00")
+        save(user.householdId, partner, TransactionCategory.FOOD, "2026-09-01T00:00:00+09:00")
+        save(user.householdId, partner, TransactionCategory.FOOD, "2026-07-31T23:59:59+09:00")
+        save(user.householdId, partner, TransactionCategory.HOUSING, "2026-08-15T12:00:00+09:00")
+        save(user.householdId, user.id, TransactionCategory.FOOD, "2026-08-15T12:00:00+09:00")
+        save(otherHousehold, outsider, TransactionCategory.FOOD, "2026-08-15T12:00:00+09:00")
+        val first = mockMvc.get("/transactions") {
+            with(allowedOidcLogin())
+            param("category", "FOOD")
+            param("payer", "partner")
+            param("from", "2026-08-01")
+            param("to", "2026-08-31")
+            param("size", "1")
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.items", hasSize<Any>(1))
+            jsonPath("$.items[0].category") { value("FOOD") }
+            jsonPath("$.items[0].payerId") { value(partner) }
+            jsonPath("$.nextCursor") { isNotEmpty() }
+        }.andReturn()
+        val cursor = objectMapper.readTree(first.response.contentAsString).path("nextCursor").asString()
+        mockMvc.get("/transactions") {
+            with(allowedOidcLogin())
+            param("category", "FOOD")
+            param("payer", "partner")
+            param("from", "2026-08-01")
+            param("to", "2026-08-31")
+            param("size", "1")
+            param("cursor", cursor)
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.items", hasSize<Any>(1))
+            jsonPath("$.items[0].category") { value("FOOD") }
+            jsonPath("$.nextCursor") { doesNotExist() }
+        }
+        mockMvc.get("/transactions") {
+            with(allowedOidcLogin())
+            param("category", "INVALID")
+        }.andExpect { status { isBadRequest() } }
+        mockMvc.get("/transactions") {
+            param("category", "FOOD")
+        }.andExpect { status { isUnauthorized() } }
+    }
+
+    @Test
     fun `paginates transactions with a stable cursor when occurred times are equal`() {
         val currentUser = googleAccountService.provision(TestOidcUsers.allowed())
         createTransaction(currentUser.id, "첫 번째")

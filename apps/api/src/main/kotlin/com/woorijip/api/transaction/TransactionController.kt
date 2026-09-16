@@ -145,6 +145,7 @@ class TransactionController(
         currentUser: CurrentUser,
         @RequestParam(defaultValue = "all") payer: String,
         @RequestParam(required = false) q: String?,
+        @RequestParam(required = false) category: TransactionCategory?,
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) from: LocalDate?,
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) to: LocalDate?,
         @RequestParam(required = false) cursor: String?,
@@ -170,6 +171,7 @@ class TransactionController(
             filters = TransactionFilters(
                 payer = payerFilter,
                 query = query,
+                category = category,
                 fromDate = from,
                 toDate = to,
             ),
