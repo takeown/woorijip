@@ -7,7 +7,13 @@ import type { StatsUrlState } from "../stats-url-state";
 export function StatsPageContent({ initialState }: { initialState: StatsUrlState }) {
   return (
     <AuthenticatedShell>
-      {() => <SpendingStatisticsPanel initialState={initialState} refreshKey={0} />}
+      {(user) => (
+        <SpendingStatisticsPanel
+          aiEnabled={user.privacyConsent.aiOverseasTransferAgreed}
+          initialState={initialState}
+          refreshKey={0}
+        />
+      )}
     </AuthenticatedShell>
   );
 }

@@ -14,6 +14,7 @@
 - pnpm 11
 - JDK 21
 - Docker
+- Tesseract OCR와 한국어·영어 언어 데이터(로컬 API에서 카드 캡처 분석 시 필요)
 
 ## 시작하기
 

@@ -44,7 +44,7 @@ describe("TransactionsPage", () => {
 
     const { container } = render(
       <TransactionsPage
-        currentUser={{ id: 1, displayName: "나", householdId: 10 }}
+        currentUser={currentUser()}
       />,
     );
 
@@ -80,7 +80,7 @@ describe("TransactionsPage", () => {
 
     render(
       <TransactionsPage
-        currentUser={{ id: 1, displayName: "나", householdId: 10 }}
+        currentUser={currentUser()}
       />,
     );
 
@@ -118,7 +118,7 @@ describe("TransactionsPage", () => {
 
     render(
       <TransactionsPage
-        currentUser={{ id: 1, displayName: "나", householdId: 10 }}
+        currentUser={currentUser()}
       />,
     );
 
@@ -162,7 +162,7 @@ describe("TransactionsPage", () => {
 
     render(
       <TransactionsPage
-        currentUser={{ id: 1, displayName: "나", householdId: 10 }}
+        currentUser={currentUser()}
       />,
     );
 
@@ -215,7 +215,7 @@ describe("TransactionsPage", () => {
 
     render(
       <TransactionsPage
-        currentUser={{ id: 1, displayName: "나", householdId: 10 }}
+        currentUser={currentUser()}
       />,
     );
 
@@ -253,7 +253,7 @@ describe("TransactionsPage", () => {
 
     render(
       <TransactionsPage
-        currentUser={{ id: 1, displayName: "나", householdId: 10 }}
+        currentUser={currentUser()}
       />,
     );
 
@@ -290,7 +290,7 @@ describe("TransactionsPage", () => {
 
     render(
       <TransactionsPage
-        currentUser={{ id: 1, displayName: "나", householdId: 10 }}
+        currentUser={currentUser()}
       />,
     );
 
@@ -320,6 +320,22 @@ function transaction(id: number, merchant: string) {
     occurredAt: "2026-07-30T12:00:00+09:00",
     createdAt: "2026-07-30T12:00:00+09:00",
     updatedAt: "2026-07-30T12:00:00+09:00",
+  };
+}
+
+function currentUser() {
+  return {
+    id: 1,
+    displayName: "나",
+    householdId: 10,
+    privacyConsent: {
+      privacyPolicyVersion: "2026-09-09",
+      privacyPolicyAgreed: true,
+      privacyPolicyAgreedAt: "2026-09-09T00:00:00Z",
+      aiOverseasTransferVersion: "2026-09-09",
+      aiOverseasTransferAgreed: true,
+      aiOverseasTransferAgreedAt: "2026-09-09T00:00:00Z",
+    },
   };
 }
 

@@ -5,6 +5,7 @@ import com.woorijip.api.error.ApiException
 import com.woorijip.api.error.ErrorCode
 import com.woorijip.api.household.HouseholdMember
 import com.woorijip.api.household.HouseholdMembershipRepository
+import com.woorijip.api.privacy.PrivacyConsentService
 import com.woorijip.api.storedvalue.StoredValueAutomationKey
 import com.woorijip.api.transaction.CardIssuer
 import com.woorijip.api.transaction.PaymentMethod
@@ -36,11 +37,13 @@ class AiTransactionDraftService(
     private val transactionDraftGenerator: TransactionDraftGenerator,
     private val householdMembershipRepository: HouseholdMembershipRepository,
     private val sensitiveInputGuard: AiSensitiveInputGuard,
+    private val privacyConsentService: PrivacyConsentService,
 ) {
     fun create(
         currentUser: CurrentUser,
         messages: List<String>,
     ): AiTransactionDraft {
+        privacyConsentService.requireAiOverseasTransfer(currentUser.id)
         sensitiveInputGuard.requireSafe(messages)
         val members = householdMembershipRepository.findMembersByHouseholdId(currentUser.householdId)
         val generated = try {

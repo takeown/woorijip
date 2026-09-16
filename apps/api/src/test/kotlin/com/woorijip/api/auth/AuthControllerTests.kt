@@ -44,6 +44,8 @@ class AuthControllerTests(
                 jsonPath("$.id") { value(currentUser.id) }
                 jsonPath("$.displayName") { value("첫 번째 사용자") }
                 jsonPath("$.householdId") { value(currentUser.householdId) }
+                jsonPath("$.privacyConsent.privacyPolicyAgreed") { value(false) }
+                jsonPath("$.privacyConsent.aiOverseasTransferAgreed") { value(false) }
             }
     }
 
