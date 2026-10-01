@@ -1,5 +1,7 @@
 # Lightsail 배포
 
+마지막 수정: 2026-10-02
+
 우리집 운영 환경은 AWS Lightsail 인스턴스 한 대에서 Caddy, Next.js, Spring API,
 PostgreSQL을 Docker Compose로 실행한다.
 
@@ -146,6 +148,78 @@ cd ~/woorijip
 docker compose --env-file deploy/.env -f compose.prod.yaml logs --tail=200 api web caddy postgres
 ```
 
+## PostgreSQL 일일 논리 백업
+
+운영 데이터는 장애 시 최대 24시간 손실을 허용한다. PostgreSQL은 매일 03:30
+`Asia/Seoul`에 custom format 논리 백업을 만들고 서울 리전의 전용 S3 버킷에 저장한다.
+예약 시각에 서버가 중지돼 있었으면 `systemd timer`의 `Persistent=true`가 재시작 후
+누락된 실행을 보충한다.
+
+백업 데이터 흐름은 다음과 같다.
+
+```text
+PostgreSQL 컨테이너
+→ pg_dump custom format
+→ 제한된 로컬 임시 파일
+→ 비어 있지 않은지 확인
+→ pg_restore --list 형식 검사
+→ AWS CLI SHA-256 checksum 업로드
+→ 비공개 S3 버킷의 postgres/ prefix
+→ 업로드 성공 후 로컬 파일 삭제
+```
+
+운영 서버의 관련 파일은 다음과 같다. 이 파일들은 실제 버킷명과 자격 증명을 포함할 수
+있으므로 저장소나 운영 로그에 복사하지 않는다.
+
+| 경로 | 역할 | 권한 |
+| --- | --- | --- |
+| `/home/ubuntu/.aws/credentials` | `woorijip-backup` AWS CLI profile의 access key | `600` |
+| `/home/ubuntu/.aws/config` | 서울 리전과 CLI profile 설정 | `600` |
+| `/home/ubuntu/.config/woorijip-backup` | 버킷명, 리전, profile 이름 | `600` |
+| `/home/ubuntu/woorijip/deploy/backup-postgres.sh` | 덤프 검사, 업로드와 로컬 정리 | `700` |
+| `/etc/systemd/system/woorijip-backup.service` | `ubuntu` 사용자로 백업 스크립트 실행 | root 관리 |
+| `/etc/systemd/system/woorijip-backup.timer` | 매일 03:30 KST 실행, 최대 5분 분산 | root 관리 |
+
+S3 버킷은 퍼블릭 액세스를 모두 차단하고 기본 암호화를 활성화한다. 백업 전용 IAM 사용자는
+해당 버킷의 `postgres/` prefix에 대한 `s3:PutObject`와 `s3:AbortMultipartUpload`만
+허용한다. 평상시 자격 증명에는 목록 조회, 다운로드와 삭제 권한을 추가하지 않는다.
+
+수동 실행과 상태 확인은 다음 명령을 사용한다.
+
+```bash
+sudo systemctl start woorijip-backup.service
+systemctl status woorijip-backup.service --no-pager
+journalctl -u woorijip-backup.service --since today --no-pager
+systemctl list-timers --all woorijip-backup.timer
+```
+
+성공 기준은 service가 `status=0/SUCCESS`로 끝나고 S3 콘솔의 `postgres/` prefix에
+0바이트가 아닌 새 `.dump` 객체가 생성되는 것이다. 백업 IAM 사용자는 목록 조회 권한이
+없으므로 서버에서 `aws s3 ls`가 거부되는 것은 정상이다. 로그에는 성공 여부와 파일명만
+남기며 거래 내용과 자격 증명을 출력하지 않는다.
+
+S3 lifecycle은 현재 객체와 versioning을 사용한 경우 noncurrent version을 모두 포함해
+14일 뒤 제거하도록 구성한다. lifecycle 적용과 Lightsail 일일 자동 스냅샷 활성화는 아직
+운영 확인 전이므로 아래 준비 현황에서 완료로 표시하지 않는다. 백업 실패는 현재
+`systemd` journal로만 확인할 수 있으며 자동 실패 알림도 아직 구성하지 않았다.
+
+### 논리 백업 복구 검증
+
+복구는 운영 데이터베이스를 덮어쓰지 않고 별도의 임시 PostgreSQL 17 컨테이너에서 한다.
+평상시 업로드 IAM 사용자에 읽기 권한을 추가하지 말고, 복구할 객체 하나에만 접근할 수
+있는 별도의 임시 profile로 덤프를 내려받는다.
+
+1. 복구할 S3 객체와 생성 시각, 크기를 관리자 권한으로 확인한다.
+2. 임시 읽기 권한으로 덤프를 권한이 제한된 디렉터리에 내려받는다.
+3. `pg_restore --list`로 archive 목록을 확인한다.
+4. 네트워크 포트를 외부에 공개하지 않은 임시 `postgres:17-alpine` 컨테이너에 복원한다.
+5. Flyway schema history와 핵심 테이블의 존재 여부, 대표 row count를 확인한다. 거래 원문은
+   로그나 작업 결과에 복사하지 않는다.
+6. 검증이 끝나면 임시 컨테이너와 로컬 덤프를 제거하고 임시 읽기 자격 증명을 폐기한다.
+
+복구 검증은 아직 운영에서 실행하지 않았다. 최초 1회 실제 검증 후 분기마다 반복하고,
+PostgreSQL major version 또는 백업 형식이 달라지면 추가로 실행한다.
+
 ## Rollback
 
 정상 동작했던 commit SHA를 사용해 `Deploy production` workflow를 다시 실행한다.
@@ -162,8 +236,12 @@ migration이 이전 애플리케이션과 호환되는지 먼저 확인한다.
 - [ ] AI 거래 초안 생성·저장 smoke test
 - [ ] 로그아웃 후 거래 API 접근 차단 검증
 - [ ] Lightsail 일일 자동 스냅샷 활성화
-- [ ] PostgreSQL 논리 백업을 서버 외부에 보관
-- [ ] 스냅샷과 논리 백업의 복구 절차 검증
+- [x] PostgreSQL 일일 논리 백업을 서버 외부 S3에 업로드
+- [x] `systemd timer` 등록과 수동 덤프·형식 검사·업로드 검증
+- [ ] S3 논리 백업을 14일 후 삭제하는 lifecycle 적용
+- [ ] PostgreSQL 논리 백업 실패 알림 구성
+- [x] 논리 백업의 격리된 복구 절차 문서화
+- [ ] 스냅샷과 논리 백업의 실제 복구 검증
 
 위 체크리스트는 운영 환경에서 직접 확인한 범위만 표시한다. 기능 구현 상태는
 `docs/PLAN.md`를 기준으로 확인하며, 코드와 테스트가 완료됐더라도 운영 smoke test를

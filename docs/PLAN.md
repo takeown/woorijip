@@ -1,6 +1,6 @@
 # 우리집 개발 계획
 
-마지막 수정: 2026-09-16
+마지막 수정: 2026-10-02
 
 ## 목표
 
@@ -66,12 +66,16 @@
 - [x] GitHub Actions에서 운영 이미지를 빌드하고 서버는 이미지를 받아 실행
 - [x] GitHub OIDC로 배포 runner의 SSH 방화벽 규칙을 자동 개방·회수
 - [x] 통제된 배포 단계에서 Flyway migration 실행
-- [ ] Lightsail 자동 스냅샷과 PostgreSQL 논리 백업 구성
+- [ ] Lightsail 일일 자동 스냅샷 활성화
+- [x] PostgreSQL 논리 백업을 하루 한 번 생성해 서버 외부 S3에 보관
+- [ ] S3 논리 백업을 14일 후 삭제하는 lifecycle 적용
+- [ ] PostgreSQL 논리 백업 실패 알림 구성
 - [x] AWS 비용 알림 추가
 - [ ] PWA manifest와 앱 아이콘을 추가해 홈 화면 설치와 standalone 실행 지원
 - [ ] iOS와 Android 실기기에서 PWA 설치, Google 로그인, 재실행 후 세션 유지 검증
 - [x] 애플리케이션 rollback 절차 문서화
-- [ ] 스냅샷과 논리 백업의 복구 절차 문서화·검증
+- [x] PostgreSQL 논리 백업의 격리된 복구 절차 문서화
+- [ ] 스냅샷과 논리 백업의 실제 복구 검증
 
 ## 백로그
 
