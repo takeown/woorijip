@@ -113,6 +113,11 @@ Google Cloud의 운영 OAuth 클라이언트에 실제 도메인을 사용한 �
 
 ## 배포
 
+웹 CI와 Docker의 빌드·실행 단계는 2026년 10월 Node.js 보안 수정이 포함된
+`24.22.1`로 고정한다. Node.js 보안 업데이트 시 두 설정을 함께 갱신하고 새 웹 이미지를
+빌드·배포한다. 기존 이미지를 재시작하거나 다시 pull하는 것만으로 Node.js가 갱신되지는
+않는다. 배포 후 웹 컨테이너에서 `node --version`으로 적용 버전을 확인한다.
+
 1. 배포할 `main` commit의 CI가 성공했는지 확인한다.
 2. Actions에서 `Release production`을 선택한다.
 3. `Run workflow`의 branch를 `main`으로 선택하고 수동 실행한다.
