@@ -8,6 +8,7 @@ import java.time.OffsetDateTime
 
 enum class GeneratedSpendingAnalysisStatus {
     ANSWERED,
+    NO_DATA,
     UNSUPPORTED,
 }
 
@@ -25,8 +26,7 @@ data class SpendingAnalysisRecord(
 data class SpendingAnalysisGenerationContext(
     val currentUserId: Long,
     val currentTime: OffsetDateTime,
-    val records: List<SpendingAnalysisRecord>,
-    val dataLimited: Boolean,
+    val tools: SpendingAnalysisTools,
 )
 
 data class GeneratedSpendingAnalysis(

@@ -27,6 +27,7 @@
 
 ## 운영과 가이드
 
+- [AI 분석 더미 데이터](./guides/AI_ANALYSIS_FIXTURE.md): 로컬 거래 250건과 검증 질문 10개
 - [운영과 배포](./operations/DEPLOYMENT.md): Lightsail, GitHub Actions, 상태 확인과
   rollback
 - [초보 기획 가이드](./guides/JUNIOR_PLANNER_CODEX_GUIDE.md): Codex와 함께 기획 작업을
