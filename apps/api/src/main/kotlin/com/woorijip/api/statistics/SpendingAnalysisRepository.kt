@@ -25,8 +25,45 @@ data class SpendingAnalysisTransaction(
 class SpendingAnalysisRepository(
     private val jdbcTemplate: NamedParameterJdbcTemplate,
 ) {
-    fun recentTransactions(
+    fun hasTransactions(householdId: Long): Boolean =
+        jdbcTemplate.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM transactions WHERE household_id = :householdId)",
+            mapOf("householdId" to householdId),
+            Boolean::class.java,
+        ) == true
+
+    fun summarize(
         householdId: Long,
+        currentUserId: Long,
+        start: OffsetDateTime,
+        endExclusive: OffsetDateTime,
+        category: TransactionCategory?,
+        payer: SpendingAnalysisPayer,
+    ): List<SpendingAnalysisSummary> =
+        jdbcTemplate.query(
+            """
+            SELECT t.category, SUM(t.amount) AS total_amount, COUNT(*) AS transaction_count
+            FROM transactions AS t
+            WHERE $QUERY_CONDITIONS
+            GROUP BY t.category
+            ORDER BY total_amount DESC, t.category
+            """.trimIndent(),
+            queryParameters(householdId, currentUserId, start, endExclusive, category, payer),
+        ) { resultSet, _ ->
+            SpendingAnalysisSummary(
+                category = resultSet.getString("category"),
+                totalAmount = resultSet.getLong("total_amount"),
+                transactionCount = resultSet.getLong("transaction_count"),
+            )
+        }
+
+    fun transactions(
+        householdId: Long,
+        currentUserId: Long,
+        start: OffsetDateTime,
+        endExclusive: OffsetDateTime,
+        category: TransactionCategory?,
+        payer: SpendingAnalysisPayer,
         limit: Int,
     ): List<SpendingAnalysisTransaction> =
         jdbcTemplate.query(
@@ -43,12 +80,12 @@ class SpendingAnalysisRepository(
             FROM transactions AS t
             JOIN users ON users.id = t.payer_id
             LEFT JOIN transaction_tags ON transaction_tags.transaction_id = t.id
-            WHERE t.household_id = :householdId
+            WHERE $QUERY_CONDITIONS
             GROUP BY t.id, users.display_name
-            ORDER BY t.occurred_at DESC, t.id DESC
+            ORDER BY t.amount DESC, t.occurred_at DESC, t.id DESC
             LIMIT :limit
             """.trimIndent(),
-            mapOf("householdId" to householdId, "limit" to limit),
+            queryParameters(householdId, currentUserId, start, endExclusive, category, payer).addValue("limit", limit),
         ) { resultSet, _ ->
             SpendingAnalysisTransaction(
                 id = resultSet.getLong("id"),
@@ -104,4 +141,29 @@ class SpendingAnalysisRepository(
         ) { resultSet, _ -> resultSet.getInt("spending_analysis_requests") }
             .firstOrNull()
             ?: 0
+
+    private fun queryParameters(
+        householdId: Long,
+        currentUserId: Long,
+        start: OffsetDateTime,
+        endExclusive: OffsetDateTime,
+        category: TransactionCategory?,
+        payer: SpendingAnalysisPayer,
+    ): MapSqlParameterSource = MapSqlParameterSource()
+        .addValue("householdId", householdId)
+        .addValue("currentUserId", currentUserId)
+        .addValue("start", start)
+        .addValue("endExclusive", endExclusive)
+        .addValue("category", category?.name, java.sql.Types.VARCHAR)
+        .addValue("payer", payer.name)
+
+    private companion object {
+        val QUERY_CONDITIONS: String = """
+            t.household_id = :householdId
+            AND t.occurred_at >= :start AND t.occurred_at < :endExclusive
+            AND (:category IS NULL OR t.category = :category)
+            AND (:payer = 'ALL' OR (:payer = 'ME' AND t.payer_id = :currentUserId)
+                OR (:payer = 'PARTNER' AND t.payer_id != :currentUserId))
+        """.trimIndent()
+    }
 }

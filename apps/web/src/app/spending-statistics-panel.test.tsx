@@ -409,7 +409,7 @@ describe("SpendingStatisticsPanel", () => {
     expect(screen.getByText("48,000원")).toBeDefined();
     expect(screen.getByText("오늘 19번 더 물어볼 수 있어요.")).toBeDefined();
     expect(
-      screen.getByText("최근 거래 일부와 외부 전송에 안전한 거래만 기준으로 살펴봤어요."),
+      screen.getByText("합계는 조회 조건의 전체 거래 기준이며, 근거 거래는 일부만 표시돼요."),
     ).toBeDefined();
     expect(fetchMock.mock.calls[2][0]).toContain("/statistics/spending-answers");
     expect(fetchMock.mock.calls[2][1]).toMatchObject({

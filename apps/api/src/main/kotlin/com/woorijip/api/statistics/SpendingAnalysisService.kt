@@ -44,22 +44,16 @@ class SpendingAnalysisService(
         question: String,
     ): SpendingAnalysisAnswer {
         sensitiveInputGuard.requireSafe(listOf(question))
-        val transactionLimit = properties.analysisTransactionLimit.coerceAtLeast(1)
-        val loaded = repository.recentTransactions(currentUser.householdId, transactionLimit + 1)
-        val safeTransactions = loaded
-            .take(transactionLimit)
-            .filter { transaction -> sensitiveInputGuard.isSafeForExternalProcessing(transaction.merchant) }
-        val dataLimited = loaded.size > transactionLimit || safeTransactions.size < loaded.take(transactionLimit).size
         val dailyLimit = properties.analysisDailyRequestLimit.coerceAtLeast(1)
         val now = OffsetDateTime.now(SEOUL)
 
-        if (safeTransactions.isEmpty()) {
+        if (!repository.hasTransactions(currentUser.householdId)) {
             val used = repository.dailyRequests(currentUser.householdId, now.toLocalDate())
             return SpendingAnalysisAnswer(
                 status = SpendingAnalysisStatus.NO_DATA,
                 answer = "분석할 수 있는 거래내역이 아직 없습니다.",
                 evidenceTransactions = emptyList(),
-                dataLimited = dataLimited,
+                dataLimited = false,
                 remainingRequestsToday = (dailyLimit - used).coerceAtLeast(0),
             )
         }
@@ -69,29 +63,14 @@ class SpendingAnalysisService(
                 ErrorCode.AI_USAGE_LIMIT_EXCEEDED,
                 "오늘 사용할 수 있는 가계 분석 횟수를 모두 사용했습니다. 내일 다시 질문해 주세요.",
             )
-        val transactionsByReference = safeTransactions
-            .mapIndexed { index, transaction -> "T${index + 1}" to transaction }
-            .toMap()
-        val records = transactionsByReference.map { (reference, transaction) ->
-            SpendingAnalysisRecord(
-                reference = reference,
-                merchant = transaction.merchant,
-                amount = transaction.amount,
-                occurredDate = transaction.occurredAt.atZoneSameInstant(SEOUL).toLocalDate(),
-                payer = if (transaction.payerId == currentUser.id) "ME" else "PARTNER",
-                paymentMethod = transaction.paymentMethod,
-                category = transaction.category,
-                tags = transaction.tags,
-            )
-        }
+        val tools = SpendingAnalysisTools(repository, currentUser, sensitiveInputGuard, properties.analysisTransactionLimit)
         val generated = try {
             generator.generate(
                 question,
                 SpendingAnalysisGenerationContext(
                     currentUserId = currentUser.id,
                     currentTime = now,
-                    records = records,
-                    dataLimited = dataLimited,
+                    tools = tools,
                 ),
             )
         } catch (exception: SpendingAnalysisGenerationException) {
@@ -107,7 +86,17 @@ class SpendingAnalysisService(
                 status = SpendingAnalysisStatus.UNSUPPORTED,
                 answer = "저장된 거래내역에 관한 질문만 답할 수 있습니다.",
                 evidenceTransactions = emptyList(),
-                dataLimited = dataLimited,
+                dataLimited = tools.dataLimited,
+                remainingRequestsToday = dailyLimit - used,
+            )
+        }
+
+        if (generated.status == GeneratedSpendingAnalysisStatus.NO_DATA && tools.successfulQueries > 0 && tools.matchedTransactions == 0L) {
+            return SpendingAnalysisAnswer(
+                status = SpendingAnalysisStatus.NO_DATA,
+                answer = "질문한 조건에 해당하는 거래내역이 없습니다.",
+                evidenceTransactions = emptyList(),
+                dataLimited = tools.dataLimited,
                 remainingRequestsToday = dailyLimit - used,
             )
         }
@@ -116,8 +105,10 @@ class SpendingAnalysisService(
         val evidence = generated.evidenceReferences
             .distinct()
             .take(MAX_EVIDENCE_COUNT)
-            .mapNotNull(transactionsByReference::get)
-        if (answer == null || evidence.isEmpty()) {
+            .mapNotNull(tools.transactionsByReference::get)
+        if (generated.status != GeneratedSpendingAnalysisStatus.ANSWERED || answer == null || evidence.isEmpty() ||
+            generated.evidenceReferences.any { it !in tools.transactionsByReference }
+        ) {
             logger.warn("AI 가계 분석 응답 검증 실패")
             throw ApiException(
                 ErrorCode.AI_ANALYSIS_UNAVAILABLE,
@@ -137,7 +128,7 @@ class SpendingAnalysisService(
                     payerLabel = transaction.payerLabel,
                 )
             },
-            dataLimited = dataLimited,
+            dataLimited = tools.dataLimited,
             remainingRequestsToday = dailyLimit - used,
         )
     }

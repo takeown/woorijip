@@ -660,7 +660,7 @@ function SpendingQuestion() {
           우리집 지출에 물어보기
         </h3>
         <p className="mt-2 text-sm text-stone-600">
-          저장된 최근 거래내역 안에서 답하고, 확인에 쓴 거래를 함께 보여드려요.
+          질문에 맞는 기간의 지출을 살펴보고, 확인에 쓴 거래를 함께 보여드려요.
         </p>
       </div>
 
@@ -697,7 +697,7 @@ function SpendingQuestion() {
           <p className="text-base leading-7 text-stone-800">{answer.answer}</p>
           {answer.dataLimited ? (
             <p className="mt-2 text-xs text-stone-600">
-              최근 거래 일부와 외부 전송에 안전한 거래만 기준으로 살펴봤어요.
+              합계는 조회 조건의 전체 거래 기준이며, 근거 거래는 일부만 표시돼요.
             </p>
           ) : null}
           {answer.evidenceTransactions.length > 0 ? (

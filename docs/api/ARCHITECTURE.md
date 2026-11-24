@@ -104,15 +104,29 @@ AI 자연어 거래 입력은 다음 경로를 지난다.
 | 순서 | 파일 | 하는 일 |
 | --- | --- | --- |
 | 1 | `statistics/SpendingAnalysisController.kt` | 최대 200자의 질문 형식을 검증한다 |
-| 2 | `statistics/SpendingAnalysisService.kt` | 질문의 민감정보를 검사하고 현재 household의 제한된 최근 거래를 조합한다 |
-| 3 | `statistics/SpendingAnalysisRepository.kt` | 최근 거래를 최대 설정 개수만 조회하고 household별 일일 호출량을 원자적으로 차감한다 |
-| 4 | `ai/OpenAiSpendingAnalysisGenerator.kt` | 임시 거래 참조와 최소 필드로 Responses API를 호출한다 |
-| 5 | `statistics/SpendingAnalysisService.kt` | 모델의 근거 참조를 이번 요청의 거래와 대조하고 실제 근거 거래로 변환한다 |
+| 2 | `statistics/SpendingAnalysisService.kt` | 질문의 민감정보, 거래 존재 여부와 일일 한도를 확인하고 요청별 도구를 만든다 |
+| 3 | `ai/SpendingAnalysisAiConfig.kt` | Spring AI 2.1의 Responses 모델과 최대 4회 도구 실행을 구성한다 |
+| 4 | `ai/OpenAiSpendingAnalysisGenerator.kt` | 질문과 서울 시각을 보내고 Spring AI가 조회 도구 호출·결과 전달을 이어간다 |
+| 5 | `statistics/SpendingAnalysisTools.kt` | 날짜·카테고리를 검증하고 인증된 사용자와 household를 고정해 조회한다 |
+| 6 | `statistics/SpendingAnalysisRepository.kt` | 조건에 맞는 전체 거래를 카테고리별로 합산하고 금액순 근거 거래를 제한 조회한다 |
+| 7 | `statistics/SpendingAnalysisService.kt` | 모델의 근거 참조를 이번 요청에서 실제 전달한 거래와 대조한다 |
 
-질문과 저장된 가맹점에서 외부 전송 금지 데이터를 검사한다. 가맹점에 금지 데이터가 있으면
-해당 거래를 AI 데이터셋에서 제외한다. 외부 AI에는 내역, 사용자 이름과 내부 거래 ID를
-보내지 않으며, 성공 답변에 유효한 근거가 없으면 응답을 거부한다. 기본 비용 한도는
-household별 하루 20회, 최근 거래 200건, 출력 500토큰이다.
+도구는 서울 날짜 기준 시작·종료일 포함 최대 366일, 카테고리와 나·배우자 필터만 받는다.
+가구나 사용자 ID는 모델이 지정할 수 없다. 전체 합계·건수는 서버 SQL로 계산하고,
+근거 거래는 호출당 최대 5건, 요청 전체로는 설정 한도(최대 200건)까지만 전달한다.
+민감한 가맹점은 근거에서 제거하지만 가맹점 정보가 없는 숫자 집계에는 포함한다.
+`dataLimited`는 합계 누락이 아니라 근거 목록의 생략 여부를 뜻한다.
+
+도구 결과에는 임시 참조, 가맹점, 금액, 서울 날짜, ME/PARTNER, 결제수단, 카테고리와
+태그만 포함한다. 내역, 사용자 이름과 내부 거래 ID는 외부에 보내지 않는다. 알 수 없는
+근거가 하나라도 있거나 유효한 근거가 없는 성공 답변은 거부한다. 질문과 응답은 저장하지
+않고 `store: false`, HMAC `safety_identifier`를 유지한다. 기본 한도는 household별 하루
+20개 질문, 질문당 최대 4회 조회, 모델 호출당 출력 500토큰이며 외부 호출 재시도는 없다.
+거래가 전혀 없으면 모델 호출·횟수 차감 없이 응답하고, 조건에 맞는 거래가 없는지는 모델이
+도구로 확인하므로 질문 1회를 사용한다. API 요청·응답 형식은 기존과 같다.
+
+Spring Boot 4.2와 Spring AI 2.1을 사용한다. 자동 설정 starter 대신 분석 전용 모델·채팅
+모듈과 명시적 설정을 사용하며 자연어 거래 초안은 기존 RestClient 경로를 유지한다.
 
 AI 요청에서 `AiSensitiveInputGuard`는 금지 데이터를 외부 전송 직전에 검사하고,
 `OpenAiSafetyIdentifier`는 내부 사용자 ID를 HMAC 가명 식별자로 바꾼다. 허용 전송
